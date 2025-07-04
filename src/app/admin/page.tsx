@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { db, auth } from '@/lib/firebase';
-import { collection, getDocs, doc, updateDoc, query, orderBy, where, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { db, auth, storage } from '@/lib/firebase';
+import { collection, getDocs, doc, updateDoc, query, orderBy, where, onSnapshot, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 
 interface Reservation {
@@ -27,7 +28,7 @@ interface Reservation {
 
 export default function AdminPanel() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'all'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'all' | 'settings' | 'photos'>('pending');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [adminPassword, setAdminPassword] = useState<string>('');
@@ -44,6 +45,16 @@ export default function AdminPanel() {
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [editingFullReservation, setEditingFullReservation] = useState<Reservation | null>(null);
   const [fullEditForm, setFullEditForm] = useState<Partial<Reservation>>({});
+  
+  // Saat yönetimi için state'ler
+  const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']);
+  const [newTimeSlot, setNewTimeSlot] = useState<string>('');
+  const [timesLoading, setTimesLoading] = useState<boolean>(false);
+
+  // Fotoğraf yönetimi için state'ler
+  const [boatPhotos, setBoatPhotos] = useState<{id: string, url: string, name: string}[]>([]);
+  const [photosLoading, setPhotosLoading] = useState<boolean>(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState<boolean>(false);
 
   // Auth state listener - kullanıcının giriş durumunu kontrol et
   useEffect(() => {
@@ -90,6 +101,10 @@ export default function AdminPanel() {
         alert('Rezervasyonlar dinlenirken hata oluştu!');
         setLoading(false);
       });
+
+      // Saatleri ve fotoğrafları da yükle
+      fetchAvailableTimes();
+      fetchBoatPhotos();
 
       // Cleanup
       return () => unsubscribe();
@@ -296,9 +311,206 @@ Balık Sefası Ekibi`;
     }
   };
 
+  // Saatleri Firebase'den çek
+  const fetchAvailableTimes = async () => {
+    try {
+      setTimesLoading(true);
+      const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
+      if (timesDoc.exists()) {
+        const data = timesDoc.data();
+        if (data.times && Array.isArray(data.times)) {
+          setAvailableTimes(data.times);
+        }
+      } else {
+        // Varsayılan saatleri kaydet
+        await setDoc(doc(db, 'settings', 'availableTimes'), {
+          times: ['07:00-13:00', '14:00-20:00'],
+          updatedAt: new Date(),
+          updatedBy: 'admin'
+        });
+      }
+    } catch (error) {
+      console.error('Saatler çekilemedi:', error);
+      alert('Saatler yüklenirken hata oluştu!');
+    } finally {
+      setTimesLoading(false);
+    }
+  };
+
+  // Yeni saat dilimi ekle
+  const addTimeSlot = async () => {
+    if (!newTimeSlot.trim()) {
+      alert('Lütfen geçerli bir saat dilimi girin!');
+      return;
+    }
+
+    if (availableTimes.includes(newTimeSlot)) {
+      alert('Bu saat dilimi zaten mevcut!');
+      return;
+    }
+
+    try {
+      const newTimes = [...availableTimes, newTimeSlot];
+      await setDoc(doc(db, 'settings', 'availableTimes'), {
+        times: newTimes,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      setAvailableTimes(newTimes);
+      setNewTimeSlot('');
+      alert('Saat dilimi başarıyla eklendi!');
+    } catch (error) {
+      console.error('Saat dilimi eklenemedi:', error);
+      alert('Saat dilimi eklenirken hata oluştu!');
+    }
+  };
+
+  // Saat dilimi sil
+  const removeTimeSlot = async (timeSlot: string) => {
+    if (availableTimes.length <= 1) {
+      alert('En az bir saat dilimi olmalıdır!');
+      return;
+    }
+
+    if (confirm(`"${timeSlot}" saat dilimini silmek istediğinizden emin misiniz?`)) {
+      try {
+        const newTimes = availableTimes.filter(time => time !== timeSlot);
+        await setDoc(doc(db, 'settings', 'availableTimes'), {
+          times: newTimes,
+          updatedAt: new Date(),
+          updatedBy: 'admin'
+        });
+        
+        setAvailableTimes(newTimes);
+        alert('Saat dilimi başarıyla silindi!');
+      } catch (error) {
+        console.error('Saat dilimi silinemedi:', error);
+        alert('Saat dilimi silinirken hata oluştu!');
+      }
+    }
+  };
+
+  // Fotoğrafları Firebase'den çek
+  const fetchBoatPhotos = async () => {
+    try {
+      setPhotosLoading(true);
+      const photosDoc = await getDoc(doc(db, 'settings', 'boatPhotos'));
+      if (photosDoc.exists()) {
+        const data = photosDoc.data();
+        if (data.photos && Array.isArray(data.photos)) {
+          setBoatPhotos(data.photos);
+        }
+      } else {
+        // Boş fotoğraf listesi oluştur
+        await setDoc(doc(db, 'settings', 'boatPhotos'), {
+          photos: [],
+          updatedAt: new Date(),
+          updatedBy: 'admin'
+        });
+        setBoatPhotos([]);
+      }
+    } catch (error) {
+      console.error('Fotoğraflar çekilemedi:', error);
+      alert('Fotoğraflar yüklenirken hata oluştu!');
+    } finally {
+      setPhotosLoading(false);
+    }
+  };
+
+  // Fotoğraf upload (CORS sorununu çözen versiyon)
+  const uploadPhoto = async (file: File) => {
+    if (!file) return;
+
+    // Dosya tipini kontrol et
+    if (!file.type.startsWith('image/')) {
+      alert('Lütfen sadece fotoğraf dosyası seçin!');
+      return;
+    }
+
+    // Dosya boyutunu kontrol et (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Dosya boyutu 5MB\'dan küçük olmalıdır!');
+      return;
+    }
+
+    try {
+      setUploadingPhoto(true);
+      
+      // Unique dosya adı oluştur
+      const fileName = `boat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${file.name.split('.').pop()}`;
+      const storageRef = ref(storage, `boat-photos/${fileName}`);
+      
+      // Dosyayı Firebase Storage'a yükle
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      // Fotoğraf listesini güncelle
+      const newPhoto = {
+        id: fileName,
+        url: downloadURL,
+        name: file.name
+      };
+      
+      const updatedPhotos = [...boatPhotos, newPhoto];
+      
+      // Firestore'da kaydet
+      await setDoc(doc(db, 'settings', 'boatPhotos'), {
+        photos: updatedPhotos,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      setBoatPhotos(updatedPhotos);
+      alert('Fotoğraf başarıyla yüklendi!');
+      
+    } catch (error: any) {
+      console.error('Fotoğraf yüklenemedi:', error);
+      const errorMessage = error.message || error.toString();
+      
+      // CORS hatasını özel olarak ele al
+      if (errorMessage.includes('CORS') || errorMessage.includes('cors')) {
+        alert('CORS hatası: Lütfen Firebase Storage Security Rules\'ın doğru ayarlandığından emin olun!');
+      } else {
+        alert(`Fotoğraf yüklenirken hata oluştu: ${errorMessage}`);
+      }
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Fotoğraf sil
+  const deletePhoto = async (photoId: string) => {
+    if (confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) {
+      try {
+        // Storage'dan sil
+        const storageRef = ref(storage, `boat-photos/${photoId}`);
+        await deleteObject(storageRef);
+        
+        // Listeden çıkar
+        const updatedPhotos = boatPhotos.filter(photo => photo.id !== photoId);
+        
+        // Firestore'da güncelle
+        await setDoc(doc(db, 'settings', 'boatPhotos'), {
+          photos: updatedPhotos,
+          updatedAt: new Date(),
+          updatedBy: 'admin'
+        });
+        
+        setBoatPhotos(updatedPhotos);
+        alert('Fotoğraf başarıyla silindi!');
+      } catch (error: any) {
+        console.error('Fotoğraf silinemedi:', error);
+        alert(`Fotoğraf silinirken hata oluştu: ${error.message || error.toString()}`);
+      }
+    }
+  };
+
   const filteredReservations = reservations.filter(res => {
     if (activeTab === 'pending') return res.status === 'pending';
     if (activeTab === 'confirmed') return res.status === 'confirmed';
+    if (activeTab === 'settings') return false; // Ayarlar sekmesinde rezervasyon gösterme
+    if (activeTab === 'photos') return false; // Fotoğraf sekmesinde rezervasyon gösterme
     return true; // all
   });
 
@@ -428,43 +640,43 @@ Balık Sefası Ekibi`;
 
       <main className="max-w-7xl mx-auto p-4">
         {/* Dashboard Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6">
+          <div className="bg-white rounded-2xl p-4 md:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Bekleyen Rezervasyonlar</p>
-                <p className="text-3xl font-bold text-orange-600">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs md:text-sm font-medium text-gray-600 truncate">Bekleyen Rezervasyonlar</p>
+                <p className="text-2xl md:text-3xl font-bold text-orange-600">
                   {reservations.filter(r => r.status === 'pending').length}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">⏳</span>
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-3">
+                <span className="text-lg md:text-2xl">⏳</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300">
+          <div className="bg-white rounded-2xl p-4 md:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Onaylanmış Rezervasyonlar</p>
-                <p className="text-3xl font-bold text-green-600">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs md:text-sm font-medium text-gray-600 truncate">Onaylanmış Rezervasyonlar</p>
+                <p className="text-2xl md:text-3xl font-bold text-green-600">
                   {reservations.filter(r => r.status === 'confirmed').length}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">✅</span>
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-3">
+                <span className="text-lg md:text-2xl">✅</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300">
+          <div className="bg-white rounded-2xl p-4 md:p-6 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Toplam Rezervasyon</p>
-                <p className="text-3xl font-bold text-blue-600">{reservations.length}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs md:text-sm font-medium text-gray-600 truncate">Toplam Rezervasyon</p>
+                <p className="text-2xl md:text-3xl font-bold text-blue-600">{reservations.length}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">📊</span>
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-3">
+                <span className="text-lg md:text-2xl">📊</span>
               </div>
             </div>
           </div>
@@ -473,38 +685,256 @@ Balık Sefası Ekibi`;
         {/* Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6">
           <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6" aria-label="Tabs">
-              {[
-                { key: 'pending', label: 'Bekleyen', icon: '⏳', count: reservations.filter(r => r.status === 'pending').length },
-                { key: 'confirmed', label: 'Onaylanmış', icon: '✅', count: reservations.filter(r => r.status === 'confirmed').length },
-                { key: 'all', label: 'Tümü', icon: '📋', count: reservations.length }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key as any)}
-                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all duration-300 ${
-                    activeTab === tab.key
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <span className="flex items-center space-x-2">
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                      activeTab === tab.key ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {tab.count}
+            {/* Mobile Scrollable Tab Navigation */}
+            <div className="overflow-x-auto scrollbar-hide">
+              <nav className="flex space-x-1 px-4 min-w-max md:justify-center" aria-label="Tabs">
+                {[
+                  { key: 'pending', label: 'Bekleyen', icon: '⏳', count: reservations.filter(r => r.status === 'pending').length },
+                  { key: 'confirmed', label: 'Onaylanmış', icon: '✅', count: reservations.filter(r => r.status === 'confirmed').length },
+                  { key: 'all', label: 'Tümü', icon: '📋', count: reservations.length },
+                  { key: 'settings', label: 'Ayarlar', icon: '⚙️', count: null },
+                  { key: 'photos', label: 'Fotoğraflar', icon: '📸', count: boatPhotos.length }
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key as any)}
+                    className={`whitespace-nowrap py-3 px-3 md:px-4 border-b-2 font-medium text-sm transition-all duration-300 flex-shrink-0 ${
+                      activeTab === tab.key
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="flex items-center space-x-1 md:space-x-2">
+                      <span className="text-base md:text-lg">{tab.icon}</span>
+                      <span className="hidden sm:inline">{tab.label}</span>
+                      <span className="sm:hidden text-xs">{tab.label.slice(0, 3)}</span>
+                      {tab.count !== null && (
+                        <span className={`px-1.5 py-0.5 md:px-2 md:py-1 rounded-full text-xs font-bold ${
+                          activeTab === tab.key ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {tab.count}
+                        </span>
+                      )}
                     </span>
-                  </span>
-                </button>
-              ))}
-            </nav>
+                  </button>
+                ))}
+              </nav>
+            </div>
           </div>
         </div>
 
+        {/* Ayarlar Sekmesi */}
+        {activeTab === 'settings' && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
+                <span className="mr-2">🕐</span>
+                Saat Dilimi Yönetimi
+              </h3>
+              <p className="text-gray-600 text-sm">Rezervasyon için kullanılabilir saat dilimlerini yönetin</p>
+            </div>
+
+            {/* Mevcut Saat Dilimleri */}
+            <div className="mb-6">
+              <h4 className="font-bold text-slate-700 mb-3">Mevcut Saat Dilimleri</h4>
+              {timesLoading ? (
+                <div className="text-center py-4">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <p className="text-sm text-gray-600 mt-2">Saatler yükleniyor...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {availableTimes.map((time, index) => (
+                    <div key={index} className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                          <span className="text-white text-sm">🕐</span>
+                        </div>
+                        <span className="font-medium text-slate-800">{time}</span>
+                      </div>
+                      <button
+                        onClick={() => removeTimeSlot(time)}
+                        className="w-8 h-8 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg flex items-center justify-center transition-all duration-300"
+                        title="Saat dilimini sil"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Yeni Saat Dilimi Ekleme */}
+            <div className="border-t border-gray-200 pt-6">
+              <h4 className="font-bold text-slate-700 mb-3">Yeni Saat Dilimi Ekle</h4>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={newTimeSlot}
+                  onChange={(e) => setNewTimeSlot(e.target.value)}
+                  placeholder="Örn: 08:00-14:00"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-transparent text-slate-800 bg-white"
+                />
+                <button
+                  onClick={addTimeSlot}
+                  className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-bold hover:from-green-600 hover:to-green-700 transition-all duration-300"
+                >
+                  Ekle
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Format: SS:DD-SS:DD (Örnek: 08:00-14:00)
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Fotoğraf Yönetimi Sekmesi */}
+        {activeTab === 'photos' && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
+                <span className="mr-2">📸</span>
+                Tekne Fotoğrafları
+              </h3>
+              <p className="text-gray-600 text-sm">Tekne fotoğraflarını buradan yönetebilirsiniz. Ana sayfada gösterilecek fotoğrafları ekleyin veya silin.</p>
+            </div>
+
+            {/* Fotoğraf Yükleme */}
+            <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+              <h4 className="font-bold text-slate-700 mb-3 flex items-center">
+                <span className="mr-2">⬆️</span>
+                Yeni Fotoğraf Yükle
+              </h4>
+              <div className="flex flex-col space-y-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      uploadPhoto(file);
+                      e.target.value = ''; // Input'u temizle
+                    }
+                  }}
+                  className="block w-full text-sm text-slate-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-xl file:border-0
+                    file:text-sm file:font-bold
+                    file:bg-blue-500 file:text-white
+                    hover:file:bg-blue-600 file:transition-all file:duration-300"
+                />
+                <div className="text-xs text-gray-600 space-y-1">
+                  <p>• Desteklenen formatlar: JPG, PNG, WEBP</p>
+                  <p>• Maksimum dosya boyutu: 5MB</p>
+                  <p>• Önerilen boyut: 800x600 piksel veya daha büyük</p>
+                </div>
+                {uploadingPhoto && (
+                  <div className="flex items-center space-x-2 text-blue-600">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm font-medium">Fotoğraf yükleniyor...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Mevcut Fotoğraflar */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-bold text-slate-700 flex items-center">
+                  <span className="mr-2">🖼️</span>
+                  Mevcut Fotoğraflar ({boatPhotos.length})
+                </h4>
+                {boatPhotos.length > 0 && (
+                  <p className="text-sm text-gray-600">
+                    Ana sayfada gösterilme sırası: sol üstten başlayarak
+                  </p>
+                )}
+              </div>
+
+              {photosLoading ? (
+                <div className="text-center py-12">
+                  <div className="w-12 h-12 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-gray-600">Fotoğraflar yükleniyor...</p>
+                </div>
+              ) : boatPhotos.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl">📷</span>
+                  </div>
+                  <h5 className="text-lg font-bold text-gray-600 mb-2">Henüz Fotoğraf Yok</h5>
+                  <p className="text-gray-500">Yukarıdaki alandan fotoğraf yükleyerek başlayın</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {boatPhotos.map((photo, index) => (
+                    <div key={photo.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300">
+                      {/* Fotoğraf */}
+                      <div className="relative aspect-video bg-gray-100">
+                        <img
+                          src={photo.url}
+                          alt={photo.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                        <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg font-bold">
+                          #{index + 1}
+                        </div>
+                      </div>
+                      
+                      {/* Fotoğraf Bilgileri */}
+                      <div className="p-3">
+                        <h6 className="font-medium text-slate-800 text-sm mb-1 truncate" title={photo.name}>
+                          {photo.name}
+                        </h6>
+                        <p className="text-xs text-gray-500 mb-3">
+                          {new Date(parseInt(photo.id.split('-')[1])).toLocaleDateString('tr-TR')}
+                        </p>
+                        
+                        {/* Aksiyonlar */}
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => window.open(photo.url, '_blank')}
+                            className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-all duration-300"
+                          >
+                            👁️ Büyük Görüntüle
+                          </button>
+                          <button
+                            onClick={() => deletePhoto(photo.id)}
+                            className="w-full py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium text-sm transition-all duration-300"
+                          >
+                            🗑️ Sil
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Fotoğraf Sıralaması Bilgisi */}
+            {boatPhotos.length > 0 && (
+              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <div className="flex items-start space-x-2">
+                  <span className="text-yellow-600 text-lg">💡</span>
+                  <div className="text-sm">
+                    <p className="font-bold text-yellow-800 mb-1">Fotoğraf Sıralaması Hakkında</p>
+                    <p className="text-yellow-700">
+                      Fotoğraflar ana sayfada yüklenme tarihine göre sıralanır. En son yüklenen fotoğraf en sona eklenir.
+                      Özel bir sıralama istiyorsanız, fotoğrafları istediğiniz sırayla yeniden yükleyebilirsiniz.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Rezervasyon Listesi */}
-        <div className="space-y-4">
+        {activeTab !== 'settings' && activeTab !== 'photos' && (
+          <div className="space-y-4">
           {loading ? (
             <div className="bg-white rounded-2xl p-12 text-center shadow-lg border border-gray-200">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
@@ -524,47 +954,53 @@ Balık Sefası Ekibi`;
           ) : (
             filteredReservations.map((reservation) => (
               <div key={reservation.id} className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-300">
-                {/* Rezervasyon Header */}
-                <div className={`p-4 ${
+                                {/* Rezervasyon Header */}
+                <div className={`p-3 md:p-4 ${
                   reservation.isPrivateTour 
                     ? 'bg-gradient-to-r from-purple-500 to-indigo-600' 
                     : 'bg-gradient-to-r from-blue-500 to-blue-600'
                 } text-white`}>
-                  <div className="flex items-center justify-between">
-                                         <div className="flex items-center space-x-3">
-                       <span className="text-2xl">
+                  <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+                     <div className="flex items-center space-x-3">
+                       <span className="text-xl md:text-2xl">
                          {reservation.isPrivateTour ? '⭐' : '🎣'}
                        </span>
-                       <div>
-                         <h3 className="font-bold text-lg text-white">
+                       <div className="min-w-0 flex-1">
+                         <h3 className="font-bold text-base md:text-lg text-white truncate">
                            {reservation.isPrivateTour ? 'Özel Tur' : 'Normal Rezervasyon'}
                          </h3>
-                         <p className="text-sm opacity-90 text-white">
-                           #{reservation.id} • {reservation.guestCount} kişi
+                         <p className="text-xs md:text-sm opacity-90 text-white">
+                           #{reservation.id.slice(0, 8)}... • {reservation.guestCount} kişi
                          </p>
                        </div>
                      </div>
                     
-                                         <div className="text-right">
-                       <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                     <div className="text-right sm:text-left">
+                       <div className={`px-2 md:px-3 py-1 rounded-full text-xs font-bold ${
                          reservation.status === 'pending' 
                            ? 'bg-orange-100 text-orange-800' 
                            : reservation.status === 'confirmed'
                            ? 'bg-green-100 text-green-800'
                            : 'bg-red-100 text-red-800'
                        }`}>
-                         {reservation.status === 'pending' ? '⏳ Manuel Kontrol Bekliyor' : 
-                          reservation.status === 'confirmed' ? '✅ Onaylandı' : '❌ İptal/Reddedildi'}
+                         <span className="hidden sm:inline">
+                           {reservation.status === 'pending' ? '⏳ Manuel Kontrol Bekliyor' : 
+                            reservation.status === 'confirmed' ? '✅ Onaylandı' : '❌ İptal/Reddedildi'}
+                         </span>
+                         <span className="sm:hidden">
+                           {reservation.status === 'pending' ? '⏳ Bekliyor' : 
+                            reservation.status === 'confirmed' ? '✅ Onaylı' : '❌ İptal'}
+                         </span>
                        </div>
                      </div>
                   </div>
                 </div>
 
-                {/* Rezervasyon Detayları */}
-                <div className="p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                         {/* Sol: Tarih ve Saat Bilgileri */}
-                     <div className="space-y-4">
+                                {/* Rezervasyon Detayları */}
+                <div className="p-4 md:p-6">
+                  <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-6">
+                     {/* Sol: Tarih ve Saat Bilgileri */}
+                     <div className="space-y-4 lg:space-y-4">
                        <div>
                          <div className="flex items-center justify-between mb-2">
                            <h4 className="font-bold text-slate-800">📅 Rezervasyon Detayları</h4>
@@ -608,8 +1044,9 @@ Balık Sefası Ekibi`;
                                  className="w-full px-2 py-1 rounded border text-xs"
                                >
                                  <option value="">Saat Seçin</option>
-                                 <option value="07:00-13:00">07:00-13:00</option>
-                                 <option value="14:00-20:00">14:00-20:00</option>
+                                 {availableTimes.map((time) => (
+                                   <option key={time} value={time}>{time}</option>
+                                 ))}
                                </select>
                              </div>
                              <div className="flex space-x-2">
@@ -696,15 +1133,16 @@ Balık Sefası Ekibi`;
 
                                          {/* Sağ: Aksiyonlar */}
                      <div>
-                       <h4 className="font-bold text-slate-800 mb-2">⚡ İşlemler</h4>
-                       <div className="space-y-2">
+                       <h4 className="font-bold text-slate-800 mb-2 lg:mb-3">⚡ İşlemler</h4>
+                       <div className="space-y-1.5 md:space-y-2">
                          {/* Ödeme Kontrol Butonları */}
                          {reservation.status === 'pending' && reservation.paymentStatus === 'waiting' && (
                            <button
                              onClick={() => markPaymentReceived(reservation.id)}
-                             className="w-full py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-bold text-sm hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
+                             className="w-full py-2 md:py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-bold text-xs md:text-sm hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
                            >
-                             💰 Ödeme Alındı Olarak İşaretle
+                             <span className="hidden sm:inline">💰 Ödeme Alındı Olarak İşaretle</span>
+                             <span className="sm:hidden">💰 Ödeme Alındı</span>
                            </button>
                          )}
 
@@ -720,15 +1158,17 @@ Balık Sefası Ekibi`;
                              )}
                              <button
                                onClick={() => approveReservation(reservation.id)}
-                               className="w-full py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-sm hover:from-green-600 hover:to-emerald-700 transition-all duration-300"
+                               className="w-full py-2 md:py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold text-xs md:text-sm hover:from-green-600 hover:to-emerald-700 transition-all duration-300"
                              >
-                               ✅ Rezervasyonu Onayla & WhatsApp Gönder
+                               <span className="hidden sm:inline">✅ Rezervasyonu Onayla & WhatsApp Gönder</span>
+                               <span className="sm:hidden">✅ Onayla & WhatsApp</span>
                              </button>
                              <button
                                onClick={() => rejectReservation(reservation.id)}
-                               className="w-full py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-bold text-sm hover:from-red-600 hover:to-red-700 transition-all duration-300"
+                               className="w-full py-2 md:py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-bold text-xs md:text-sm hover:from-red-600 hover:to-red-700 transition-all duration-300"
                              >
-                               ❌ Rezervasyonu Reddet
+                               <span className="hidden sm:inline">❌ Rezervasyonu Reddet</span>
+                               <span className="sm:hidden">❌ Reddet</span>
                              </button>
                            </div>
                          )}
@@ -742,9 +1182,10 @@ Balık Sefası Ekibi`;
                                const message = `Merhaba ${guest.name}! Balık Sefası rezervasyonunuz ile ilgili bilgi vermek istiyoruz.`;
                                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
                              }}
-                             className="w-full py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-bold text-sm hover:from-green-600 hover:to-green-700 transition-all duration-300"
+                             className="w-full py-2 md:py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-bold text-xs md:text-sm hover:from-green-600 hover:to-green-700 transition-all duration-300"
                            >
-                             💬 WhatsApp Mesajı Gönder
+                             <span className="hidden sm:inline">💬 WhatsApp Mesajı Gönder</span>
+                             <span className="sm:hidden">💬 WhatsApp</span>
                            </button>
                          )}
 
@@ -754,7 +1195,7 @@ Balık Sefası Ekibi`;
                              const guest = reservation.guestInfos[0];
                              window.open(`tel:${guest.phone}`, '_self');
                            }}
-                           className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-all duration-300"
+                           className="w-full py-2 md:py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-xs md:text-sm transition-all duration-300"
                          >
                            📞 Ara
                          </button>
@@ -762,27 +1203,30 @@ Balık Sefası Ekibi`;
                          {/* Gelişmiş Düzenleme Butonu */}
                          <button
                            onClick={() => openEditModal(reservation)}
-                           className="w-full py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-bold text-sm hover:from-purple-600 hover:to-purple-700 transition-all duration-300"
+                           className="w-full py-2 md:py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-bold text-xs md:text-sm hover:from-purple-600 hover:to-purple-700 transition-all duration-300"
                          >
-                           ✏️ Gelişmiş Düzenle
+                           <span className="hidden sm:inline">✏️ Gelişmiş Düzenle</span>
+                           <span className="sm:hidden">✏️ Düzenle</span>
                          </button>
 
                          {/* Manuel İptal Butonu */}
                          {(reservation.status === 'pending' || reservation.status === 'confirmed') && (
                            <button
                              onClick={() => cancelReservation(reservation.id)}
-                             className="w-full py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium text-sm transition-all duration-300"
+                             className="w-full py-2 md:py-2.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium text-xs md:text-sm transition-all duration-300"
                            >
-                             🗑️ Manuel İptal
+                             <span className="hidden sm:inline">🗑️ Manuel İptal</span>
+                             <span className="sm:hidden">🗑️ İptal</span>
                            </button>
                          )}
 
                          {/* Kalıcı Silme Butonu */}
                          <button
                            onClick={() => deleteReservation(reservation.id)}
-                           className="w-full py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-bold text-sm hover:from-red-700 hover:to-red-800 transition-all duration-300 border-2 border-red-800"
+                           className="w-full py-2 md:py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-bold text-xs md:text-sm hover:from-red-700 hover:to-red-800 transition-all duration-300 border-2 border-red-800"
                          >
-                           🗑️ KALICI SİL
+                           <span className="hidden sm:inline">🗑️ KALICI SİL</span>
+                           <span className="sm:hidden">🗑️ SİL</span>
                          </button>
                        </div>
                      </div>
@@ -791,19 +1235,20 @@ Balık Sefası Ekibi`;
               </div>
             ))
           )}
-        </div>
+          </div>
+        )}
       </main>
 
       {/* Gelişmiş Düzenleme Modal'ı */}
       {showEditModal && editingFullReservation && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-2 md:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-t-2xl">
+            <div className="p-3 md:p-6 border-b border-gray-200 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-t-2xl">
               <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-bold">✏️ Rezervasyon Düzenle</h3>
-                  <p className="text-sm opacity-90">#{editingFullReservation.id}</p>
+                <div className="min-w-0 flex-1 mr-3">
+                  <h3 className="text-lg md:text-xl font-bold truncate">✏️ Rezervasyon Düzenle</h3>
+                  <p className="text-xs md:text-sm opacity-90 truncate">#{editingFullReservation.id}</p>
                 </div>
                 <button
                   onClick={() => {
@@ -811,9 +1256,9 @@ Balık Sefası Ekibi`;
                     setEditingFullReservation(null);
                     setFullEditForm({});
                   }}
-                  className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all duration-300"
+                  className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all duration-300 flex-shrink-0"
                 >
-                  <span className="text-white font-bold">×</span>
+                  <span className="text-white font-bold text-lg md:text-xl">×</span>
                 </button>
               </div>
             </div>
@@ -911,8 +1356,9 @@ Balık Sefası Ekibi`;
                         className="w-full px-3 py-2 rounded-lg border border-gray-300 text-slate-800"
                       >
                         <option value="">Saat Seçin</option>
-                        <option value="07:00-13:00">07:00-13:00</option>
-                        <option value="14:00-20:00">14:00-20:00</option>
+                        {availableTimes.map((time) => (
+                          <option key={time} value={time}>{time}</option>
+                        ))}
                       </select>
                     </div>
                   )}

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, query, where, getDocs, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 
 export default function Home() {
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
@@ -29,6 +29,8 @@ export default function Home() {
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [calendarOccupancy, setCalendarOccupancy] = useState<{[key: string]: {morning: number, afternoon: number}}>({});
+  const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']); // Varsayılan saatler
+  const [boatPhotos, setBoatPhotos] = useState<{id: string, url: string, name: string}[]>([]); // Dinamik fotoğraflar
 
   // Scroll Referansları
   const rezervasyonRef = useRef<HTMLDivElement>(null);
@@ -102,13 +104,15 @@ export default function Home() {
     setBubbles(newBubbles);
   }, []);
 
-  // Görsel rotasyonu için
+  // Görsel rotasyonu için - dinamik fotoğraf sayısına göre
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentImageIndex((prev) => (prev + 1) % 10);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    if (boatPhotos.length > 0) {
+      const interval = setInterval(() => {
+        setCurrentImageIndex((prev) => (prev + 1) % boatPhotos.length);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [boatPhotos]);
 
   // Tarih ve saat seçildiğinde dolu koltukları çek ve real-time dinle
   useEffect(() => {
@@ -242,6 +246,44 @@ export default function Home() {
     fetchCalendarOccupancy(currentMonth);
   }, [currentMonth]);
 
+  // Saatleri ve fotoğrafları Firebase'den çek
+  useEffect(() => {
+    const fetchAvailableTimes = async () => {
+      try {
+        const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
+        if (timesDoc.exists()) {
+          const data = timesDoc.data();
+          if (data.times && Array.isArray(data.times)) {
+            setAvailableTimes(data.times);
+          }
+        }
+      } catch (error) {
+        console.error('Saatler çekilemedi:', error);
+        // Hata durumunda varsayılan saatleri kullan
+        setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+      }
+    };
+
+    const fetchBoatPhotos = async () => {
+      try {
+        const photosDoc = await getDoc(doc(db, 'settings', 'boatPhotos'));
+        if (photosDoc.exists()) {
+          const data = photosDoc.data();
+          if (data.photos && Array.isArray(data.photos)) {
+            setBoatPhotos(data.photos);
+          }
+        }
+      } catch (error) {
+        console.error('Fotoğraflar çekilemedi:', error);
+        // Hata durumunda boş array kullan
+        setBoatPhotos([]);
+      }
+    };
+
+    fetchAvailableTimes();
+    fetchBoatPhotos();
+  }, []);
+
      // Günün doluluk durumunu hesapla (0-12 arası)
    const getDayOccupancy = (dateStr: string) => {
      const dayData = calendarOccupancy[dateStr];
@@ -358,10 +400,7 @@ export default function Home() {
 
   const calendarDays = getCalendarDays(currentMonth);
 
-  // Mevcut saatler
-  const availableTimes = [
-    '07:00-13:00', '14:00-20:00'
-  ];
+
 
   const getSeatStatus = (seat: string) => {
     if (occupiedSeats.includes(seat)) return 'occupied';
@@ -403,7 +442,7 @@ export default function Home() {
           }
         }}
         disabled={isOccupied || isPrivateTour}
-        className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold transition-all duration-300 shadow-lg border-2 ${getSeatColor(getSeatStatus(seatId))} ${
+        className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center text-white text-xs sm:text-sm font-bold transition-all duration-300 shadow-lg border-2 ${getSeatColor(getSeatStatus(seatId))} ${
           (!canSelect && !isOccupied && !isSelected) || isPrivateTour ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         title={
@@ -561,98 +600,16 @@ export default function Home() {
         ))}
       </div>
 
-      {/* Header */}
-      <header className="glass-header sticky top-0 z-50 backdrop-blur-xl border-b border-white/10">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            {/* Logo ve Başlık */}
-            <div className="flex items-center space-x-4">
-              <div className="relative group">
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-xl floating group-hover:shadow-2xl transition-all duration-300">
-                  <span className="text-white font-bold text-2xl">🐟</span>
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full animate-pulse shadow-lg">
-                  <div className="absolute inset-1 bg-white rounded-full"></div>
-                </div>
-                {/* Şık çember efekti */}
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 bg-clip-text text-transparent">
-                  Balık Sefası
-                </h1>
-                <div className="flex items-center space-x-1">
-                  <span className="text-xs text-slate-600 font-medium">🌊 Tekne Kiralama & Balık Avı</span>
-                  <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse"></div>
-                </div>
-              </div>
-            </div>
 
-            {/* İletişim Butonları */}
-            <div className="flex items-center space-x-3">
-              {/* Gizli Admin Linki */}
-              <Link 
-                href="/admin"
-                className="opacity-30 hover:opacity-100 transition-all duration-300"
-                title="Admin Panel"
-              >
-                <div className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
-                  <span className="text-gray-600 text-xs">🎛️</span>
-                </div>
-              </Link>
-              {/* WhatsApp Butonu */}
-              <a 
-                href="https://wa.me/905310892537?text=Merhaba, tekne kiralama hakkında bilgi almak istiyorum." 
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative bg-gradient-to-r from-green-500 to-green-600 text-white p-3 rounded-full hover:from-green-600 hover:to-green-700 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.785"/>
-                </svg>
-                
-                {/* Tooltip */}
-                <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                  WhatsApp ile iletişim
-                </div>
-                
-                {/* Şık parlaklık efekti */}
-                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </a>
-
-              {/* Telefon Butonu */}
-              <a 
-                href="tel:05310892537" 
-                className="group relative bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-full text-sm font-bold hover:from-blue-600 hover:to-blue-700 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-300 flex items-center space-x-2"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
-                </svg>
-                <span className="hidden sm:inline">Ara</span>
-                
-                {/* Tooltip mobil için */}
-                <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap sm:hidden">
-                  Hemen ara
-                </div>
-                
-                {/* Şık parlaklık efekti */}
-                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Şık alt çizgi efekti */}
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent"></div>
-      </header>
 
       {/* Hero Section */}
-      <section className="px-4 py-8 relative z-10">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-white mb-4 floating">
+      <section className="px-4 py-6 md:py-8 relative z-10">
+        <div className="max-w-2xl lg:max-w-3xl mx-auto">
+        <div className="text-center mb-6 md:mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 md:mb-4 floating">
             🌊 Denizde Balık Avı Keyfi
           </h2>
-          <p className="text-white/90 leading-relaxed text-sm backdrop-blur-sm bg-white/10 rounded-xl p-4 border border-white/20 mb-6">
+          <p className="text-white/90 leading-relaxed text-xs md:text-sm backdrop-blur-sm bg-white/10 rounded-xl p-3 md:p-4 border border-white/20 mb-4 md:mb-6">
             İstanbul Sarıyer'de profesyonel balıkçı teknesi kiralama. 
             Konforlu koltuklar, deneyimli kaptan ve güvenli yolculuk.
           </p>
@@ -660,7 +617,7 @@ export default function Home() {
           {/* Rezervasyona Başla Butonu */}
           <button
             onClick={() => scrollToSection(rezervasyonRef, 100)}
-            className="bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 active:scale-95 shadow-2xl hover:shadow-3xl transition-all duration-300 shimmer floating"
+            className="bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white px-6 md:px-8 py-3 md:py-4 rounded-full font-bold text-sm md:text-lg hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 active:scale-95 shadow-2xl hover:shadow-3xl transition-all duration-300 shimmer floating"
           >
             🚀 Rezervasyona Başla
           </button>
@@ -670,28 +627,41 @@ export default function Home() {
         </div>
 
         {/* Tekne Görselleri */}
-        <div className="glass-card p-6 mb-6 hover-lift">
-          <h3 className="text-lg font-bold mb-4 text-center">
-            <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
+        <div className="glass-card p-4 md:p-6 mb-4 md:mb-6 hover-lift">
+          <h3 className="text-base md:text-lg font-bold mb-3 md:mb-4 text-center">
+            <span className="bg-white/90 px-3 md:px-4 py-1.5 md:py-2 rounded-full shadow-lg text-slate-800 text-sm md:text-base">
               📸 Teknemiz
             </span>
           </h3>
           
           {/* Ana Görsel */}
           <div className="relative mb-4 rounded-2xl overflow-hidden shadow-xl">
-            <div className="aspect-[16/9] relative">
-              <Image
-                src={`/tekne-gorseller/tekne-${currentImageIndex + 1}.jpg`}
-                alt={`Balık Sefası Tekne Görsel ${currentImageIndex + 1}`}
-                fill
-                className="object-cover"
-                priority={currentImageIndex === 0}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-            </div>
-            <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-1 rounded-full text-xs font-bold">
-              {currentImageIndex + 1} / 10
-            </div>
+            {boatPhotos.length > 0 ? (
+              <>
+                <div className="aspect-[16/9] relative">
+                  <Image
+                    src={boatPhotos[currentImageIndex % boatPhotos.length]?.url || '/tekne-gorseller/tekne-1.jpg'}
+                    alt={`Balık Sefası Tekne Görsel ${currentImageIndex + 1}`}
+                    fill
+                    className="object-cover"
+                    priority={currentImageIndex === 0}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                </div>
+                <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-1 rounded-full text-xs font-bold">
+                  {currentImageIndex + 1} / {boatPhotos.length}
+                </div>
+              </>
+            ) : (
+              // Fallback - Fotoğraf yüklenene kadar placeholder
+              <div className="aspect-[16/9] relative bg-blue-100 flex items-center justify-center">
+                <div className="text-center text-blue-600">
+                  <div className="w-12 h-12 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-sm font-medium">Fotoğraflar yükleniyor...</p>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+              </div>
+            )}
             <div className="absolute bottom-4 left-4 text-white">
               <div className="text-lg font-bold drop-shadow-lg">Balık Sefası Teknesi</div>
               <div className="text-sm opacity-90 drop-shadow-lg">Profesyonel Balık Avı Turu</div>
@@ -700,41 +670,53 @@ export default function Home() {
 
           {/* Küçük Görseller Grid */}
           <div className="grid grid-cols-5 gap-2">
-            {Array.from({ length: 10 }, (_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentImageIndex(i)}
-                className={`aspect-square rounded-lg overflow-hidden transition-all duration-300 relative ${
-                  currentImageIndex === i 
-                    ? 'ring-3 ring-blue-400 scale-105 shadow-xl' 
-                    : 'hover:scale-105 shadow-lg'
-                }`}
-              >
-                <Image
-                  src={`/tekne-gorseller/tekne-${i + 1}.jpg`}
-                  alt={`Tekne Görsel ${i + 1}`}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 20vw, 10vw"
-                />
-                <div className="absolute inset-0 bg-black/20 hover:bg-black/10 transition-all duration-300"></div>
-                <div className="absolute top-1 right-1 bg-black/70 text-white px-1.5 py-0.5 rounded text-xs font-bold">
-                  {i + 1}
-                </div>
-                {currentImageIndex === i && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs">✓</span>
-                    </div>
+            {boatPhotos.length > 0 ? (
+              boatPhotos.map((photo, i) => (
+                <button
+                  key={photo.id}
+                  onClick={() => setCurrentImageIndex(i)}
+                  className={`aspect-square rounded-lg overflow-hidden transition-all duration-300 relative ${
+                    currentImageIndex === i 
+                      ? 'ring-3 ring-blue-400 scale-105 shadow-xl' 
+                      : 'hover:scale-105 shadow-lg'
+                  }`}
+                >
+                  <Image
+                    src={photo.url}
+                    alt={`Tekne Görsel ${i + 1}`}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 20vw, 10vw"
+                  />
+                  <div className="absolute inset-0 bg-black/20 hover:bg-black/10 transition-all duration-300"></div>
+                  <div className="absolute top-1 right-1 bg-black/70 text-white px-1.5 py-0.5 rounded text-xs font-bold">
+                    {i + 1}
                   </div>
-                )}
-              </button>
-            ))}
+                  {currentImageIndex === i && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              ))
+            ) : (
+              // Placeholder while loading
+              Array.from({ length: 5 }, (_, i) => (
+                <div
+                  key={i}
+                  className="aspect-square rounded-lg bg-gray-200 animate-pulse flex items-center justify-center"
+                >
+                  <span className="text-gray-400 text-xs">📷</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
         {/* Rezervasyon Bilgileri */}
-        <div ref={rezervasyonRef} className="glass-card p-6 mb-6 hover-lift">
+        <div ref={rezervasyonRef} className="glass-card p-4 md:p-6 mb-4 md:mb-6 hover-lift">
           <h3 className="text-lg font-bold mb-6 text-center">
             <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
               📅 Rezervasyon Bilgileri
@@ -855,39 +837,39 @@ export default function Home() {
               )}
             </div>
             
-            <div className="bg-white/90 rounded-2xl shadow-lg border border-blue-200 p-4">
+            <div className="bg-white/90 rounded-2xl shadow-lg border border-blue-200 p-3 md:p-4 max-w-sm md:max-w-md mx-auto">
               {/* Takvim Başlığı */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <button
                   onClick={prevMonth}
-                  className="w-8 h-8 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-all duration-300"
+                  className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-all duration-300"
                 >
-                  <span className="text-blue-600 font-bold">‹</span>
+                  <span className="text-blue-600 font-bold text-sm md:text-base">‹</span>
                 </button>
                 
-                <h4 className="text-lg font-bold text-slate-800">
+                <h4 className="text-sm md:text-lg font-bold text-slate-800">
                   {currentMonth.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
                 </h4>
                 
                 <button
                   onClick={nextMonth}
-                  className="w-8 h-8 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-all duration-300"
+                  className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-all duration-300"
                 >
-                  <span className="text-blue-600 font-bold">›</span>
+                  <span className="text-blue-600 font-bold text-sm md:text-base">›</span>
                 </button>
               </div>
 
               {/* Hafta Günleri */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
+              <div className="grid grid-cols-7 gap-0.5 md:gap-1 mb-1 md:mb-2">
                 {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((day) => (
-                  <div key={day} className="text-center py-2">
+                  <div key={day} className="text-center py-1 md:py-2">
                     <span className="text-xs font-bold text-slate-600">{day}</span>
                   </div>
                 ))}
               </div>
 
               {/* Takvim Günleri */}
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-0.5 md:gap-1">
                 {calendarDays.map((dayInfo, index) => {
                   const occupancy = getDayOccupancy(dayInfo.date);
                   const dayColorClass = getDayColor(dayInfo.date, dayInfo.isCurrentMonth, dayInfo.isDisabled);
@@ -902,15 +884,15 @@ export default function Home() {
                       }}
                       disabled={dayInfo.isDisabled}
                       className={`
-                        aspect-square rounded-lg text-sm font-bold transition-all duration-300 relative
+                        aspect-square rounded-md md:rounded-lg text-xs md:text-sm font-bold transition-all duration-300 relative
                         ${dayInfo.isDisabled 
                           ? 'text-gray-300 cursor-not-allowed' 
-                          : 'hover:scale-110 hover:shadow-lg cursor-pointer'
+                          : 'hover:scale-105 md:hover:scale-110 hover:shadow-lg cursor-pointer'
                         }
                         ${selectedDate === dayInfo.date
-                          ? 'bg-gradient-to-br from-green-400 to-green-600 text-white shadow-xl scale-110'
+                          ? 'bg-gradient-to-br from-green-400 to-green-600 text-white shadow-xl scale-105 md:scale-110'
                           : dayInfo.isToday
-                          ? 'bg-blue-100 text-blue-600 ring-2 ring-blue-400'
+                          ? 'bg-blue-100 text-blue-600 ring-1 md:ring-2 ring-blue-400'
                           : dayInfo.isCurrentMonth && !dayInfo.isDisabled
                           ? `${dayColorClass} border border-gray-200 hover:border-green-300`
                           : 'text-gray-400'
@@ -1004,7 +986,7 @@ export default function Home() {
 
         {/* Saat Seçimi - Sadece normal rezervasyonlar için */}
         {!isPrivateTour && (
-          <div ref={saatRef} className="glass-card p-6 mb-6 hover-lift">
+          <div ref={saatRef} className="glass-card p-4 md:p-6 mb-4 md:mb-6 hover-lift">
             <h3 className="text-lg font-bold mb-2 text-center">
               <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
                 🕐 Saat Seçin
@@ -1035,7 +1017,7 @@ export default function Home() {
 
         {/* Özel Tur Bilgilendirmesi */}
         {isPrivateTour && (
-          <div ref={saatRef} className="glass-card p-6 mb-6 hover-lift">
+          <div ref={saatRef} className="glass-card p-4 md:p-6 mb-4 md:mb-6 hover-lift">
             <h3 className="text-lg font-bold mb-4 text-center">
               <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
                 ⭐ Özel Tur - Gün Boyu Kiralama
@@ -1076,7 +1058,7 @@ export default function Home() {
         )}
 
         {/* Tekne Krokisi */}
-        <div ref={koltukRef} className="glass-card p-6 mb-6 hover-lift">
+        <div ref={koltukRef} className="glass-card p-4 md:p-6 mb-4 md:mb-6 hover-lift">
           <h3 className="text-lg font-bold mb-2 text-center">
             <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
               ⚓ Tekne Krokisi & Koltuk Seçimi
@@ -1180,72 +1162,72 @@ export default function Home() {
             )}
           </div>
           
-          <div className="relative max-w-md mx-auto">
+          <div className="relative max-w-xs sm:max-w-sm md:max-w-md mx-auto">
             {/* BAŞ - Üçgen Kısım */}
             <div className="relative">
               {/* Baş Label */}
-              <div className="text-center mb-3">
-                <span className="text-sm font-bold text-slate-800 bg-white/95 px-4 py-2 rounded-full shadow-xl border border-slate-300">⚓ BAŞ</span>
+              <div className="text-center mb-2 md:mb-3">
+                <span className="text-xs md:text-sm font-bold text-slate-800 bg-white/95 px-3 md:px-4 py-1.5 md:py-2 rounded-full shadow-xl border border-slate-300">⚓ BAŞ</span>
               </div>
               
               {/* Üçgen Şekil */}
               <div 
-                className="relative mx-auto w-40 h-28 bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 shadow-2xl border-2 border-slate-400"
+                className="relative mx-auto w-32 h-20 sm:w-36 sm:h-24 md:w-40 md:h-28 bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 shadow-2xl border-2 border-slate-400"
                 style={{
                   clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
                 }}
               >
                 {/* Baş bölümü içerik */}
-                <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-3">
-                  <div className="bg-white/90 p-2 rounded-full shadow-lg border border-slate-300">
-                    <span className="text-xl">⚓</span>
+                <div className="absolute bottom-2 md:bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-2 md:space-x-3">
+                  <div className="bg-white/90 p-1.5 md:p-2 rounded-full shadow-lg border border-slate-300">
+                    <span className="text-lg md:text-xl">⚓</span>
                   </div>
-                  <div className="bg-white/90 p-2 rounded-full shadow-lg border border-slate-300">
-                    <span className="text-lg">🚽</span>
+                  <div className="bg-white/90 p-1.5 md:p-2 rounded-full shadow-lg border border-slate-300">
+                    <span className="text-sm md:text-lg">🚽</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* ANA GÖVDE - Dikdörtgen Kısım */}
-            <div className="relative bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 w-40 mx-auto shadow-2xl rounded-b-2xl border-2 border-slate-400 border-t-0">
+            <div className="relative bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 w-32 sm:w-36 md:w-40 mx-auto shadow-2xl rounded-b-2xl border-2 border-slate-400 border-t-0">
               {/* İskele (Sol) Label */}
-              <div className="absolute -left-20 top-1/2 transform -translate-y-1/2 -rotate-90">
-                <span className="text-sm font-bold text-black bg-white/95 px-3 py-2 rounded-full shadow-xl border border-blue-600">🌊 İSKELE</span>
+              <div className="absolute -left-16 sm:-left-18 md:-left-20 top-1/2 transform -translate-y-1/2 -rotate-90">
+                <span className="text-xs md:text-sm font-bold text-black bg-white/95 px-2 md:px-3 py-1 md:py-2 rounded-full shadow-xl border border-blue-600">🌊 İSKELE</span>
               </div>
               
               {/* Sancak (Sağ) Label */}
-              <div className="absolute -right-20 top-1/2 transform -translate-y-1/2 rotate-90">
-                <span className="text-sm font-bold text-slate-800 bg-white/95 px-3 py-2 rounded-full shadow-xl border border-slate-300">🌊 SANCAK</span>
+              <div className="absolute -right-16 sm:-right-18 md:-right-20 top-1/2 transform -translate-y-1/2 rotate-90">
+                <span className="text-xs md:text-sm font-bold text-slate-800 bg-white/95 px-2 md:px-3 py-1 md:py-2 rounded-full shadow-xl border border-slate-300">🌊 SANCAK</span>
               </div>
 
               {/* Koltuk Düzeni */}
-              <div className="flex justify-between p-5">
+              <div className="flex justify-between p-3 md:p-5">
                 {/* İskele Koltukları (Sol) */}
-                <div className="flex flex-col space-y-3">
+                <div className="flex flex-col space-y-2 md:space-y-3">
                   {iskeleSeat.map(seatId => renderSeat(seatId))}
                 </div>
 
                 {/* Orta Koridor */}
-                <div className="w-10 bg-gradient-to-b from-slate-400 via-slate-450 to-slate-500 rounded-lg shadow-inner border border-slate-500">
+                <div className="w-6 md:w-10 bg-gradient-to-b from-slate-400 via-slate-450 to-slate-500 rounded-lg shadow-inner border border-slate-500">
                   {/* Koridor detayları */}
-                  <div className="space-y-2 pt-4">
-                    <div className="w-6 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
-                    <div className="w-4 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
-                    <div className="w-6 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
+                  <div className="space-y-1 md:space-y-2 pt-2 md:pt-4">
+                    <div className="w-3 md:w-6 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
+                    <div className="w-2 md:w-4 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
+                    <div className="w-3 md:w-6 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
                   </div>
                 </div>
 
                 {/* Sancak Koltukları (Sağ) */}
-                <div className="flex flex-col space-y-3">
+                <div className="flex flex-col space-y-2 md:space-y-3">
                   {sancakSeat.map(seatId => renderSeat(seatId))}
                 </div>
               </div>
             </div>
 
             {/* KIÇ */}
-            <div className="text-center mt-3">
-              <span className="text-sm font-bold text-slate-800 bg-white/95 px-4 py-2 rounded-full shadow-xl border border-slate-300">🚤 KIÇ</span>
+            <div className="text-center mt-2 md:mt-3">
+              <span className="text-xs md:text-sm font-bold text-slate-800 bg-white/95 px-3 md:px-4 py-1.5 md:py-2 rounded-full shadow-xl border border-slate-300">🚤 KIÇ</span>
             </div>
           </div>
 
@@ -1306,7 +1288,7 @@ export default function Home() {
 
         {/* Rezervasyon Özeti */}
         {!showPersonalInfoForm && (
-          <div ref={ozetRef} className="glass-card p-6 mb-6 hover-lift">
+          <div ref={ozetRef} className="glass-card p-4 md:p-6 mb-4 md:mb-6 hover-lift">
             <h3 className="text-lg font-bold mb-4 text-center">
               <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
                 🎯 Rezervasyon Özeti
@@ -1371,11 +1353,11 @@ export default function Home() {
 
         {/* Kişi Bilgileri Formu - ARTIK HEMEN REZERVASYON ÖZETİ'NDEN SONRA */}
         {showPersonalInfoForm && (
-          <div className="glass-card p-6 mb-6 hover-lift">
-            <h3 className="text-lg font-bold mb-6 text-center">
-              <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
+          <div className="glass-card p-4 md:p-6 mb-6 hover-lift">
+            <h3 className="text-base md:text-lg font-bold mb-4 md:mb-6 text-center">
+              <span className="bg-white/90 px-3 md:px-4 py-2 rounded-full shadow-lg text-slate-800 text-sm md:text-base">
                 {isPrivateTour 
-                  ? '👤 Yetkili Kişi Bilgileri (Grup Lideri)' 
+                  ? '👤 Yetkili Kişi Bilgileri' 
                   : `👥 Kişi Bilgileri (${guestCount} Kişi)`
                 }
               </span>
@@ -1383,25 +1365,25 @@ export default function Home() {
 
             {/* Özel tur açıklaması */}
             {isPrivateTour && (
-              <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
-                <p className="text-purple-800 text-sm font-medium text-center">
+              <div className="mb-4 p-3 md:p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                <p className="text-purple-800 text-xs md:text-sm font-medium text-center leading-relaxed">
                   ⭐ <strong>Özel Tur:</strong> Sadece grup lideri/yetkili kişi bilgilerini girin. 
                   Bu kişi tüm grup adına iletişim kurulacak temsilci olacaktır.
                 </p>
               </div>
             )}
 
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-6">
               {guestInfos.map((guest, index) => (
-                <div key={index} className="bg-white/90 rounded-xl p-4 border border-blue-200 shadow-lg">
-                  <h4 className="font-bold text-slate-800 mb-3 text-center">
+                <div key={index} className="bg-white/90 rounded-xl p-3 md:p-4 border border-blue-200 shadow-lg">
+                  <h4 className="font-bold text-slate-800 mb-3 text-center text-sm md:text-base">
                     {isPrivateTour 
                       ? 'Grup Lideri / Yetkili Kişi Bilgileri' 
                       : `${index + 1}. Kişi Bilgileri`
                     }
                   </h4>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* İsim */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">Ad</label>
@@ -1471,7 +1453,7 @@ export default function Home() {
                     </div>
 
                     {/* Telefon */}
-                    <div className="md:col-span-2">
+                    <div className="sm:col-span-2">
                       <label className="block text-xs font-bold text-slate-700 mb-1">Telefon</label>
                       <input
                         type="tel"
@@ -1481,7 +1463,7 @@ export default function Home() {
                           newInfos[index].phone = e.target.value;
                           setGuestInfos(newInfos);
                         }}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-slate-800 bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 text-xs md:text-sm text-slate-800 bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                         placeholder="05XX XXX XX XX"
                       />
                     </div>
@@ -1491,10 +1473,10 @@ export default function Home() {
             </div>
 
             {/* Form Navigasyon */}
-            <div className="flex gap-3 mt-6">
+            <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-6">
               <button
                 onClick={() => setShowPersonalInfoForm(false)}
-                className="flex-1 py-3 rounded-xl font-bold text-sm bg-gray-400 text-white hover:bg-gray-500 transition-all duration-300"
+                className="sm:flex-1 py-2.5 md:py-3 rounded-xl font-bold text-xs md:text-sm bg-gray-400 text-white hover:bg-gray-500 transition-all duration-300"
               >
                 ← Geri Dön
               </button>
@@ -1506,28 +1488,37 @@ export default function Home() {
                   }
                 }}
                 disabled={!isPersonalInfoComplete || loading}
-                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
+                className={`sm:flex-1 py-2.5 md:py-3 rounded-xl font-bold text-xs md:text-sm transition-all duration-300 ${
                   isPersonalInfoComplete && !loading
                     ? 'bg-gradient-to-r from-green-500 via-green-600 to-emerald-600 text-white shadow-xl hover:shadow-2xl hover:scale-105 shimmer'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                {loading 
-                  ? '💾 Kaydediliyor...'
-                  : isPersonalInfoComplete 
-                  ? isPrivateTour 
-                    ? '🎉 Özel Tur Rezervasyonunu Onayla' 
-                    : '🎉 Rezervasyonu Onayla'
-                  : isPrivateTour
-                  ? '📝 Yetkili Kişi Bilgilerini Doldurun'
-                  : '📝 Kişi Bilgilerini Doldurun'}
+                <span className="hidden sm:inline">
+                  {loading 
+                    ? '💾 Kaydediliyor...'
+                    : isPersonalInfoComplete 
+                    ? isPrivateTour 
+                      ? '🎉 Özel Tur Rezervasyonunu Onayla' 
+                      : '🎉 Rezervasyonu Onayla'
+                    : isPrivateTour
+                    ? '📝 Yetkili Kişi Bilgilerini Doldurun'
+                    : '📝 Kişi Bilgilerini Doldurun'}
+                </span>
+                <span className="sm:hidden">
+                  {loading 
+                    ? '💾 Kaydediliyor...'
+                    : isPersonalInfoComplete 
+                    ? '🎉 Onayla'
+                    : '📝 Bilgileri Doldurun'}
+                </span>
               </button>
             </div>
           </div>
         )}
 
         {/* Hizmetler */}
-        <div className="glass-card p-6 mb-6 hover-lift">
+        <div className="glass-card p-4 md:p-6 mb-4 md:mb-6 hover-lift">
           <h3 className="text-lg font-bold mb-4 text-center">
             <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
               🎣 Hizmetlerimiz
@@ -1549,8 +1540,10 @@ export default function Home() {
           </div>
         </div>
 
+
+
         {/* İletişim */}
-        <div className="glass-card p-6 mb-6 hover-lift">
+        <div className="glass-card p-4 md:p-6 mb-4 md:mb-6 hover-lift">
           <h3 className="text-lg font-bold mb-4 text-center">
             <span className="bg-white/90 px-4 py-2 rounded-full shadow-lg text-slate-800">
               📍 İletişim Bilgileri
@@ -1581,7 +1574,8 @@ export default function Home() {
             </div>
                       </div>
           </div>
-        </section>
+        </div>
+      </section>
 
         {/* Ödeme Modal'ı */}
         {showPaymentModal && (
