@@ -120,6 +120,182 @@ export default function HakkimizdaPage() {
             </div>
           </div>
 
+          {/* Sıkça Sorulan Sorular */}
+          <div className="bg-white rounded-2xl shadow-xl border border-cyan-200 p-8 hover:shadow-2xl transition-all duration-300">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
+              <span className="mr-3 text-3xl">❓</span>
+              Sıkça Sorulan Sorular
+            </h2>
+            <div className="space-y-6">
+              <div className="border-l-4 border-blue-500 pl-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-2">🚤 Turlar nereden kalkıyor, nerelere gidiliyor?</h3>
+                <p className="text-slate-600">Turlarımız Eyüp Odabaşı Sporcular Parkı'ndan başlayıp İstanbul Boğazı'nın en bereketli balık avlama noktalarını kapsıyor. Genellikle Rumeli Kavağı, Anadolu Kavağı ve Fatih Sultan Mehmet Köprüsü çevresini kapsayan rotamız var.</p>
+              </div>
+              
+              <div className="border-l-4 border-green-500 pl-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-2">🕐 Hangi saatlerde yapılıyor?</h3>
+                <p className="text-slate-600">Normal turlarımız günde 2 seans halinde düzenleniyor: <strong>07:00-13:00</strong> sabah turu ve <strong>14:00-20:00</strong> öğleden sonra turu. Özel turlar ise istediğiniz saatlerde düzenlenebilir.</p>
+              </div>
+              
+              <div className="border-l-4 border-orange-500 pl-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-2">🐟 Hangi balıklar tutuluyor?</h3>
+                <p className="text-slate-600">İstanbul Boğazı'nda mevsime göre çipura, levrek, lüfer, palamut, istavrit, mezgit, barbunya ve daha birçok tür balık yakalama şansınız var. Aşağıdaki sezonluk balık takvimine göz atabilirsiniz.</p>
+              </div>
+              
+              <div className="border-l-4 border-purple-500 pl-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-2">👨‍👩‍👧‍👦 Herkes katılabilir mi? Eğitim veriliyor mu?</h3>
+                <p className="text-slate-600">Elbette! 0-99 yaş arası herkes katılabilir. Deneyimli rehberimiz başlangıç seviyesindeki misafirlerimize temel balık avlama tekniklerini öğretir. Çocuklar için özel güvenlik önlemleri alınır.</p>
+              </div>
+              
+              <div className="border-l-4 border-red-500 pl-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-2">⚓ Teknede ne var?</h3>
+                <p className="text-slate-600">Teknemizde modern navigasyon ekipmanları, güvenlik malzemeleri (can yeleği, cankurtaran simidi), temiz tuvalet, oturma alanları ve balık avı için gerekli tüm ekipmanlar bulunuyor. Ayrıca soğuk içecek servisi de mevcut.</p>
+              </div>
+              
+              <div className="border-l-4 border-teal-500 pl-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-2">🎣 Oltam yoksa ne olur?</h3>
+                <p className="text-slate-600">Hiç sorun değil! +150 TL ek ücretle olta ve tüm balık avı takımını biz sağlıyoruz. Kaliteli oltalar, ipler, yemler ve çeşitli iğneler dahildir. Deneyimli misafirler kendi ekipmanlarını da getirebilir.</p>
+              </div>
+              
+              <div className="border-l-4 border-pink-500 pl-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-2">🥪 Yiyecek/içecek getirebilir miyim?</h3>
+                <p className="text-slate-600">Tabii ki! Kendi yiyecek ve içeceklerinizi getirebilirsiniz. Teknede cooler buz dolabı bulunuyor. Alkollü içecekler güvenlik nedeniyle sınırlı miktarda kabul edilmektedir.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Hangi Balık Hangi Sezonda Tutulur */}
+          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-2xl shadow-xl border border-cyan-200 p-8 hover:shadow-2xl transition-all duration-300">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
+              <span className="mr-3 text-3xl">🐠</span>
+              Hangi Balık Hangi Sezonda Tutulur?
+            </h2>
+            <p className="text-slate-600 mb-8 text-center">İstanbul Boğazı'nda mevsime göre avlanabilecek balık türleri ve en uygun zamanları</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* İlkbahar */}
+              <div className="bg-white rounded-xl p-6 border-2 border-green-200 hover:border-green-300 transition-all duration-300">
+                <div className="text-center mb-4">
+                  <div className="text-4xl mb-2">🌸</div>
+                  <h3 className="text-xl font-bold text-green-700">İlkbahar</h3>
+                  <p className="text-sm text-green-600">Mart - Mayıs</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐟</span>
+                    <span className="text-slate-700 font-medium">Çipura</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐠</span>
+                    <span className="text-slate-700 font-medium">Levrek</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐟</span>
+                    <span className="text-slate-700 font-medium">Mezgit</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐠</span>
+                    <span className="text-slate-700 font-medium">İstavrit</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Yaz */}
+              <div className="bg-white rounded-xl p-6 border-2 border-yellow-200 hover:border-yellow-300 transition-all duration-300">
+                <div className="text-center mb-4">
+                  <div className="text-4xl mb-2">☀️</div>
+                  <h3 className="text-xl font-bold text-yellow-700">Yaz</h3>
+                  <p className="text-sm text-yellow-600">Haziran - Ağustos</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐟</span>
+                    <span className="text-slate-700 font-medium">Lüfer</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐠</span>
+                    <span className="text-slate-700 font-medium">Palamut</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐟</span>
+                    <span className="text-slate-700 font-medium">Uskumru</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐠</span>
+                    <span className="text-slate-700 font-medium">Sarıkanat</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sonbahar */}
+              <div className="bg-white rounded-xl p-6 border-2 border-orange-200 hover:border-orange-300 transition-all duration-300">
+                <div className="text-center mb-4">
+                  <div className="text-4xl mb-2">🍂</div>
+                  <h3 className="text-xl font-bold text-orange-700">Sonbahar</h3>
+                  <p className="text-sm text-orange-600">Eylül - Kasım</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐟</span>
+                    <span className="text-slate-700 font-medium">Barbunya</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐠</span>
+                    <span className="text-slate-700 font-medium">Kefal</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐟</span>
+                    <span className="text-slate-700 font-medium">Çipura</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐠</span>
+                    <span className="text-slate-700 font-medium">Levrek</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kış */}
+              <div className="bg-white rounded-xl p-6 border-2 border-blue-200 hover:border-blue-300 transition-all duration-300">
+                <div className="text-center mb-4">
+                  <div className="text-4xl mb-2">❄️</div>
+                  <h3 className="text-xl font-bold text-blue-700">Kış</h3>
+                  <p className="text-sm text-blue-600">Aralık - Şubat</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐟</span>
+                    <span className="text-slate-700 font-medium">Mezgit</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐠</span>
+                    <span className="text-slate-700 font-medium">Kalkan</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐟</span>
+                    <span className="text-slate-700 font-medium">Dil Balığı</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">🐠</span>
+                    <span className="text-slate-700 font-medium">Barbunya</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mevcut Sezon Bilgisi */}
+            <div className="mt-8 text-center">
+              <div className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl p-6 inline-block">
+                <h3 className="text-lg font-bold mb-2">🗓️ Şu Anki Sezon</h3>
+                <p className="text-blue-100 mb-3">
+                  {new Date().toLocaleDateString('tr-TR', { month: 'long' })} ayında avlanabilecek balıklar
+                </p>
+                <div className="text-sm text-blue-100">
+                  Bu ay için en uygun balık türleri ve teknikleri hakkında detaylı bilgi almak için bizi arayın!
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Neden Bizi Seçmelisiniz */}
           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl shadow-xl border border-purple-200 p-8 hover:shadow-2xl transition-all duration-300">
             <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">

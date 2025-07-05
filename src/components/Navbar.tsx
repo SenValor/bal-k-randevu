@@ -11,6 +11,8 @@ export default function Navbar() {
   const navigation = [
     { name: 'Ana Sayfa', href: '/', icon: '🏠' },
     { name: 'Hakkımızda', href: '/hakkimizda', icon: '👥' },
+    { name: 'Görsellerimiz', href: '/gorsellerimiz', icon: '📸' },
+    { name: 'Randevu Al', href: '/randevu', icon: '🎣' },
     { name: 'SSS', href: '/sss', icon: '❓' },
     { name: 'İletişim', href: '/iletisim', icon: '📞' },
   ];
