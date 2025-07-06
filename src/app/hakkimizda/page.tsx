@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 
 export const metadata: Metadata = {
   title: "Hakkımızda - Balık Sefası",
@@ -12,8 +13,17 @@ export default function HakkimizdaPage() {
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-12">
+          <div className="mb-6">
+            <Image
+              src="/logo.png"
+              alt="Balık Sefası Logo"
+              width={120}
+              height={60}
+              className="object-contain mx-auto"
+            />
+          </div>
           <h1 className="text-4xl font-bold text-slate-800 mb-4">
-            👨‍👩‍👧‍👦 Hakkımızda
+            Hakkımızda
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
             İstanbul Boğazı'nda profesyonel balık avı turları düzenleyen deneyimli ekibimizle tanışın

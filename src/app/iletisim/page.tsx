@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { Metadata } from "next";
 
 // Metadata'yı client component'te export edemeyiz, bu yüzden kaldırıyoruz
@@ -11,8 +12,17 @@ export default function IletisimPage() {
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-12">
+          <div className="mb-6">
+            <Image
+              src="/logo.png"
+              alt="Balık Sefası Logo"
+              width={120}
+              height={60}
+              className="object-contain mx-auto"
+            />
+          </div>
           <h1 className="text-4xl font-bold text-slate-800 mb-4">
-            📞 İletişim
+            İletişim
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
             Rezervasyon yapmak, soru sormak veya bilgi almak için bizimle iletişime geçin

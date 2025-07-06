@@ -389,8 +389,40 @@ export default function RandevuPage() {
     setLoading(true);
     try {
       const isSpecialTour = tourType === 'private' || tourType === 'fishing-swimming';
+      
+      // Rezervasyon numarası üretme
+      const generateReservationNumber = () => {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const random = Math.floor(Math.random() * 9000) + 1000;
+        return `RV-${year}${month}${day}-${random}`;
+      };
+      
+      // Fiyat hesaplama
+      let selectedPrice = 0;
+      let priceDetails = '';
+      
+      if (tourType === 'normal') {
+        if (priceOption === 'own-equipment') {
+          selectedPrice = prices.normalOwn;
+          priceDetails = 'Normal Tur - Kendi Ekipmanı';
+        } else {
+          selectedPrice = prices.normalWithEquipment;
+          priceDetails = 'Normal Tur - Ekipman Dahil';
+        }
+      } else if (tourType === 'private') {
+        selectedPrice = prices.privateTour;
+        priceDetails = 'Kapalı Tur (Özel) - Tüm Tekne';
+      } else if (tourType === 'fishing-swimming') {
+        selectedPrice = prices.fishingSwimming;
+        priceDetails = 'Balık + Yüzme Turu - 6 Saat';
+      }
+      
       const reservationData = {
         tourType,
+        reservationNumber: generateReservationNumber(),
         guestCount: isSpecialTour ? 12 : guestCount,
         selectedDate,
         selectedTime: isSpecialTour ? 
@@ -402,6 +434,9 @@ export default function RandevuPage() {
         status: 'pending',
         paymentStatus: 'waiting',
         priceOption: tourType === 'normal' ? priceOption : 'with-equipment',
+        selectedPrice: selectedPrice,
+        priceDetails: priceDetails,
+        totalAmount: isSpecialTour ? selectedPrice : selectedPrice * guestCount,
         createdAt: serverTimestamp()
       };
 
@@ -1397,6 +1432,38 @@ export default function RandevuPage() {
                           <span className="text-slate-600">🪑 Koltuklar:</span>
                           <span className="font-bold text-slate-800 text-xs sm:text-sm">
                             {selectedSeats.join(', ')}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center border-t pt-2">
+                          <span className="text-slate-600">💰 Paket:</span>
+                          <span className="font-bold text-slate-800 text-xs sm:text-sm">
+                            {tourType === 'normal' ? 
+                              (priceOption === 'own-equipment' ? 'Kendi Ekipmanı' : 'Ekipman Dahil') :
+                              tourType === 'private' ? 'Kapalı Tur (Özel)' : 'Balık + Yüzme Turu'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600">💵 Fiyat:</span>
+                          <span className="font-bold text-green-600 text-xs sm:text-sm">
+                            {tourType === 'normal' ? 
+                              (priceOption === 'own-equipment' ? 
+                                `${prices.normalOwn.toLocaleString('tr-TR')} TL/kişi` : 
+                                `${prices.normalWithEquipment.toLocaleString('tr-TR')} TL/kişi`) :
+                              tourType === 'private' ? 
+                                `${prices.privateTour.toLocaleString('tr-TR')} TL (Grup)` : 
+                                `${prices.fishingSwimming.toLocaleString('tr-TR')} TL (Grup)`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center border-t pt-2">
+                          <span className="text-slate-600 font-bold">🧾 Toplam Tutar:</span>
+                          <span className="font-bold text-green-700 text-sm sm:text-base">
+                            {(tourType === 'private' || tourType === 'fishing-swimming') ? 
+                              (tourType === 'private' ? 
+                                `${prices.privateTour.toLocaleString('tr-TR')} TL` : 
+                                `${prices.fishingSwimming.toLocaleString('tr-TR')} TL`) :
+                              (priceOption === 'own-equipment' ? 
+                                `${(prices.normalOwn * guestCount).toLocaleString('tr-TR')} TL` : 
+                                `${(prices.normalWithEquipment * guestCount).toLocaleString('tr-TR')} TL`)}
                           </span>
                         </div>
                       </div>

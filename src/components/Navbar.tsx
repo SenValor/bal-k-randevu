@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 export default function Navbar() {
@@ -25,8 +26,15 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity duration-300">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-lg">🐟</span>
+            <div className="w-12 h-12 flex items-center justify-center">
+              <Image
+                src="/logo.png"
+                alt="Balık Sefası Logo"
+                width={48}
+                height={48}
+                className="object-contain"
+                priority
+              />
             </div>
             <div className="hidden sm:block">
               <h1 className="text-xl font-bold text-slate-800">Balık Sefası</h1>
@@ -54,8 +62,6 @@ export default function Navbar() {
               );
             })}
           </div>
-
-
 
           {/* Mobile Hamburger */}
           <div className="md:hidden">
