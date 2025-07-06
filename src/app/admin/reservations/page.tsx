@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
@@ -28,7 +28,8 @@ interface Reservation {
   totalAmount?: number;
 }
 
-export default function ReservationsPage() {
+// SearchParams kullanan component'i ayrı bir component'e al
+function ReservationsContent() {
   const searchParams = useSearchParams();
   const statusFilter = searchParams.get('status');
   
@@ -866,5 +867,21 @@ Anlayışınız için teşekkürler. 🙏`
         </div>
       )}
     </div>
+  );
+}
+
+// Ana export function - Suspense ile sarmalı
+export default function ReservationsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Randevular yükleniyor...</p>
+        </div>
+      </div>
+    }>
+      <ReservationsContent />
+    </Suspense>
   );
 } 

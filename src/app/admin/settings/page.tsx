@@ -63,13 +63,31 @@ export default function SettingsPage() {
         const settingsDoc = snapshot.docs.find(doc => doc.id === 'general');
         if (settingsDoc) {
           const data = settingsDoc.data();
-          setSettings(data);
+          // Firebase'den gelen veriyi varsayılan değerlerle birleştir
+          const mergedSettings: Settings = {
+            siteName: data.siteName || 'Balık Sefası',
+            contactPhone: data.contactPhone || '+90 555 123 4567',
+            contactEmail: data.contactEmail || 'info@balikserafasi.com',
+            workingHours: data.workingHours || '07:00 - 20:00',
+            maxCapacity: data.maxCapacity || 12,
+            priceUpdateDate: data.priceUpdateDate || '',
+            maintenanceMode: data.maintenanceMode || false,
+            bookingEnabled: data.bookingEnabled !== undefined ? data.bookingEnabled : true
+          };
+          setSettings(mergedSettings);
         }
         
         const pricesDoc = snapshot.docs.find(doc => doc.id === 'prices');
         if (pricesDoc) {
           const data = pricesDoc.data();
-          setPrices(data);
+          // Firebase'den gelen veriyi varsayılan değerlerle birleştir
+          const mergedPrices: Prices = {
+            normalOwn: data.normalOwn || 850,
+            normalWithEquipment: data.normalWithEquipment || 1000,
+            privateTour: data.privateTour || 12000,
+            fishingSwimming: data.fishingSwimming || 15000
+          };
+          setPrices(mergedPrices);
         }
         
         const timesDoc = snapshot.docs.find(doc => doc.id === 'availableTimes');
