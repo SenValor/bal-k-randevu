@@ -780,7 +780,7 @@ export default function RandevuPage() {
                           Tüm tekne sadece sizin grubunuz için - 12 olta ve takım dahil
                         </p>
                         <div className="text-xs sm:text-sm text-slate-500">
-                          • 12 kişiye kadar • Tüm tekne kiralama • 6 saat (07:00-13:00 veya 14:00-20:00)
+                          • 12 kişiye kadar • Tüm tekne kiralama • 6 saat (Sabah veya Öğleden sonra seansı)
                         </div>
                       </div>
                     </div>
@@ -1698,7 +1698,7 @@ export default function RandevuPage() {
                       const customTour = getSelectedCustomTour(tourType);
                       if (customTour) return `${customTour.duration} Özel Tur`;
                       if (tourType === 'fishing-swimming') return '6 Saat Özel Tur';
-                      if (tourType === 'private') return '6 Saat (07:00-13:00 veya 14:00-20:00)';
+                      if (tourType === 'private') return `${selectedTime} (6 Saat Özel Tur)`;
                       return selectedTime;
                     })() : 
                     selectedTime
@@ -1876,8 +1876,8 @@ export default function RandevuPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-slate-600">🕐 Saat:</span>
                           <span className="font-bold text-slate-800 text-xs sm:text-sm">
-                            {tourType === 'private' ? '6 Saat (07:00-13:00 veya 14:00-20:00)' : 
-                             tourType === 'fishing-swimming' ? '6 Saat Özel Tur' :
+                            {tourType === 'private' ? `${selectedTime} (6 Saat Özel Tur)` : 
+                             tourType === 'fishing-swimming' ? `${selectedTime} (6 Saat Özel Tur)` :
                              selectedTime}
                           </span>
                         </div>
