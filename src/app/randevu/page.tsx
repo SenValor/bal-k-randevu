@@ -106,7 +106,7 @@ export default function RandevuPage() {
     };
   }, []);
 
-  // Ayın dolu günlerini çek
+  // Ayın dolu günlerini seans bazlı çek
   useEffect(() => {
     const fetchOccupiedDates = async () => {
       try {
@@ -123,32 +123,63 @@ export default function RandevuPage() {
         );
         
         const querySnapshot = await getDocs(q);
-        const dateOccupancy: {[key: string]: number} = {};
+        const dateTimeOccupancy: {[key: string]: {[key: string]: number}} = {};
         
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          if (data.selectedDate) {
+          if (data.selectedDate && data.selectedTime) {
+            const dateKey = data.selectedDate;
+            const timeKey = data.selectedTime;
+            
             let occupiedCount = 0;
             
             if (data.isPrivateTour) {
-              // Özel tur = 12 koltuk dolu
+              // Özel tur = 12 koltuk dolu (tüm tekne)
               occupiedCount = 12;
             } else if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
               // Normal tur = seçili koltuk sayısı kadar dolu
               occupiedCount = data.selectedSeats.length;
             }
             
-            // Eğer o tarih zaten varsa, koltuk sayısını ekle
-            if (dateOccupancy[data.selectedDate]) {
-              dateOccupancy[data.selectedDate] += occupiedCount;
-            } else {
-              dateOccupancy[data.selectedDate] = occupiedCount;
+            // Tarih için obje yoksa oluştur
+            if (!dateTimeOccupancy[dateKey]) {
+              dateTimeOccupancy[dateKey] = {};
             }
             
-            // Maksimum 12 koltuk olabilir
-            if (dateOccupancy[data.selectedDate] > 12) {
-              dateOccupancy[data.selectedDate] = 12;
+            // Seans için rezervasyon varsa koltuk sayısını ekle
+            if (dateTimeOccupancy[dateKey][timeKey]) {
+              dateTimeOccupancy[dateKey][timeKey] += occupiedCount;
+            } else {
+              dateTimeOccupancy[dateKey][timeKey] = occupiedCount;
             }
+            
+            // Maksimum 12 koltuk olabilir (bir seans için)
+            if (dateTimeOccupancy[dateKey][timeKey] > 12) {
+              dateTimeOccupancy[dateKey][timeKey] = 12;
+            }
+          }
+        });
+        
+        // Eski formatta uyumlu olması için toplam doluluk da hesapla
+        const dateOccupancy: {[key: string]: number} = {};
+        Object.keys(dateTimeOccupancy).forEach((date) => {
+          const sessions = dateTimeOccupancy[date];
+          let totalOccupied = 0;
+          let fullyOccupiedSessions = 0;
+          
+          Object.keys(sessions).forEach((time) => {
+            if (sessions[time] >= 12) {
+              fullyOccupiedSessions++;
+            }
+            totalOccupied += sessions[time];
+          });
+          
+          // Eğer her iki seans da tamamen dolu ise (2x12=24) günü tamamen dolu say
+          // Diğer durumlarda kısmi dolu olarak işaretle
+          if (fullyOccupiedSessions === Object.keys(sessions).length && Object.keys(sessions).length >= 2) {
+            dateOccupancy[date] = 24; // Her iki seans dolu
+          } else {
+            dateOccupancy[date] = Math.min(totalOccupied, 23); // Kısmi dolu (max 23 olsun ki 24'ten az olsun)
           }
         });
         
@@ -439,9 +470,7 @@ export default function RandevuPage() {
         reservationNumber: generateReservationNumber(),
         guestCount: isSpecialTour ? 12 : guestCount,
         selectedDate,
-        selectedTime: isSpecialTour ? 
-          (tourType === 'fishing-swimming' ? '6 saat özel tur' : '07:00-20:00') : 
-          selectedTime,
+        selectedTime: selectedTime, // Kullanıcının seçtiği saat dilimi her zaman korunur
         isPrivateTour: isSpecialTour,
         selectedSeats: selectedSeats,
         guestInfos: [guestInfo],
@@ -861,8 +890,8 @@ export default function RandevuPage() {
                       {calendarDays.map((dayInfo, index) => {
                         const occupiedCount = occupiedDates[dayInfo.date] || 0;
                         const isSelected = selectedDate === dayInfo.date;
-                        const isFullyOccupied = occupiedCount >= 12;
-                        const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < 12;
+                        const isFullyOccupied = occupiedCount >= 24; // Her iki seans da tamamen dolu
+                        const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < 24;
                         
                         return (
                           <button
@@ -896,9 +925,9 @@ export default function RandevuPage() {
                               dayInfo.isDisabled
                                 ? 'Geçmiş tarih'
                                 : isFullyOccupied && dayInfo.isCurrentMonth
-                                ? `Tamamen dolu (${occupiedCount}/12 koltuk) - Seçilemez`
+                                ? `Tamamen dolu (her iki seans) - Seçilemez`
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
-                                ? `Kısmen dolu (${occupiedCount}/12 koltuk)`
+                                ? `Kısmen dolu (bazı seanslar dolu) - Müsait seans var`
                                 : dayInfo.isCurrentMonth
                                 ? 'Tamamen boş - Tarih seçmek için tıklayın'
                                 : ''
@@ -939,8 +968,8 @@ export default function RandevuPage() {
                     </div>
                   </div>
 
-                  {/* Saat Seçimi - Sadece Normal Tur İçin */}
-                  {tourType === 'normal' && selectedDate && (
+                  {/* Saat Seçimi - Tüm Tur Tipleri İçin */}
+                  {selectedDate && (
                     <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 p-3 sm:p-6">
                       <h3 className="text-base sm:text-xl font-bold text-slate-800 mb-3 sm:mb-4 text-center">🕐 Saat Seçin</h3>
                       <div className="flex flex-col gap-2 sm:gap-3">
@@ -958,36 +987,28 @@ export default function RandevuPage() {
                             }`}
                           >
                             {time}
+                            {(tourType === 'private' || tourType === 'fishing-swimming') && (
+                              <div className="text-xs mt-1 opacity-80">
+                                {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel Tur'} - 6 Saat
+                              </div>
+                            )}
                           </button>
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Özel Tur Bilgisi */}
-                  {(tourType === 'private' || tourType === 'fishing-swimming') && selectedDate && (
-                    <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-purple-200 p-3 sm:p-6">
-                      <div className={`text-center border rounded-xl p-3 sm:p-4 ${
-                        tourType === 'fishing-swimming' 
-                          ? 'bg-cyan-50 border-cyan-200'
-                          : 'bg-purple-50 border-purple-200'
-                      }`}>
-                        <div className="text-3xl sm:text-4xl mb-2">
-                          {tourType === 'fishing-swimming' ? '🏊‍♂️' : '⭐'}
+                      
+                      {(tourType === 'private' || tourType === 'fishing-swimming') && (
+                        <div className={`mt-3 p-3 rounded-xl border ${
+                          tourType === 'fishing-swimming' 
+                            ? 'bg-cyan-50 border-cyan-200'
+                            : 'bg-purple-50 border-purple-200'
+                        }`}>
+                          <p className={`text-xs text-center ${
+                            tourType === 'fishing-swimming' ? 'text-cyan-700' : 'text-purple-700'
+                          }`}>
+                            💡 {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel'} tur için seçtiğiniz saat dilimi boyunca tüm tekne sizin olacak
+                          </p>
                         </div>
-                        <p className={`font-bold text-base sm:text-lg ${
-                          tourType === 'fishing-swimming' ? 'text-cyan-800' : 'text-purple-800'
-                        }`}>
-                          {tourType === 'fishing-swimming' ? 'Balık + Yüzme Turu: 6 Saat' : 'Özel Tur: 6 Saat'}
-                        </p>
-                        <p className={`text-xs sm:text-sm ${
-                          tourType === 'fishing-swimming' ? 'text-cyan-700' : 'text-purple-700'
-                        }`}>
-                          {tourType === 'fishing-swimming' 
-                            ? 'Balık avı + yüzme molası' 
-                            : '07:00-20:00 arası tüm tekne sizin'}
-                        </p>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>

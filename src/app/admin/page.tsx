@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut, onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 
 interface Reservation {
   id: string;
@@ -116,6 +116,55 @@ export default function AdminPanel() {
     setStats({ pending, confirmed, completed, total, todayReservations, totalRevenue, upcoming: upcomingCount });
   };
 
+  // Otomatik tamamlanma kontrolü
+  const checkAndCompleteReservations = async () => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentTime = now.getHours() * 60 + now.getMinutes(); // Dakika cinsinden
+    
+    for (const reservation of reservations) {
+      if (reservation.status === 'confirmed' && reservation.selectedDate === today) {
+        let shouldComplete = false;
+        
+        // Normal turlar için saat kontrolü
+        if (!reservation.isPrivateTour && reservation.selectedTime) {
+          const timeRange = reservation.selectedTime.split('-');
+          if (timeRange.length === 2) {
+            const endTime = timeRange[1].trim();
+            const [endHour, endMinute] = endTime.split(':').map(Number);
+            const endTimeInMinutes = endHour * 60 + endMinute;
+            
+            // Tur bitiş saatinden 30 dakika sonra otomatik tamamla
+            if (currentTime >= endTimeInMinutes + 30) {
+              shouldComplete = true;
+            }
+          }
+        }
+        
+        // Özel turlar için (6 saat olan turlar)
+        if (reservation.isPrivateTour) {
+          // Gece 21:00'dan sonra tamamla (turlar max 20:00'da bitiyor)
+          if (currentTime >= 21 * 60) {
+            shouldComplete = true;
+          }
+        }
+        
+        if (shouldComplete) {
+          try {
+            await updateDoc(doc(db, 'reservations', reservation.id), {
+              status: 'completed',
+              completedAt: new Date().toISOString(),
+              autoCompleted: true
+            });
+            console.log(`Rezervasyon otomatik tamamlandı: ${reservation.reservationNumber}`);
+          } catch (error) {
+            console.error('Otomatik tamamlanma hatası:', error);
+          }
+        }
+      }
+    }
+  };
+
   const handleLogin = async () => {
     if (!adminEmail || !adminPassword) return;
     
@@ -131,7 +180,26 @@ export default function AdminPanel() {
     }
   };
 
+  // Otomatik kontrol sistemi (her 5 dakikada bir)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (reservations.length > 0) {
+        checkAndCompleteReservations();
+      }
+    }, 5 * 60 * 1000); // 5 dakika
+
+    return () => clearInterval(interval);
+  }, [reservations]);
+
   const quickActions = [
+    {
+      title: 'Rezervasyon Takvimi',
+      description: 'Aylık rezervasyon durumunu görüntüle',
+      href: '/admin/calendar',
+      icon: '📅',
+      color: 'bg-indigo-500 hover:bg-indigo-600',
+      stats: 'Takvim görünümü'
+    },
     {
       title: 'Randevu Yönetimi',
       description: 'Tüm randevuları görüntüle ve yönet',
@@ -286,19 +354,32 @@ export default function AdminPanel() {
       <header className="bg-white shadow-lg border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <Link href="/" className="text-2xl font-bold text-blue-600">
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <Link href="/" className="text-xl sm:text-2xl font-bold text-blue-600">
                 🎣 Balık Sefası
               </Link>
-              <span className="text-sm text-gray-500">Admin Dashboard</span>
+              <span className="hidden sm:block text-sm text-gray-500">Admin Dashboard</span>
             </div>
             
-            <button
-              onClick={() => signOut(auth)}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              Çıkış Yap
-            </button>
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <Link
+                href="/admin/calendar"
+                className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 flex items-center space-x-1 sm:space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105 border-2 border-indigo-400"
+                title="Rezervasyon Takvimi"
+              >
+                <span className="text-base sm:text-lg">📅</span>
+                <span className="hidden sm:inline">Rezervasyon Takvimi</span>
+                <span className="sm:hidden">Takvim</span>
+              </Link>
+              
+              <button
+                onClick={() => signOut(auth)}
+                className="bg-red-500 hover:bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors"
+              >
+                <span className="hidden sm:inline">Çıkış Yap</span>
+                <span className="sm:hidden">Çıkış</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>

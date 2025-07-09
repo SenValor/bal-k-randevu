@@ -228,8 +228,8 @@ Sarıyer/İstanbul
 🗺️ Konum: https://maps.google.com/?q=41.1063,29.0587
 
 🚗 Ulaşım: 
-- Sarıyer-Eyüp minibüsü ile "Odabaşı" durağı
 - Özel araç için park alanı mevcut
+- Toplu taşıma ile ulaşım için detaylı bilgi almak üzere arayabilirsiniz
 
 Randevu saatinden 15 dakika önce hazır olmanızı rica ederiz. 
 Herhangi bir sorunuz varsa bize ulaşabilirsiniz.
