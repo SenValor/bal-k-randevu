@@ -44,7 +44,7 @@ export default function RootLayout({
             <div className="flex flex-col md:flex-row items-center justify-between">
               <div className="text-center md:text-left mb-4 md:mb-0">
                 <p className="text-gray-300 text-sm">
-                  © 2024 Balık Sefası. Tüm hakları saklıdır.
+                  © 2025 Balık Sefası. Tüm hakları saklıdır.
                 </p>
               </div>
               

@@ -58,6 +58,7 @@ export default function RandevuPage() {
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [occupiedDates, setOccupiedDates] = useState<{[key: string]: number}>({});
+  const [sessionOccupancy, setSessionOccupancy] = useState<{[key: string]: number}>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
@@ -402,6 +403,46 @@ export default function RandevuPage() {
     );
   };
 
+  // Seçili tarih için seans bazlı doluluk bilgisini çek
+  const fetchSessionOccupancy = async (date: string) => {
+    if (!date) return;
+    
+    try {
+      const q = query(
+        collection(db, 'reservations'),
+        where('selectedDate', '==', date)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const sessionOccupancyMap: {[key: string]: number} = {};
+      
+      // Her saat için doluluk sayısını hesapla
+      availableTimes.forEach(time => {
+        sessionOccupancyMap[time] = 0;
+      });
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        // Sadece onaylı ve bekleyen rezervasyonları dikkate al
+        if ((data.status === 'confirmed' || data.status === 'pending') && data.selectedTime) {
+          if (data.isPrivateTour) {
+            // Özel tur: tüm tekneyi kaplar (12 koltuk)
+            sessionOccupancyMap[data.selectedTime] = 12;
+          } else if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
+            // Normal tur: koltuk sayısı kadar
+            const currentOccupancy = sessionOccupancyMap[data.selectedTime] || 0;
+            const newOccupancy = currentOccupancy + data.selectedSeats.length;
+            sessionOccupancyMap[data.selectedTime] = Math.min(newOccupancy, 12);
+          }
+        }
+      });
+      
+      setSessionOccupancy(sessionOccupancyMap);
+    } catch (error) {
+      console.error('Seans doluluk bilgisi çekilemedi:', error);
+    }
+  };
+
   // Dolu koltukları çek
   const fetchOccupiedSeats = async (date: string, time: string) => {
     if (!date || !time) return;
@@ -502,6 +543,15 @@ export default function RandevuPage() {
       setSelectedSeats([...iskeleSeat, ...sancakSeat]);
     }
   }, [selectedDate, tourType, customTours]); // customTours dependency eklendi
+
+  // Tarih seçildiğinde seans bazlı doluluk bilgisini çek
+  useEffect(() => {
+    if (selectedDate) {
+      fetchSessionOccupancy(selectedDate);
+    } else {
+      setSessionOccupancy({});
+    }
+  }, [selectedDate, availableTimes]);
 
   // Rezervasyon kaydetme
   const saveReservation = async () => {
@@ -1119,16 +1169,21 @@ export default function RandevuPage() {
                         const isFullyOccupied = occupiedCount >= 24; // Her iki seans da tamamen dolu
                         const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < 24;
                         
+                        // Bu tarih için hangi seansların dolu olduğunu hesapla
+                        const getSessionStatusForDate = (date: string) => {
+                          // Bu implementation daha sonra eklenecek - şimdilik basit mesaj
+                          if (isFullyOccupied) return "Tüm seanslar dolu";
+                          if (isPartiallyOccupied) return "Bazı seanslar dolu";
+                          return "Tüm seanslar boş";
+                        };
+                        
                         return (
                           <button
                             key={index}
                             onClick={() => {
                               if (!dayInfo.isDisabled && !isFullyOccupied) {
-                                // Özel tur kısıtlaması kontrolü
-                                if ((tourType === 'private' || tourType === 'fishing-swimming') && isPartiallyOccupied) {
-                                  alert(`❌ Seçili tarihte özel tur alamazsınız!\n\nBu tarihte ${occupiedCount} koltuk dolu olduğu için özel tur (balık+yüzme) seçimi yapılamaz.\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
-                                  return;
-                                }
+                                // Tarih seçimi - özel tur kısıtlaması sadece tamamen dolu günler için
+                                // Kısmen dolu günlerde hangi seansın müsait olduğunu saat seçiminde göstereceğiz
                                 setSelectedDate(dayInfo.date);
                                 scrollToContinueButton();
                               }
@@ -1149,13 +1204,13 @@ export default function RandevuPage() {
                             }`}
                             title={
                               dayInfo.isDisabled
-                                ? 'Geçmiş tarih'
+                                ? 'Geçmiş tarih seçilemez'
                                 : isFullyOccupied && dayInfo.isCurrentMonth
-                                ? `Tamamen dolu (her iki seans) - Seçilemez`
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen dolu (tüm seanslar) - Hiçbir tur türü için müsait değil`
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
-                                ? `Kısmen dolu (bazı seanslar dolu) - Müsait seans var`
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Kısmi dolu (${occupiedCount}/24) - Müsait seanslar var, saat seçiminde görün`
                                 : dayInfo.isCurrentMonth
-                                ? 'Tamamen boş - Tarih seçmek için tıklayın'
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen boş - Tüm seanslar müsait`
                                 : ''
                             }
                           >
@@ -1198,28 +1253,115 @@ export default function RandevuPage() {
                   {selectedDate && (
                     <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 p-3 sm:p-6">
                       <h3 className="text-base sm:text-xl font-bold text-slate-800 mb-3 sm:mb-4 text-center">🕐 Saat Seçin</h3>
+                      
+                      {/* Seçili Tarih İçin Durum Bilgisi */}
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                        <div className="text-center">
+                          <p className="text-blue-800 font-bold text-sm mb-2">
+                            📅 {new Date(selectedDate).toLocaleDateString('tr-TR', { 
+                              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
+                            })}
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            <div className="flex items-center justify-center space-x-1 bg-white/60 px-2 py-1 rounded-full">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-green-700 font-bold">Boş Seans</span>
+                            </div>
+                            <div className="flex items-center justify-center space-x-1 bg-white/60 px-2 py-1 rounded-full">
+                              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                              <span className="text-orange-700 font-bold">Kısmi Dolu</span>
+                            </div>
+                            <div className="flex items-center justify-center space-x-1 bg-white/60 px-2 py-1 rounded-full">
+                              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                              <span className="text-red-700 font-bold">Tamamen Dolu</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                       <div className="flex flex-col gap-2 sm:gap-3">
-                        {availableTimes.map((time) => (
-                          <button
-                            key={time}
-                            onClick={() => {
-                              setSelectedTime(time);
-                              scrollToContinueButton();
-                            }}
-                            className={`px-4 sm:px-6 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
-                              selectedTime === time
-                                ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-105'
-                                : 'bg-blue-50 hover:bg-blue-100 text-slate-800'
-                            }`}
-                          >
-                            {time}
-                            {(tourType === 'private' || tourType === 'fishing-swimming') && (
-                              <div className="text-xs mt-1 opacity-80">
-                                {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel Tur'} - 6 Saat
+                        {availableTimes.map((time) => {
+                          const timeOccupancy = sessionOccupancy[time] || 0;
+                          const isFullyOccupied = timeOccupancy >= 12;
+                          const isPartiallyOccupied = timeOccupancy > 0 && timeOccupancy < 12;
+                          const canSelectPrivate = timeOccupancy === 0; // Özel tur için tamamen boş olmalı
+                          
+                          // Özel tur seçildi ama seans dolu
+                          const isPrivateBlocked = isSpecialTour(tourType) && !canSelectPrivate;
+                          
+                          return (
+                            <button
+                              key={time}
+                              onClick={() => {
+                                if (isPrivateBlocked) {
+                                  alert(`❌ Bu seans için özel tur alamazsınız!\n\n${time} seansında ${timeOccupancy} koltuk dolu olduğu için özel tur seçimi yapılamaz.\nÖzel turlar için tamamen boş seanslar gereklidir.\n\nLütfen başka bir saat seçin veya normal tur seçeneğini tercih edin.`);
+                                  return;
+                                }
+                                if (isFullyOccupied) {
+                                  alert(`❌ Bu seans tamamen dolu!\n\n${time} seansında tüm koltuklar (12/12) dolu.\nLütfen başka bir saat seçin.`);
+                                  return;
+                                }
+                                setSelectedTime(time);
+                                scrollToContinueButton();
+                              }}
+                              disabled={isFullyOccupied || isPrivateBlocked}
+                              className={`px-4 sm:px-6 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base relative ${
+                                selectedTime === time
+                                  ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-105'
+                                  : isFullyOccupied || isPrivateBlocked
+                                  ? 'bg-gradient-to-br from-red-400 to-red-500 text-white cursor-not-allowed opacity-75'
+                                  : isPartiallyOccupied
+                                  ? 'bg-gradient-to-br from-orange-100 to-orange-200 hover:from-orange-200 hover:to-orange-300 text-slate-800 border-2 border-orange-300'
+                                  : 'bg-blue-50 hover:bg-blue-100 text-slate-800 border-2 border-blue-200'
+                              }`}
+                              title={
+                                isPrivateBlocked
+                                  ? `Özel tur için müsait değil (${timeOccupancy}/12 dolu)`
+                                  : isFullyOccupied
+                                  ? `Tamamen dolu (${timeOccupancy}/12)`
+                                  : isPartiallyOccupied
+                                  ? `Kısmi dolu (${timeOccupancy}/12) - Normal tur için müsait`
+                                  : `Tamamen boş (${timeOccupancy}/12) - Tüm tur tipleri için müsait`
+                              }
+                            >
+                              <div className="flex items-center justify-between">
+                                <span>{time}</span>
+                                {/* Doluluk Göstergesi */}
+                                <div className="flex items-center space-x-1">
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    isFullyOccupied 
+                                      ? 'bg-white/80' 
+                                      : isPartiallyOccupied 
+                                      ? 'bg-orange-600' 
+                                      : 'bg-green-500'
+                                  }`}></div>
+                                  <span className="text-xs font-bold">
+                                    {timeOccupancy}/12
+                                  </span>
+                                </div>
                               </div>
-                            )}
-                          </button>
-                        ))}
+                              
+                              {(tourType === 'private' || tourType === 'fishing-swimming') && (
+                                <div className="text-xs mt-1 opacity-80">
+                                  {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel Tur'} - 6 Saat
+                                  {isPrivateBlocked && (
+                                    <div className="text-xs mt-1 font-bold">
+                                      ⚠️ Bu seans için özel tur alınamaz
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* Durum açıklaması */}
+                              <div className="text-xs mt-1 opacity-75">
+                                {isFullyOccupied 
+                                  ? '🔴 Tamamen Dolu' 
+                                  : isPartiallyOccupied 
+                                  ? '🟡 Kısmi Dolu' 
+                                  : '🟢 Tamamen Boş'}
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                       
                       {(tourType === 'private' || tourType === 'fishing-swimming') && (
@@ -1228,10 +1370,20 @@ export default function RandevuPage() {
                             ? 'bg-cyan-50 border-cyan-200'
                             : 'bg-purple-50 border-purple-200'
                         }`}>
-                          <p className={`text-xs text-center ${
+                          <p className={`text-xs text-center font-bold mb-2 ${
+                            tourType === 'fishing-swimming' ? 'text-cyan-800' : 'text-purple-800'
+                          }`}>
+                            ⭐ {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel'} Tur Seçimi
+                          </p>
+                          <p className={`text-xs text-center mb-1 ${
                             tourType === 'fishing-swimming' ? 'text-cyan-700' : 'text-purple-700'
                           }`}>
-                            💡 {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel'} tur için seçtiğiniz saat dilimi boyunca tüm tekne sizin olacak
+                            🚤 Seçtiğiniz saat dilimi boyunca tüm tekne (12 koltuk) sizin olacak
+                          </p>
+                          <p className={`text-xs text-center ${
+                            tourType === 'fishing-swimming' ? 'text-cyan-600' : 'text-purple-600'
+                          }`}>
+                            ℹ️ Diğer seans boşsa başka müşteriler o seansı alabilir
                           </p>
                         </div>
                       )}
@@ -1445,13 +1597,13 @@ export default function RandevuPage() {
                   onClick={() => setCurrentStep(4)}
                   disabled={
                     !selectedDate || 
-                    (tourType === 'normal' && !selectedTime) ||
+                    !selectedTime ||  // TÜM TUR TİPLERİ İÇİN SAAT SEÇİMİ ZORUNLU
                     (tourType === 'normal' && selectedSeats.length !== guestCount) ||
                     (isSpecialTour(tourType) && selectedSeats.length !== 12)
                   }
                   className={`px-6 sm:px-8 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
                     selectedDate && 
-                    (isSpecialTour(tourType) || selectedTime) &&
+                    selectedTime &&  // TÜM TUR TİPLERİ İÇİN SAAT SEÇİMİ ZORUNLU
                     ((tourType === 'normal' && selectedSeats.length === guestCount) || 
                      (isSpecialTour(tourType) && selectedSeats.length === 12))
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
@@ -1828,4 +1980,4 @@ export default function RandevuPage() {
       </div>
     </div>
   );
-} 
+}
