@@ -84,7 +84,7 @@ export default function IletisimPage() {
                   </div>
                   <div className="mt-4">
                     <a
-                      href="https://maps.google.com/?q=Eyüp+Odabaşı+Sporcular+Parkı"
+                      href="https://maps.app.goo.gl/fVPxCBB9JphkEMBH7"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-center px-4 py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-all duration-300"
@@ -266,7 +266,7 @@ export default function IletisimPage() {
               <div className="text-4xl mb-2">🗺️</div>
               <p className="font-medium mb-2">Interaktif Harita</p>
               <a
-                href="https://maps.google.com/?q=Eyüp+Odabaşı+Sporcular+Parkı"
+                href="https://maps.app.goo.gl/fVPxCBB9JphkEMBH7"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block bg-blue-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-600 transition-all duration-300"

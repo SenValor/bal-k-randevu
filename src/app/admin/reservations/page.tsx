@@ -14,6 +14,7 @@ interface Reservation {
   selectedTime: string;
   selectedSeats: string[];
   isPrivateTour: boolean;
+  tourType?: string; // Tur tipi bilgisi - custom tur ID'leri de dahil
   guestInfos: Array<{
     name: string;
     surname: string;
@@ -26,6 +27,7 @@ interface Reservation {
   paymentStatus: 'waiting' | 'received' | 'confirmed';
   createdAt: string;
   totalAmount?: number;
+  priceOption?: 'own-equipment' | 'with-equipment'; // Normal tur için ekipman seçeneği
 }
 
 function ReservationsContent() {
@@ -41,6 +43,26 @@ function ReservationsContent() {
   const [previewMessage, setPreviewMessage] = useState<{phone: string, message: string} | null>(null);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [editForm, setEditForm] = useState<Partial<Reservation>>({});
+  const [customTours, setCustomTours] = useState<any[]>([]);
+
+  // Custom turları çek
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, 'settings', 'customTours'),
+      (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          if (data.tours && Array.isArray(data.tours)) {
+            // Tüm turları al (aktif/pasif fark etmez, admin görüntülemesi için)
+            setCustomTours(data.tours);
+          }
+        } else {
+          setCustomTours([]);
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
   // Rezervasyonları dinle
   useEffect(() => {
@@ -202,11 +224,56 @@ function ReservationsContent() {
     window.open(whatsappUrl, '_blank');
   };
 
+  // Rezervasyon tur tipini belirleme fonksiyonu
+  const getReservationTourType = (reservation: Reservation) => {
+    if (reservation.tourType === 'fishing-swimming') {
+      return 'Balık + Yüzme Turu';
+    } else if (reservation.tourType === 'private') {
+      return 'Kapalı Tur (Özel)';
+    } else if (reservation.tourType === 'normal') {
+      // Normal tur için ekipman seçeneğini kontrol et
+      if (reservation.priceOption === 'own-equipment') {
+        return 'Normal Tur - Kendi Ekipmanı';
+      } else if (reservation.priceOption === 'with-equipment') {
+        return 'Normal Tur - Ekipman Dahil';
+      } else {
+        return 'Normal Tur';
+      }
+    } else {
+      // Custom tur kontrolü
+      const customTour = customTours.find(tour => tour.id === reservation.tourType);
+      return customTour ? customTour.name : `Bilinmeyen Tur (${reservation.tourType})`;
+    }
+  };
+
   const getWhatsAppMessages = (reservation: Reservation) => {
     const guest = reservation.guestInfos[0];
     const date = new Date(reservation.selectedDate).toLocaleDateString('tr-TR');
     const time = reservation.selectedTime;
-    const tourType = reservation.isPrivateTour ? 'Özel Tur' : 'Normal Tur';
+    
+    // Tur tipini doğru şekilde belirle
+    const getTourTypeName = (reservation: Reservation) => {
+      if (reservation.tourType === 'fishing-swimming') {
+        return 'Balık + Yüzme Turu';
+      } else if (reservation.tourType === 'private') {
+        return 'Kapalı Tur (Özel)';
+      } else if (reservation.tourType === 'normal') {
+        // Normal tur için ekipman seçeneğini kontrol et
+        if (reservation.priceOption === 'own-equipment') {
+          return 'Normal Tur - Kendi Ekipmanı';
+        } else if (reservation.priceOption === 'with-equipment') {
+          return 'Normal Tur - Ekipman Dahil';
+        } else {
+          return 'Normal Tur';
+        }
+      } else {
+        // Custom tur kontrolü
+        const customTour = customTours.find(tour => tour.id === reservation.tourType);
+        return customTour ? customTour.name : 'Normal Tur';
+      }
+    };
+    
+    const tourType = getTourTypeName(reservation);
     
     return {
       approved: `🎉 Merhaba ${guest?.name}! 
@@ -225,7 +292,7 @@ Randevu No: ${reservation.reservationNumber}
 Eyüp Odabaşı Sporcular Parkı - İskele
 Sarıyer/İstanbul
 
-🗺️ Konum: https://maps.google.com/?q=41.1063,29.0587
+🗺️ Konum: https://maps.app.goo.gl/fVPxCBB9JphkEMBH7
 
 🚗 Ulaşım: 
 - Özel araç için park alanı mevcut
@@ -252,7 +319,7 @@ Randevu No: ${reservation.reservationNumber}
 
 📍 BULUŞMA YERİ:
 Eyüp Odabaşı Sporcular Parkı - İskele
-🗺️ Konum: https://maps.google.com/?q=41.1063,29.0587
+🗺️ Konum: https://maps.app.goo.gl/fVPxCBB9JphkEMBH7
 
 Lütfen randevu saatinden 15 dakika önce hazır olun.
 Güzel bir deneyim için sabırsızlanıyoruz! 🌊⚓`,
@@ -518,7 +585,7 @@ Anlayışınız için teşekkürler. 🙏`
                     <div className="space-y-1 text-sm text-gray-700">
                       <p><strong>Tarih:</strong> {new Date(reservation.selectedDate).toLocaleDateString('tr-TR')}</p>
                       <p><strong>Saat:</strong> {reservation.selectedTime}</p>
-                      <p><strong>Tur Tipi:</strong> {reservation.isPrivateTour ? 'Özel Tur' : 'Normal Tur'}</p>
+                      <p><strong>Tur Tipi:</strong> {getReservationTourType(reservation)}</p>
                       <p><strong>Koltuklar:</strong> {reservation.selectedSeats.join(', ')}</p>
                     </div>
                   </div>

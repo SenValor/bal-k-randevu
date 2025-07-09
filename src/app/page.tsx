@@ -98,7 +98,7 @@ export default function Home() {
             
             {/* WhatsApp Butonu */}
             <a
-              href="https://wa.me/905310892537?text=Merhaba,%20Balık%20Sefası%20balık%20avı%20turları%20hakkında%20bilgi%20almak%20istiyorum."
+              href="https://wa.me/905310892537?text=Merhaba,%20Balık%20Sefası%20balık%20avı%20turları%20hakkında%20bilgi%20almak%20istiyorum.%20Konum:%20https://maps.app.goo.gl/fVPxCBB9JphkEMBH7"
               target="_blank"
               rel="noopener noreferrer"
               className="group bg-green-500 hover:bg-green-600 text-white p-6 rounded-2xl font-bold text-base transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:scale-105 flex flex-col items-center space-y-3 border-2 border-green-400 hover:border-green-300"
@@ -444,7 +444,7 @@ export default function Home() {
       {/* Floating WhatsApp Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <a
-          href="https://wa.me/905310892537?text=Merhaba,%20Balık%20Sefası%20balık%20avı%20turları%20hakkında%20bilgi%20almak%20istiyorum."
+          href="https://wa.me/905310892537?text=Merhaba,%20Balık%20Sefası%20balık%20avı%20turları%20hakkında%20bilgi%20almak%20istiyorum.%20Konum:%20https://maps.app.goo.gl/fVPxCBB9JphkEMBH7"
           target="_blank"
           rel="noopener noreferrer"
           className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center animate-pulse"

@@ -15,6 +15,7 @@ interface Reservation {
   selectedTime: string;
   selectedSeats: string[];
   isPrivateTour: boolean;
+  tourType?: 'normal' | 'private' | 'fishing-swimming'; // Tur tipi bilgisi
   guestInfos: Array<{
     name: string;
     surname: string;
@@ -514,7 +515,11 @@ export default function AdminPanel() {
                             📅 {new Date(reservation.selectedDate).toLocaleDateString('tr-TR')} • {reservation.selectedTime}
                           </p>
                           <p className="text-sm opacity-75">
-                            🚢 {reservation.isPrivateTour ? 'Özel Tur' : 'Normal Tur'} • 💺 {reservation.selectedSeats.join(', ')}
+                            🚢 {
+                          reservation.tourType === 'fishing-swimming' ? 'Balık + Yüzme Turu' :
+                          reservation.tourType === 'private' ? 'Kapalı Tur (Özel)' :
+                          'Normal Tur'
+                        } • 💺 {reservation.selectedSeats.join(', ')}
                           </p>
                         </div>
                       </div>

@@ -219,7 +219,7 @@ export default function SettingsPage() {
   };
 
   // Özel tur yönetimi fonksiyonları
-  const addCustomTour = () => {
+  const addCustomTour = async () => {
     if (!newTour.name.trim() || newTour.price <= 0) {
       alert('Lütfen tur adı ve geçerli bir fiyat girin!');
       return;
@@ -236,51 +236,85 @@ export default function SettingsPage() {
       createdAt: new Date()
     };
 
-    setCustomTours([...customTours, tourToAdd]);
-    setNewTour({
-      name: '',
-      price: 0,
-      capacity: 12,
-      duration: '6 saat',
-      description: '',
-      isActive: true
-    });
+    const updatedTours = [...customTours, tourToAdd];
+    setCustomTours(updatedTours);
     
-    // Otomatik kaydet
-    setTimeout(saveCustomTours, 500);
+    // Hemen kaydet - güncellenen veriyi doğrudan kullan
+    try {
+      await setDoc(doc(db, 'settings', 'customTours'), {
+        tours: updatedTours,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      alert('Özel tur başarıyla eklendi!');
+      console.log('Özel tur eklendi:', tourToAdd);
+      
+      setNewTour({
+        name: '',
+        price: 0,
+        capacity: 12,
+        duration: '6 saat',
+        description: '',
+        isActive: true
+      });
+    } catch (error: any) {
+      console.error('Özel tur kaydetme hatası:', error);
+      alert('Özel tur kaydedilirken hata oluştu');
+      // Hata durumunda state'i geri al
+      setCustomTours(customTours);
+    }
   };
 
-  const toggleTourStatus = (tourId: string) => {
+  const toggleTourStatus = async (tourId: string) => {
     const updatedTours = customTours.map(tour =>
       tour.id === tourId ? { ...tour, isActive: !tour.isActive } : tour
     );
     setCustomTours(updatedTours);
     
-    // Otomatik kaydet
-    setTimeout(saveCustomTours, 500);
-  };
-
-  const removeTour = (tourId: string) => {
-    if (!confirm('Bu özel turu silmek istediğinize emin misiniz?')) return;
-    
-    setCustomTours(customTours.filter(tour => tour.id !== tourId));
-    
-    // Otomatik kaydet
-    setTimeout(saveCustomTours, 500);
-  };
-
-  const saveCustomTours = async () => {
+    // Hemen kaydet
     try {
       await setDoc(doc(db, 'settings', 'customTours'), {
-        tours: customTours,
+        tours: updatedTours,
         updatedAt: new Date(),
         updatedBy: 'admin'
       });
-      console.log('Özel turlar kaydedildi');
+      
+      const tour = updatedTours.find(t => t.id === tourId);
+      alert(`"${tour?.name}" ${tour?.isActive ? 'aktif hale getirildi' : 'pasif hale getirildi'}!`);
     } catch (error: any) {
-      console.error('Özel tur kaydetme hatası:', error);
+      console.error('Özel tur durumu güncellenemedi:', error);
+      alert('Tur durumu güncellenirken hata oluştu');
+      // Hata durumunda state'i geri al
+      setCustomTours(customTours);
     }
   };
+
+  const removeTour = async (tourId: string) => {
+    if (!confirm('Bu özel turu silmek istediğinize emin misiniz?')) return;
+    
+    const tourToRemove = customTours.find(tour => tour.id === tourId);
+    const updatedTours = customTours.filter(tour => tour.id !== tourId);
+    setCustomTours(updatedTours);
+    
+    // Hemen kaydet
+    try {
+      await setDoc(doc(db, 'settings', 'customTours'), {
+        tours: updatedTours,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      alert(`"${tourToRemove?.name}" özel turu silindi!`);
+    } catch (error: any) {
+      console.error('Özel tur silinemedi:', error);
+      alert('Tur silinirken hata oluştu');
+      // Hata durumunda state'i geri al
+      setCustomTours(customTours);
+    }
+  };
+
+
 
   if (loading) {
     return (

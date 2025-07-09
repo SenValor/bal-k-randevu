@@ -5,6 +5,17 @@ import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
+interface CustomTour {
+  id: string;
+  name: string;
+  price: number;
+  capacity: number;
+  duration: string;
+  description: string;
+  isActive: boolean;
+  createdAt: Date;
+}
+
 export default function RandevuPage() {
   // Adım takibi
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -23,7 +34,7 @@ export default function RandevuPage() {
   };
   
   // Form verileri
-  const [tourType, setTourType] = useState<'normal' | 'private' | 'fishing-swimming'>('normal'); // normal, özel tur veya balık+yüzme
+  const [tourType, setTourType] = useState<string>('normal'); // normal, private, fishing-swimming, veya custom tur ID'si
   const [priceOption, setPriceOption] = useState<'own-equipment' | 'with-equipment'>('own-equipment');
   const [prices, setPrices] = useState({
     normalOwn: 850,
@@ -44,6 +55,7 @@ export default function RandevuPage() {
   
   // Sistem verileri
   const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']);
+  const [customTours, setCustomTours] = useState<CustomTour[]>([]);
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [occupiedDates, setOccupiedDates] = useState<{[key: string]: number}>({});
   const [loading, setLoading] = useState<boolean>(false);
@@ -67,6 +79,23 @@ export default function RandevuPage() {
     }
   };
 
+  // Firebase'den özel turları çek
+  const fetchCustomTours = async () => {
+    try {
+      const toursDoc = await getDoc(doc(db, 'settings', 'customTours'));
+      if (toursDoc.exists()) {
+        const data = toursDoc.data();
+        if (data.tours && Array.isArray(data.tours)) {
+          // Sadece aktif turları göster
+          const activeTours = data.tours.filter((tour: CustomTour) => tour.isActive);
+          setCustomTours(activeTours);
+        }
+      }
+    } catch (error) {
+      console.error('Özel turlar çekilemedi:', error);
+    }
+  };
+
   // Firebase'den saatleri ve fiyatları çek
   useEffect(() => {
     const fetchAvailableTimes = async () => {
@@ -85,6 +114,7 @@ export default function RandevuPage() {
     
     fetchAvailableTimes();
     fetchPrices(); // Fiyatları da çek
+    fetchCustomTours(); // Özel turları da çek
 
     // Fiyatları real-time dinle
     const unsubscribePrices = onSnapshot(doc(db, 'settings', 'prices'), (doc) => {
@@ -101,8 +131,24 @@ export default function RandevuPage() {
       }
     });
 
+    // Özel turları real-time dinle
+    const unsubscribeCustomTours = onSnapshot(doc(db, 'settings', 'customTours'), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        if (data.tours && Array.isArray(data.tours)) {
+          // Sadece aktif turları göster
+          const activeTours = data.tours.filter((tour: CustomTour) => tour.isActive);
+          setCustomTours(activeTours);
+          console.log('Özel turlar güncellendi:', activeTours);
+        }
+      } else {
+        setCustomTours([]);
+      }
+    });
+
     return () => {
       unsubscribePrices();
+      unsubscribeCustomTours();
     };
   }, []);
 
@@ -118,8 +164,7 @@ export default function RandevuPage() {
         const q = query(
           collection(db, 'reservations'),
           where('selectedDate', '>=', firstDay),
-          where('selectedDate', '<=', lastDay),
-          where('status', '==', 'confirmed')
+          where('selectedDate', '<=', lastDay)
         );
         
         const querySnapshot = await getDocs(q);
@@ -127,35 +172,35 @@ export default function RandevuPage() {
         
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          if (data.selectedDate && data.selectedTime) {
+          // Sadece onaylı ve bekleyen rezervasyonları dikkate al
+          if ((data.status === 'confirmed' || data.status === 'pending') && data.selectedDate && data.selectedTime) {
             const dateKey = data.selectedDate;
-            const timeKey = data.selectedTime;
-            
-            let occupiedCount = 0;
-            
-            if (data.isPrivateTour) {
-              // Özel tur = 12 koltuk dolu (tüm tekne)
-              occupiedCount = 12;
-            } else if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
-              // Normal tur = seçili koltuk sayısı kadar dolu
-              occupiedCount = data.selectedSeats.length;
-            }
             
             // Tarih için obje yoksa oluştur
             if (!dateTimeOccupancy[dateKey]) {
               dateTimeOccupancy[dateKey] = {};
             }
             
-            // Seans için rezervasyon varsa koltuk sayısını ekle
-            if (dateTimeOccupancy[dateKey][timeKey]) {
-              dateTimeOccupancy[dateKey][timeKey] += occupiedCount;
-            } else {
-              dateTimeOccupancy[dateKey][timeKey] = occupiedCount;
-            }
-            
-            // Maksimum 12 koltuk olabilir (bir seans için)
-            if (dateTimeOccupancy[dateKey][timeKey] > 12) {
-              dateTimeOccupancy[dateKey][timeKey] = 12;
+            if (data.isPrivateTour) {
+              // ÖZEL TUR: Sadece seçilen seans için tüm tekneyi blokla (12 koltuk)
+              const timeKey = data.selectedTime;
+              dateTimeOccupancy[dateKey][timeKey] = 12; // Seçilen seans için 12 koltuk dolu
+            } else if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
+              // Normal tur = sadece seçili seans için koltuk sayısı
+              const timeKey = data.selectedTime;
+              const occupiedCount = data.selectedSeats.length;
+              
+              // Seans için rezervasyon varsa koltuk sayısını ekle
+              if (dateTimeOccupancy[dateKey][timeKey]) {
+                dateTimeOccupancy[dateKey][timeKey] += occupiedCount;
+              } else {
+                dateTimeOccupancy[dateKey][timeKey] = occupiedCount;
+              }
+              
+              // Maksimum 12 koltuk olabilir (bir seans için)
+              if (dateTimeOccupancy[dateKey][timeKey] > 12) {
+                dateTimeOccupancy[dateKey][timeKey] = 12;
+              }
             }
           }
         });
@@ -191,6 +236,31 @@ export default function RandevuPage() {
     
     fetchOccupiedDates();
   }, [currentMonth]);
+
+  // Yardımcı fonksiyonlar
+  const isSpecialTour = (type: string) => {
+    return type === 'private' || type === 'fishing-swimming' || customTours.some(tour => tour.id === type);
+  };
+
+  const getSelectedCustomTour = (type: string) => {
+    return customTours.find(tour => tour.id === type);
+  };
+
+  const getTourDisplayName = (type: string) => {
+    if (type === 'normal') return 'Normal Tur';
+    if (type === 'private') return 'Kapalı Tur (Özel)';
+    if (type === 'fishing-swimming') return 'Balık + Yüzme Turu';
+    const customTour = getSelectedCustomTour(type);
+    return customTour ? customTour.name : 'Bilinmeyen Tur';
+  };
+
+  const getTourPrice = (type: string) => {
+    if (type === 'normal') return priceOption === 'own-equipment' ? prices.normalOwn : prices.normalWithEquipment;
+    if (type === 'private') return prices.privateTour;
+    if (type === 'fishing-swimming') return prices.fishingSwimming;
+    const customTour = getSelectedCustomTour(type);
+    return customTour ? customTour.price : 0;
+  };
 
   // Takvim işlevleri
   const getCalendarDays = (month: Date) => {
@@ -295,7 +365,7 @@ export default function RandevuPage() {
       <button
         key={seatId}
         onClick={() => {
-          if (tourType === 'private' || tourType === 'fishing-swimming') return; // Özel/Balık+yüzme turda koltuk seçimi yok
+          if (isSpecialTour(tourType)) return; // Özel turda koltuk seçimi yok
           
           if (!isOccupied) {
             if (isSelected) {
@@ -308,13 +378,13 @@ export default function RandevuPage() {
             }
           }
         }}
-        disabled={isOccupied || tourType === 'private' || tourType === 'fishing-swimming'}
+        disabled={isOccupied || isSpecialTour(tourType)}
         className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center text-white text-xs sm:text-sm font-bold transition-all duration-300 shadow-lg border-2 ${getSeatColor(getSeatStatus(seatId))} ${
-          (!canSelect && !isOccupied && !isSelected) || (tourType === 'private' || tourType === 'fishing-swimming') ? 'opacity-50 cursor-not-allowed' : ''
+          (!canSelect && !isOccupied && !isSelected) || isSpecialTour(tourType) ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         title={
-          (tourType === 'private' || tourType === 'fishing-swimming')
-            ? `${tourType === 'fishing-swimming' ? 'Balık+yüzme' : 'Özel'} turda tüm koltuklar otomatik seçilmiştir`
+          isSpecialTour(tourType)
+            ? `${getTourDisplayName(tourType)} - tüm koltuklar otomatik seçilmiştir`
             : isOccupied 
             ? 'Bu koltuk dolu' 
             : isSelected 
@@ -340,8 +410,7 @@ export default function RandevuPage() {
       const q = query(
         collection(db, 'reservations'),
         where('selectedDate', '==', date),
-        where('selectedTime', '==', time),
-        where('status', '==', 'confirmed')
+        where('selectedTime', '==', time)
       );
       
       const querySnapshot = await getDocs(q);
@@ -349,17 +418,20 @@ export default function RandevuPage() {
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
-          occupied.push(...data.selectedSeats);
-        }
-        
-        if (data.isPrivateTour) {
-          const allSeats = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
-          allSeats.forEach(seat => {
-            if (!occupied.includes(seat)) {
-              occupied.push(seat);
-            }
-          });
+        // Sadece onaylı ve bekleyen rezervasyonları dikkate al
+        if (data.status === 'confirmed' || data.status === 'pending') {
+          if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
+            occupied.push(...data.selectedSeats);
+          }
+          
+          if (data.isPrivateTour) {
+            const allSeats = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
+            allSeats.forEach(seat => {
+              if (!occupied.includes(seat)) {
+                occupied.push(seat);
+              }
+            });
+          }
         }
       });
       
@@ -377,8 +449,7 @@ export default function RandevuPage() {
       const q = query(
         collection(db, 'reservations'),
         where('selectedDate', '==', selectedDate),
-        where('selectedTime', '==', selectedTime),
-        where('status', '==', 'confirmed')
+        where('selectedTime', '==', selectedTime)
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -386,17 +457,20 @@ export default function RandevuPage() {
         
         snapshot.forEach((doc) => {
           const data = doc.data();
-          if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
-            occupied.push(...data.selectedSeats);
-          }
-          
-          if (data.isPrivateTour) {
-            const allSeats = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
-            allSeats.forEach(seat => {
-              if (!occupied.includes(seat)) {
-                occupied.push(seat);
-              }
-            });
+          // Sadece onaylı ve bekleyen rezervasyonları dikkate al
+          if (data.status === 'confirmed' || data.status === 'pending') {
+            if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
+              occupied.push(...data.selectedSeats);
+            }
+            
+            if (data.isPrivateTour) {
+              const allSeats = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
+              allSeats.forEach(seat => {
+                if (!occupied.includes(seat)) {
+                  occupied.push(seat);
+                }
+              });
+            }
           }
         });
         
@@ -413,27 +487,28 @@ export default function RandevuPage() {
     }
   }, [selectedDate, selectedTime, tourType]);
 
-  // Özel tur veya balık+yüzme turu seçildiğinde tüm koltukları seç
+  // Özel tur seçildiğinde tüm koltukları seç
   useEffect(() => {
-    if (tourType === 'private' || tourType === 'fishing-swimming') {
+    if (isSpecialTour(tourType)) {
       setSelectedSeats([...iskeleSeat, ...sancakSeat]);
     } else {
       setSelectedSeats([]);
     }
-  }, [tourType]);
+  }, [tourType, customTours]); // customTours dependency eklendi
 
-  // Özel tur veya balık+yüzme turu için tarih seçildiğinde de koltukları seç
+  // Özel tur için tarih seçildiğinde de koltukları seç
   useEffect(() => {
-    if ((tourType === 'private' || tourType === 'fishing-swimming') && selectedDate) {
+    if (isSpecialTour(tourType) && selectedDate) {
       setSelectedSeats([...iskeleSeat, ...sancakSeat]);
     }
-  }, [selectedDate, tourType]);
+  }, [selectedDate, tourType, customTours]); // customTours dependency eklendi
 
   // Rezervasyon kaydetme
   const saveReservation = async () => {
     setLoading(true);
     try {
-      const isSpecialTour = tourType === 'private' || tourType === 'fishing-swimming';
+      const isSpecial = isSpecialTour(tourType);
+      const customTour = getSelectedCustomTour(tourType);
       
       // Rezervasyon numarası üretme
       const generateReservationNumber = () => {
@@ -448,6 +523,7 @@ export default function RandevuPage() {
       // Fiyat hesaplama
       let selectedPrice = 0;
       let priceDetails = '';
+      let capacity = 12; // Varsayılan kapasite
       
       if (tourType === 'normal') {
         if (priceOption === 'own-equipment') {
@@ -463,15 +539,19 @@ export default function RandevuPage() {
       } else if (tourType === 'fishing-swimming') {
         selectedPrice = prices.fishingSwimming;
         priceDetails = 'Balık + Yüzme Turu - 6 Saat';
+      } else if (customTour) {
+        selectedPrice = customTour.price;
+        priceDetails = `${customTour.name} - ${customTour.duration}`;
+        capacity = customTour.capacity;
       }
       
       const reservationData = {
         tourType,
         reservationNumber: generateReservationNumber(),
-        guestCount: isSpecialTour ? 12 : guestCount,
+        guestCount: isSpecial ? capacity : guestCount,
         selectedDate,
         selectedTime: selectedTime, // Kullanıcının seçtiği saat dilimi her zaman korunur
-        isPrivateTour: isSpecialTour,
+        isPrivateTour: isSpecial,
         selectedSeats: selectedSeats,
         guestInfos: [guestInfo],
         status: 'pending',
@@ -479,8 +559,19 @@ export default function RandevuPage() {
         priceOption: tourType === 'normal' ? priceOption : 'with-equipment',
         selectedPrice: selectedPrice,
         priceDetails: priceDetails,
-        totalAmount: isSpecialTour ? selectedPrice : selectedPrice * guestCount,
-        createdAt: serverTimestamp()
+        totalAmount: isSpecial ? selectedPrice : selectedPrice * guestCount,
+        createdAt: serverTimestamp(),
+        // Custom tur detayları
+        ...(customTour && {
+          customTourDetails: {
+            id: customTour.id,
+            name: customTour.name,
+            price: customTour.price,
+            capacity: customTour.capacity,
+            duration: customTour.duration,
+            description: customTour.description
+          }
+        })
       };
 
       await addDoc(collection(db, 'reservations'), reservationData);
@@ -688,6 +779,92 @@ export default function RandevuPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Dinamik Özel Turlar */}
+                {customTours.map((customTour: CustomTour, index: number) => {
+                  // 5 farklı renk şeması
+                  const colorSchemes = [
+                    { 
+                      border: 'border-emerald-500', 
+                      bg: 'bg-emerald-50', 
+                      text: 'text-emerald-600',
+                      hover: 'hover:border-emerald-300 hover:bg-emerald-50',
+                      emoji: '🌟'
+                    },
+                    { 
+                      border: 'border-rose-500', 
+                      bg: 'bg-rose-50', 
+                      text: 'text-rose-600',
+                      hover: 'hover:border-rose-300 hover:bg-rose-50',
+                      emoji: '🎯'
+                    },
+                    { 
+                      border: 'border-amber-500', 
+                      bg: 'bg-amber-50', 
+                      text: 'text-amber-600',
+                      hover: 'hover:border-amber-300 hover:bg-amber-50',
+                      emoji: '⚡'
+                    },
+                    { 
+                      border: 'border-indigo-500', 
+                      bg: 'bg-indigo-50', 
+                      text: 'text-indigo-600',
+                      hover: 'hover:border-indigo-300 hover:bg-indigo-50',
+                      emoji: '🚀'
+                    },
+                    { 
+                      border: 'border-pink-500', 
+                      bg: 'bg-pink-50', 
+                      text: 'text-pink-600',
+                      hover: 'hover:border-pink-300 hover:bg-pink-50',
+                      emoji: '💎'
+                    }
+                  ];
+                  
+                  const scheme = colorSchemes[index % colorSchemes.length];
+                  
+                  return (
+                    <div 
+                      key={customTour.id}
+                      onClick={() => {
+                        // Seçili tarih kısmi dolu ise uyarı ver
+                        if (selectedDate && occupiedDates[selectedDate] > 0) {
+                          alert(`❌ ${customTour.name} alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedDate]} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
+                          return;
+                        }
+                        setTourType(customTour.id);
+                        scrollToContinueButton();
+                      }}
+                      className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
+                        tourType === customTour.id
+                          ? `${scheme.border} ${scheme.bg} scale-105 shadow-xl`
+                          : `border-gray-200 ${scheme.hover}`
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="text-3xl sm:text-4xl">{scheme.emoji}</div>
+                          <div className="text-left">
+                            <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">{customTour.name}</h3>
+                            <p className="text-sm sm:text-base text-slate-600 mb-2">
+                              {customTour.description || `${customTour.duration} özel tur deneyimi`}
+                            </p>
+                            <div className="text-xs sm:text-sm text-slate-500">
+                              • {customTour.capacity} kişiye kadar • Tüm ekipman dahil • {customTour.duration}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-2xl sm:text-3xl font-bold ${scheme.text}`}>
+                            {customTour.price.toLocaleString('tr-TR')} TL
+                          </div>
+                          <div className="text-xs sm:text-sm text-slate-500">grup fiyatı</div>
+                          <div className={`text-xs ${scheme.text} font-medium`}>özel tur</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Yaş Ücretlendirmesi Bilgisi */}
@@ -780,7 +957,7 @@ export default function RandevuPage() {
                     </div>
                   </div>
                 </>
-              ) : (
+              ) : tourType === 'fishing-swimming' ? (
                 <>
                   <h2 className="text-xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">
                     Balık + Yüzme Turu Seçtiniz
@@ -797,6 +974,43 @@ export default function RandevuPage() {
                     </div>
                   </div>
                 </>
+              ) : (
+                // Özel (Custom) Tur
+                (() => {
+                  const customTour = getSelectedCustomTour(tourType);
+                  if (!customTour) return null;
+                  
+                  const colorSchemes = [
+                    { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800', icon: '🌟' },
+                    { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-800', icon: '🎯' },
+                    { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-800', icon: '⚡' },
+                    { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800', icon: '🚀' },
+                    { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-800', icon: '💎' }
+                  ];
+                  
+                  const scheme = colorSchemes[customTours.findIndex(tour => tour.id === tourType) % colorSchemes.length];
+                  
+                  return (
+                    <>
+                      <h2 className="text-xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">
+                        {customTour.name} Seçtiniz
+                      </h2>
+                      
+                      <div className={`${scheme.bg} border-2 ${scheme.border} rounded-xl sm:rounded-2xl p-4 sm:p-8 mb-6 sm:mb-8`}>
+                        <div className="text-4xl sm:text-6xl mb-2 sm:mb-4">{scheme.icon}</div>
+                        <h3 className={`text-lg sm:text-2xl font-bold ${scheme.text} mb-2 sm:mb-4`}>
+                          {customTour.name}
+                        </h3>
+                        <div className={`${scheme.text} space-y-1 sm:space-y-2 text-sm sm:text-base`}>
+                          <p>✅ {customTour.capacity} kişiye kadar katılım</p>
+                          <p>✅ {customTour.duration} özel tur</p>
+                          <p>✅ Tüm ekipmanlar dahil</p>
+                          <p>✅ {customTour.description || 'Özel hizmet'}</p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()
               )}
               
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
@@ -834,13 +1048,25 @@ export default function RandevuPage() {
                     })}
                   </p>
                                       <p className="text-green-700 text-xs sm:text-sm">
-                      🕐 {(tourType === 'private' || tourType === 'fishing-swimming') ? 
-                           (tourType === 'fishing-swimming' ? '6 Saat Özel Tur' : '6 Saat Özel Tur (07:00-13:00 veya 14:00-20:00)') : 
+                      🕐 {isSpecialTour(tourType) ? 
+                           (() => {
+                             const customTour = getSelectedCustomTour(tourType);
+                             if (customTour) return `${customTour.duration} Özel Tur`;
+                             if (tourType === 'fishing-swimming') return '6 Saat Özel Tur';
+                             if (tourType === 'private') return '6 Saat Özel Tur (07:00-13:00 veya 14:00-20:00)';
+                             return selectedTime;
+                           })() : 
                            selectedTime}
                     </p>
                     <p className="text-green-700 text-xs sm:text-sm">
-                      👥 {(tourType === 'private' || tourType === 'fishing-swimming') ? 
-                           `12 kişi (${tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel'} Tur)` : 
+                      👥 {isSpecialTour(tourType) ? 
+                           (() => {
+                             const customTour = getSelectedCustomTour(tourType);
+                             if (customTour) return `${customTour.capacity} kişi (${customTour.name})`;
+                             if (tourType === 'fishing-swimming') return '12 kişi (Balık+Yüzme Tur)';
+                             if (tourType === 'private') return '12 kişi (Özel Tur)';
+                             return `${guestCount} kişi`;
+                           })() : 
                            `${guestCount} kişi`}
                     </p>
                 </div>
@@ -1221,13 +1447,13 @@ export default function RandevuPage() {
                     !selectedDate || 
                     (tourType === 'normal' && !selectedTime) ||
                     (tourType === 'normal' && selectedSeats.length !== guestCount) ||
-                    ((tourType === 'private' || tourType === 'fishing-swimming') && selectedSeats.length !== 12)
+                    (isSpecialTour(tourType) && selectedSeats.length !== 12)
                   }
                   className={`px-6 sm:px-8 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
                     selectedDate && 
-                    ((tourType === 'private' || tourType === 'fishing-swimming') || selectedTime) &&
+                    (isSpecialTour(tourType) || selectedTime) &&
                     ((tourType === 'normal' && selectedSeats.length === guestCount) || 
-                     ((tourType === 'private' || tourType === 'fishing-swimming') && selectedSeats.length === 12))
+                     (isSpecialTour(tourType) && selectedSeats.length === 12))
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
@@ -1302,21 +1528,37 @@ export default function RandevuPage() {
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-6 mb-6 sm:mb-8">
                 <h4 className="font-bold text-blue-800 mb-3 sm:mb-4 text-sm sm:text-base">📋 Rezervasyon Özeti</h4>
                 <div className="text-left space-y-2 text-blue-700 text-sm sm:text-base">
-                  <p>🎣 <strong>Tur Tipi:</strong> {
-                    tourType === 'private' ? 'Kapalı Tur (Özel)' : 
-                    tourType === 'fishing-swimming' ? 'Balık + Yüzme Turu' : 
-                    'Normal Tur'
+                  <p>🎣 <strong>Tur Tipi:</strong> {getTourDisplayName(tourType)}</p>
+                  <p>👥 <strong>Kişi Sayısı:</strong> {
+                    isSpecialTour(tourType) ? 
+                    (() => {
+                      const customTour = getSelectedCustomTour(tourType);
+                      return customTour ? `${customTour.capacity} kişi (Tüm Tekne)` : '12 kişi (Tüm Tekne)';
+                    })() : 
+                    `${guestCount} kişi`
                   }</p>
-                  <p>👥 <strong>Kişi Sayısı:</strong> {(tourType === 'private' || tourType === 'fishing-swimming') ? '12 kişi (Tüm Tekne)' : `${guestCount} kişi`}</p>
                   <p>📅 <strong>Tarih:</strong> {new Date(selectedDate).toLocaleDateString('tr-TR', { 
                     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
                   })}</p>
                   <p>🕐 <strong>Saat:</strong> {
-                    tourType === 'private' ? '6 Saat (07:00-13:00 veya 14:00-20:00)' : 
-                    tourType === 'fishing-swimming' ? '6 Saat Özel Tur' : 
+                    isSpecialTour(tourType) ? 
+                    (() => {
+                      const customTour = getSelectedCustomTour(tourType);
+                      if (customTour) return `${customTour.duration} Özel Tur`;
+                      if (tourType === 'fishing-swimming') return '6 Saat Özel Tur';
+                      if (tourType === 'private') return '6 Saat (07:00-13:00 veya 14:00-20:00)';
+                      return selectedTime;
+                    })() : 
                     selectedTime
                   }</p>
-                  <p>🪑 <strong>Koltuklar:</strong> {(tourType === 'private' || tourType === 'fishing-swimming') ? 'Tüm Tekne (12 Koltuk)' : selectedSeats.join(', ')}</p>
+                  <p>🪑 <strong>Koltuklar:</strong> {
+                    isSpecialTour(tourType) ? 
+                    (() => {
+                      const customTour = getSelectedCustomTour(tourType);
+                      return customTour ? `Tüm Tekne (${customTour.capacity} Koltuk)` : 'Tüm Tekne (12 Koltuk)';
+                    })() :
+                    selectedSeats.join(', ')
+                  }</p>
                   <p>👤 <strong>İletişim:</strong> {guestInfo.name} {guestInfo.surname}</p>
                   <p>📞 <strong>Telefon:</strong> {guestInfo.phone}</p>
                   {tourType === 'normal' && (
