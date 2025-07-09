@@ -28,7 +28,6 @@ interface Reservation {
   totalAmount?: number;
 }
 
-// SearchParams kullanan component'i ayrı bir component'e al
 function ReservationsContent() {
   const searchParams = useSearchParams();
   const statusFilter = searchParams.get('status');
@@ -188,8 +187,16 @@ function ReservationsContent() {
   };
 
   // WhatsApp mesaj şablonları
-  const sendWhatsAppMessage = (phone: string, message: string) => {
-    const cleanPhone = phone.replace(/\D/g, ''); // Sadece rakamları al
+  const sendWhatsAppMessage = (phone: string, message: string, fromBusinessNumber: boolean = true) => {
+    let targetPhone = phone;
+    
+    if (fromBusinessNumber) {
+      // İşletme numarasını kullan (ayarlarda tanımlı WhatsApp numarası)
+      // Bu durumda işletme numarasından müşteriye mesaj gönderilir
+      targetPhone = phone;
+    }
+    
+    const cleanPhone = targetPhone.replace(/\D/g, ''); // Sadece rakamları al
     const formattedPhone = cleanPhone.startsWith('0') ? '90' + cleanPhone.substring(1) : cleanPhone;
     const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
@@ -214,6 +221,16 @@ Tekne randevunuz onaylandı! ✅
 
 Randevu No: ${reservation.reservationNumber}
 
+📍 BULUŞMA YERİ:
+Eyüp Odabaşı Sporcular Parkı - İskele
+Sarıyer/İstanbul
+
+🗺️ Konum: https://maps.google.com/?q=41.1063,29.0587
+
+🚗 Ulaşım: 
+- Sarıyer-Eyüp minibüsü ile "Odabaşı" durağı
+- Özel araç için park alanı mevcut
+
 Randevu saatinden 15 dakika önce hazır olmanızı rica ederiz. 
 Herhangi bir sorunuz varsa bize ulaşabilirsiniz.
 
@@ -232,6 +249,10 @@ Yarın tekne randevunuz var:
 💺 Koltuk No: ${reservation.selectedSeats.join(', ')}
 
 Randevu No: ${reservation.reservationNumber}
+
+📍 BULUŞMA YERİ:
+Eyüp Odabaşı Sporcular Parkı - İskele
+🗺️ Konum: https://maps.google.com/?q=41.1063,29.0587
 
 Lütfen randevu saatinden 15 dakika önce hazır olun.
 Güzel bir deneyim için sabırsızlanıyoruz! 🌊⚓`,
@@ -562,8 +583,11 @@ Anlayışınız için teşekkürler. 🙏`
                   <div className="bg-green-50 p-3 rounded-lg">
                     <div className="flex items-center space-x-2 mb-2">
                       <span className="text-sm font-medium text-green-800">📱 WhatsApp Mesajları</span>
-                      <span className="text-xs text-green-600">({reservation.guestInfos[0]?.phone})</span>
+                      <span className="text-xs text-green-600">→ {reservation.guestInfos[0]?.phone}</span>
                     </div>
+                    <p className="text-xs text-green-700 mb-2">
+                      💡 Mesajlar işletme WhatsApp numaranızdan müşteriye gönderilecek
+                    </p>
                     <div className="flex flex-wrap gap-2">
                                              {reservation.status === 'pending' && (
                          <button
@@ -870,17 +894,9 @@ Anlayışınız için teşekkürler. 🙏`
   );
 }
 
-// Ana export function - Suspense ile sarmalı
 export default function ReservationsPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Randevular yükleniyor...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<div>Loading...</div>}>
       <ReservationsContent />
     </Suspense>
   );

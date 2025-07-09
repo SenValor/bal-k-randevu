@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, updateDoc } from 'firebase/firestore';
 
 interface Reservation {
   id: string;
@@ -80,6 +80,66 @@ export default function AdminDashboard() {
 
     setStats({ pending, confirmed, completed, total, todayReservations, totalRevenue });
   };
+
+  // Otomatik tamamlanma kontrolü
+  const checkAndCompleteReservations = async () => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentTime = now.getHours() * 60 + now.getMinutes(); // Dakika cinsinden
+    
+    for (const reservation of reservations) {
+      if (reservation.status === 'confirmed' && reservation.selectedDate === today) {
+        let shouldComplete = false;
+        
+        // Normal turlar için saat kontrolü
+        if (!reservation.isPrivateTour && reservation.selectedTime) {
+          const timeRange = reservation.selectedTime.split('-');
+          if (timeRange.length === 2) {
+            const endTime = timeRange[1].trim();
+            const [endHour, endMinute] = endTime.split(':').map(Number);
+            const endTimeInMinutes = endHour * 60 + endMinute;
+            
+            // Tur bitiş saatinden 30 dakika sonra otomatik tamamla
+            if (currentTime >= endTimeInMinutes + 30) {
+              shouldComplete = true;
+            }
+          }
+        }
+        
+        // Özel turlar için (6 saat olan turlar)
+        if (reservation.isPrivateTour) {
+          // Gece 21:00'dan sonra tamamla (turlar max 20:00'da bitiyor)
+          if (currentTime >= 21 * 60) {
+            shouldComplete = true;
+          }
+        }
+        
+        if (shouldComplete) {
+          try {
+            await updateDoc(doc(db, 'reservations', reservation.id), {
+              status: 'completed',
+              completedAt: new Date().toISOString(),
+              autoCompleted: true
+            });
+            console.log(`Rezervasyon otomatik tamamlandı: ${reservation.reservationNumber}`);
+          } catch (error) {
+            console.error('Otomatik tamamlanma hatası:', error);
+          }
+        }
+      }
+    }
+  };
+
+  // Otomatik kontrol sistemi (her 5 dakikada bir)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (reservations.length > 0) {
+        checkAndCompleteReservations();
+      }
+    }, 5 * 60 * 1000); // 5 dakika
+
+    return () => clearInterval(interval);
+  }, [reservations]);
 
   const quickActions = [
     {

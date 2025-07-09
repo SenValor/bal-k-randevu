@@ -9,6 +9,19 @@ export default function RandevuPage() {
   // Adım takibi
   const [currentStep, setCurrentStep] = useState<number>(1);
   
+  // Scroll to continue button utility
+  const scrollToContinueButton = () => {
+    setTimeout(() => {
+      const continueButton = document.querySelector('[data-continue-button]') as HTMLElement;
+      if (continueButton) {
+        continueButton.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }
+    }, 300);
+  };
+  
   // Form verileri
   const [tourType, setTourType] = useState<'normal' | 'private' | 'fishing-swimming'>('normal'); // normal, özel tur veya balık+yüzme
   const [priceOption, setPriceOption] = useState<'own-equipment' | 'with-equipment'>('own-equipment');
@@ -260,6 +273,7 @@ export default function RandevuPage() {
             } else if (selectedSeats.length < guestCount) {
               // Yeni koltuk ekle
               setSelectedSeats([...selectedSeats, seatId]);
+              scrollToContinueButton();
             }
           }
         }}
@@ -508,6 +522,7 @@ export default function RandevuPage() {
                   onClick={() => {
                     setTourType('normal');
                     setPriceOption('own-equipment');
+                    scrollToContinueButton();
                   }}
                   className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                     tourType === 'normal' && priceOption === 'own-equipment'
@@ -540,6 +555,7 @@ export default function RandevuPage() {
                   onClick={() => {
                     setTourType('normal');
                     setPriceOption('with-equipment');
+                    scrollToContinueButton();
                   }}
                   className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                     tourType === 'normal' && priceOption === 'with-equipment'
@@ -570,7 +586,15 @@ export default function RandevuPage() {
 
                 {/* Özel Tur */}
                 <div 
-                  onClick={() => setTourType('private')}
+                  onClick={() => {
+                    // Seçili tarih kısmi dolu ise uyarı ver
+                    if (selectedDate && occupiedDates[selectedDate] > 0) {
+                      alert(`❌ Özel tur alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedDate]} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
+                      return;
+                    }
+                    setTourType('private');
+                    scrollToContinueButton();
+                  }}
                   className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                     tourType === 'private'
                       ? 'border-purple-500 bg-purple-50 scale-105 shadow-xl'
@@ -586,7 +610,7 @@ export default function RandevuPage() {
                           Tüm tekne sadece sizin grubunuz için - 12 olta ve takım dahil
                         </p>
                         <div className="text-xs sm:text-sm text-slate-500">
-                          • 12 kişiye kadar • Tüm tekne kiralama • Gün boyu (07:00-20:00)
+                          • 12 kişiye kadar • Tüm tekne kiralama • 6 saat (07:00-13:00 veya 14:00-20:00)
                         </div>
                       </div>
                     </div>
@@ -600,7 +624,15 @@ export default function RandevuPage() {
 
                 {/* Balık + Yüzme Turu */}
                 <div 
-                  onClick={() => setTourType('fishing-swimming')}
+                  onClick={() => {
+                    // Seçili tarih kısmi dolu ise uyarı ver
+                    if (selectedDate && occupiedDates[selectedDate] > 0) {
+                      alert(`❌ Balık + Yüzme turu alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedDate]} koltuk dolu olduğu için balık+yüzme turu seçimi yapılamaz.\n\nBu özel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
+                      return;
+                    }
+                    setTourType('fishing-swimming');
+                    scrollToContinueButton();
+                  }}
                   className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                     tourType === 'fishing-swimming'
                       ? 'border-cyan-500 bg-cyan-50 scale-105 shadow-xl'
@@ -654,6 +686,7 @@ export default function RandevuPage() {
               </div>
 
               <button
+                data-continue-button
                 onClick={() => setCurrentStep(2)}
                 disabled={!tourType}
                 className={`mt-6 sm:mt-8 px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all duration-300 shadow-lg w-full sm:w-auto ${
@@ -712,7 +745,7 @@ export default function RandevuPage() {
                     <h3 className="text-lg sm:text-2xl font-bold text-purple-800 mb-2 sm:mb-4">Tüm Tekne Sizin!</h3>
                     <div className="text-purple-700 space-y-1 sm:space-y-2 text-sm sm:text-base">
                       <p>✅ 12 kişiye kadar katılım</p>
-                      <p>✅ Gün boyu kullanım (07:00-20:00)</p>
+                      <p>✅ 6 saat kullanım (07:00-13:00 veya 14:00-20:00)</p>
                       <p>✅ 12 olta ve takım dahil</p>
                       <p>✅ Özel hizmet</p>
                     </div>
@@ -745,6 +778,7 @@ export default function RandevuPage() {
                   ← Geri
                 </button>
                 <button
+                  data-continue-button
                   onClick={() => setCurrentStep(3)}
                   className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 touch-manipulation"
                 >
@@ -772,7 +806,7 @@ export default function RandevuPage() {
                   </p>
                                       <p className="text-green-700 text-xs sm:text-sm">
                       🕐 {(tourType === 'private' || tourType === 'fishing-swimming') ? 
-                           (tourType === 'fishing-swimming' ? '6 Saat Özel Tur' : 'Gün Boyu (07:00-20:00)') : 
+                           (tourType === 'fishing-swimming' ? '6 Saat Özel Tur' : '6 Saat Özel Tur (07:00-13:00 veya 14:00-20:00)') : 
                            selectedTime}
                     </p>
                     <p className="text-green-700 text-xs sm:text-sm">
@@ -835,7 +869,13 @@ export default function RandevuPage() {
                             key={index}
                             onClick={() => {
                               if (!dayInfo.isDisabled && !isFullyOccupied) {
+                                // Özel tur kısıtlaması kontrolü
+                                if ((tourType === 'private' || tourType === 'fishing-swimming') && isPartiallyOccupied) {
+                                  alert(`❌ Seçili tarihte özel tur alamazsınız!\n\nBu tarihte ${occupiedCount} koltuk dolu olduğu için özel tur (balık+yüzme) seçimi yapılamaz.\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
+                                  return;
+                                }
                                 setSelectedDate(dayInfo.date);
+                                scrollToContinueButton();
                               }
                             }}
                             disabled={dayInfo.isDisabled || isFullyOccupied}
@@ -907,7 +947,10 @@ export default function RandevuPage() {
                         {availableTimes.map((time) => (
                           <button
                             key={time}
-                            onClick={() => setSelectedTime(time)}
+                            onClick={() => {
+                              setSelectedTime(time);
+                              scrollToContinueButton();
+                            }}
                             className={`px-4 sm:px-6 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
                               selectedTime === time
                                 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-105'
@@ -935,7 +978,7 @@ export default function RandevuPage() {
                         <p className={`font-bold text-base sm:text-lg ${
                           tourType === 'fishing-swimming' ? 'text-cyan-800' : 'text-purple-800'
                         }`}>
-                          {tourType === 'fishing-swimming' ? 'Balık + Yüzme Turu: 6 Saat' : 'Özel Tur: Gün Boyu'}
+                          {tourType === 'fishing-swimming' ? 'Balık + Yüzme Turu: 6 Saat' : 'Özel Tur: 6 Saat'}
                         </p>
                         <p className={`text-xs sm:text-sm ${
                           tourType === 'fishing-swimming' ? 'text-cyan-700' : 'text-purple-700'
@@ -1014,7 +1057,7 @@ export default function RandevuPage() {
                           }`}>
                             {tourType === 'fishing-swimming' ? '🏊‍♂️' : '⭐'} <strong>
                               {tourType === 'fishing-swimming' ? 'Balık + Yüzme:' : 'Özel Tur:'} 
-                            </strong> {tourType === 'fishing-swimming' ? '6 Saat' : 'Gün Boyu'}
+                            </strong> {tourType === 'fishing-swimming' ? '6 Saat' : '6 Saat'}
                           </p>
                           <div className="flex items-center space-x-2 justify-center">
                             <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${
@@ -1151,6 +1194,7 @@ export default function RandevuPage() {
                   ← Geri
                 </button>
                 <button
+                  data-continue-button
                   onClick={() => setCurrentStep(4)}
                   disabled={
                     !selectedDate || 
@@ -1247,7 +1291,7 @@ export default function RandevuPage() {
                     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
                   })}</p>
                   <p>🕐 <strong>Saat:</strong> {
-                    tourType === 'private' ? 'Gün Boyu (07:00-20:00)' : 
+                    tourType === 'private' ? '6 Saat (07:00-13:00 veya 14:00-20:00)' : 
                     tourType === 'fishing-swimming' ? '6 Saat Özel Tur' : 
                     selectedTime
                   }</p>
@@ -1417,7 +1461,7 @@ export default function RandevuPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-slate-600">🕐 Saat:</span>
                           <span className="font-bold text-slate-800 text-xs sm:text-sm">
-                            {tourType === 'private' ? 'Gün Boyu (07:00-20:00)' : 
+                            {tourType === 'private' ? '6 Saat (07:00-13:00 veya 14:00-20:00)' : 
                              tourType === 'fishing-swimming' ? '6 Saat Özel Tur' :
                              selectedTime}
                           </span>

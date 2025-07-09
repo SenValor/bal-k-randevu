@@ -10,6 +10,7 @@ interface BoatPhoto {
   id: string;
   url: string;
   name: string;
+  type?: 'image' | 'video';
 }
 
 export default function GorsellerimizPage() {
@@ -92,14 +93,14 @@ export default function GorsellerimizPage() {
             {/* Başlık ve Açıklama */}
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold text-slate-800 mb-4">
-                Balık Sefası Fotoğraf Galerisi
+                Balık Sefası Medya Galerisi
               </h2>
               <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
                 İstanbul Boğazı'nda geçirdiğimiz keyifli anlar, yakaladığımız balıklar ve 
-                teknemizdeki mutlu misafirlerimizin fotoğrafları
+                teknemizdeki mutlu misafirlerimizin fotoğraf & videoları
               </p>
               <div className="mt-6 text-orange-600 font-medium">
-                {boatPhotos.length} fotoğraf • Büyütmek için tıklayın
+                {boatPhotos.length} medya • Büyütmek için tıklayın
               </div>
             </div>
 
@@ -111,13 +112,23 @@ export default function GorsellerimizPage() {
                   onClick={() => openLightbox(photo)}
                   className="relative aspect-square bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer group border-4 border-white hover:border-orange-200"
                 >
-                  <Image
-                    src={photo.url}
-                    alt={photo.name}
-                    fill
-                    className="object-cover group-hover:scale-110 transition-transform duration-500"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  />
+                  {photo.type === 'video' ? (
+                    <video
+                      src={photo.url}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : (
+                    <Image
+                      src={photo.url}
+                      alt={photo.name}
+                      fill
+                      className="object-cover group-hover:scale-110 transition-transform duration-500"
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    />
+                  )}
                   
                   {/* Overlay */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center">
@@ -127,8 +138,23 @@ export default function GorsellerimizPage() {
                     </div>
                   </div>
 
-                  {/* Fotoğraf Numarası */}
-                  <div className="absolute top-3 left-3 bg-black/60 text-white text-xs px-2 py-1 rounded-full font-bold">
+                  {/* Media Type Indicator */}
+                  <div className="absolute top-3 left-3 bg-black/80 text-white text-xs px-2 py-1 rounded-full font-bold flex items-center space-x-1">
+                    {photo.type === 'video' ? (
+                      <>
+                        <span>🎥</span>
+                        <span>VİDEO</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>📸</span>
+                        <span>FOTO</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Media Numarası */}
+                  <div className="absolute top-3 right-3 bg-black/60 text-white text-xs px-2 py-1 rounded-full font-bold">
                     {index + 1}
                   </div>
                 </div>
@@ -182,15 +208,26 @@ export default function GorsellerimizPage() {
             →
           </button>
 
-          {/* Fotoğraf */}
+          {/* Media Content */}
           <div className="relative w-full h-full max-w-4xl max-h-[80vh]">
-            <Image
-              src={selectedPhoto.url}
-              alt={selectedPhoto.name}
-              fill
-              className="object-contain"
-              sizes="100vw"
-            />
+            {selectedPhoto.type === 'video' ? (
+              <video
+                src={selectedPhoto.url}
+                className="w-full h-full object-contain"
+                controls
+                autoPlay
+                muted
+                playsInline
+              />
+            ) : (
+              <Image
+                src={selectedPhoto.url}
+                alt={selectedPhoto.name}
+                fill
+                className="object-contain"
+                sizes="100vw"
+              />
+            )}
           </div>
 
           {/* Fotoğraf Bilgisi */}
