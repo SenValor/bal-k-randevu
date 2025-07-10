@@ -2,9 +2,41 @@ import type { Metadata } from "next";
 import Image from "next/image";
 
 export const metadata: Metadata = {
-  title: "Hakkımızda - Balık Sefası",
-  description: "Balık Sefası ailesi, deneyimli ekibimiz ve hizmet felsefemiz hakkında bilgi alın. 15+ yıl deneyim, lisanslı kaptan ve güvenlik öncelikli hizmet.",
-  keywords: "hakkımızda, balık sefası, deneyim, kaptan, tekne kiralama, güvenlik",
+  title: "Hakkımızda - Balık Sefası | Deneyimli Ekip & Güvenli Hizmet",
+  description: "Balık Sefası ailesi, 15+ yıl deneyimli ekibimiz ve güvenlik öncelikli hizmet felsefemiz hakkında bilgi alın. Lisanslı kaptan, modern tekne ve profesyonel balık avı rehberliği.",
+  keywords: [
+    "hakkımızda",
+    "balık sefası", 
+    "deneyim",
+    "lisanslı kaptan",
+    "tekne kiralama güvenlik",
+    "profesyonel ekip",
+    "İstanbul balık avı",
+    "Sarıyer tekne turu",
+    "Eyüp Odabaşı",
+    "modern tekne",
+    "balık avı rehberliği"
+  ].join(", "),
+  openGraph: {
+    title: 'Hakkımızda - Balık Sefası | Deneyimli Ekip & Güvenli Hizmet',
+    description: '15+ yıl deneyimli ekibimiz, lisanslı kaptan ve güvenlik öncelikli hizmet anlayışımızla İstanbul Boğazı\'nda profesyonel balık avı turları.',
+    url: 'https://baliksefasi.com/hakkimizda',
+    images: [
+      {
+        url: 'https://baliksefasi.com/logo.png',
+        width: 1200,
+        height: 630,
+        alt: 'Balık Sefası - Hakkımızda',
+      },
+    ],
+  },
+  twitter: {
+    title: 'Hakkımızda - Balık Sefası | Deneyimli Ekip',
+    description: '15+ yıl deneyimli ekibimiz ve güvenlik öncelikli hizmet anlayışımızla İstanbul Boğazı\'nda profesyonel balık avı turları.',
+  },
+  alternates: {
+    canonical: 'https://baliksefasi.com/hakkimizda',
+  },
 };
 
 export default function HakkimizdaPage() {

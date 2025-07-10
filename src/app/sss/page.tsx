@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Head from 'next/head';
+import Image from "next/image";
+import Link from "next/link";
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
@@ -83,11 +84,6 @@ export default function SSSPage() {
   if (loading) {
     return (
       <>
-        <Head>
-          <title>Sıkça Sorulan Sorular - Balık Sefası</title>
-          <meta name="description" content="Balık avı turu, tekne kiralama, ödeme, ekipman ve güvenlik ile ilgili en çok merak edilen soruların cevaplarını bulun." />
-          <meta name="keywords" content="sıkça sorulan sorular, SSS, balık avı, tekne kiralama, ödeme, güvenlik, ekipman" />
-        </Head>
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
           <div className="max-w-4xl mx-auto px-4 py-12">
             <div className="text-center">
@@ -102,11 +98,6 @@ export default function SSSPage() {
 
   return (
     <>
-      <Head>
-        <title>Sıkça Sorulan Sorular - Balık Sefası</title>
-        <meta name="description" content="Balık avı turu, tekne kiralama, ödeme, ekipman ve güvenlik ile ilgili en çok merak edilen soruların cevaplarını bulun." />
-        <meta name="keywords" content="sıkça sorulan sorular, SSS, balık avı, tekne kiralama, ödeme, güvenlik, ekipman" />
-      </Head>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
         <div className="max-w-4xl mx-auto px-4 py-12">
           {/* Header */}
