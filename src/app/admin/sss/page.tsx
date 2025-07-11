@@ -129,10 +129,11 @@ export default function SSSPage() {
     return () => unsubscribe();
   }, []);
 
-  const saveSSS = async () => {
+  const saveSSS = async (dataToSave?: SSSItem[]) => {
     try {
+      const finalData = dataToSave || sssData;
       await setDoc(doc(db, 'settings', 'sss'), {
-        data: sssData,
+        data: finalData,
         updatedAt: new Date()
       });
       console.log('SSS kaydedildi');
@@ -141,7 +142,7 @@ export default function SSSPage() {
     }
   };
 
-  const addSSS = () => {
+  const addSSS = async () => {
     const newSSS: SSSItem = {
       id: Date.now().toString(),
       question: sssForm.question || '',
@@ -154,7 +155,8 @@ export default function SSSPage() {
       active: true
     };
 
-    setSssData([...sssData, newSSS]);
+    const updatedData = [...sssData, newSSS];
+    setSssData(updatedData);
     setSssForm({
       question: '',
       answer: '',
@@ -167,8 +169,8 @@ export default function SSSPage() {
     });
     setShowSSSForm(false);
     
-    // Otomatik kaydet
-    setTimeout(saveSSS, 500);
+    // Anında kaydet
+    await saveSSS(updatedData);
   };
 
   const editSSS = (sss: SSSItem) => {
@@ -177,7 +179,7 @@ export default function SSSPage() {
     setShowSSSForm(true);
   };
 
-  const updateSSS = () => {
+  const updateSSS = async () => {
     if (!editingSSS) return;
 
     const updatedSSS = sssData.map(item => 
@@ -200,18 +202,18 @@ export default function SSSPage() {
       active: true
     });
     
-    // Otomatik kaydet
-    setTimeout(saveSSS, 500);
+    // Anında kaydet
+    await saveSSS(updatedSSS);
   };
 
-  const deleteSSS = (id: string) => {
-    if (!confirm('Bu SSS öğesini silmek istediğinize emin misiniz?')) return;
+  const deleteSSS = async (id: string) => {
+    if (!confirm('Bu SSS öğesini silmek istediğinizden emin misiniz?')) return;
     
-    const filteredSSS = sssData.filter(item => item.id !== id);
-    setSssData(filteredSSS);
+    const updatedSSS = sssData.filter(item => item.id !== id);
+    setSssData(updatedSSS);
     
-    // Otomatik kaydet
-    setTimeout(saveSSS, 500);
+    // Anında kaydet
+    await saveSSS(updatedSSS);
   };
 
   // Varsayılan SSS'leri yükle
@@ -290,7 +292,7 @@ export default function SSSPage() {
     }
   };
 
-  const toggleSSSActive = (id: string) => {
+  const toggleSSSActive = async (id: string) => {
     const updatedSSS = sssData.map(item => 
       item.id === id 
         ? { ...item, active: !item.active }
@@ -298,31 +300,31 @@ export default function SSSPage() {
     );
     setSssData(updatedSSS);
     
-    // Otomatik kaydet
-    setTimeout(saveSSS, 500);
+    // Anında kaydet
+    await saveSSS(updatedSSS);
   };
 
-  const moveSSSUp = (id: string) => {
+  const moveSSSUp = async (id: string) => {
     const index = sssData.findIndex(item => item.id === id);
     if (index > 0) {
       const newData = [...sssData];
       [newData[index], newData[index - 1]] = [newData[index - 1], newData[index]];
       setSssData(newData);
       
-      // Otomatik kaydet
-      setTimeout(saveSSS, 500);
+      // Anında kaydet
+      await saveSSS(newData);
     }
   };
 
-  const moveSSSDown = (id: string) => {
+  const moveSSSDown = async (id: string) => {
     const index = sssData.findIndex(item => item.id === id);
     if (index < sssData.length - 1) {
       const newData = [...sssData];
       [newData[index], newData[index + 1]] = [newData[index + 1], newData[index]];
       setSssData(newData);
       
-      // Otomatik kaydet
-      setTimeout(saveSSS, 500);
+      // Anında kaydet
+      await saveSSS(newData);
     }
   };
 

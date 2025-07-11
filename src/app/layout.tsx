@@ -74,8 +74,6 @@ export const metadata: Metadata = {
   category: 'Tourism',
   classification: 'Boat Rental & Tourism Services',
   referrer: 'origin-when-cross-origin',
-  colorScheme: 'light',
-  themeColor: '#3B82F6',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -93,8 +91,8 @@ export const metadata: Metadata = {
     url: true,
   },
   verification: {
-    google: 'your-google-verification-code', // Bu kodu Google Search Console'dan alacaksınız
-    yandex: 'your-yandex-verification-code', // Bu kodu Yandex Webmaster'dan alacaksınız
+    google: 'google-site-verification=GOOGLE_SEARCH_CONSOLE_KODU_BURAYA', 
+    yandex: 'yandex-verification=YANDEX_WEBMASTER_KODU_BURAYA', 
   },
   other: {
     'msapplication-TileColor': '#3B82F6',
@@ -121,7 +119,7 @@ const structuredData = {
       "name": "Balık Sefası",
       "image": "https://baliksefasi.com/logo.png",
       "url": "https://baliksefasi.com",
-      "telephone": "+90-XXX-XXX-XXXX", // Gerçek telefon numaranızı ekleyin
+      "telephone": "+90-531-089-25-37",
       "address": {
         "@type": "PostalAddress",
         "streetAddress": "Eyüp Odabaşı Sporcular Parkı",
@@ -131,8 +129,8 @@ const structuredData = {
       },
       "geo": {
         "@type": "GeoCoordinates",
-        "latitude": 41.1095, // Gerçek koordinatları ekleyin
-        "longitude": 29.0502
+        "latitude": 41.1567,
+        "longitude": 29.0465
       },
       "openingHoursSpecification": [
         {
