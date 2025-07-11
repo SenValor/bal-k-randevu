@@ -1289,9 +1289,9 @@ export default function RandevuPage() {
                           const isPrivateBlocked = isSpecialTour(tourType) && !canSelectPrivate;
                           
                           return (
-                            <button
-                              key={time}
-                              onClick={() => {
+                          <button
+                            key={time}
+                            onClick={() => {
                                 if (isPrivateBlocked) {
                                   alert(`❌ Bu seans için özel tur alamazsınız!\n\n${time} seansında ${timeOccupancy} koltuk dolu olduğu için özel tur seçimi yapılamaz.\nÖzel turlar için tamamen boş seanslar gereklidir.\n\nLütfen başka bir saat seçin veya normal tur seçeneğini tercih edin.`);
                                   return;
@@ -1300,19 +1300,19 @@ export default function RandevuPage() {
                                   alert(`❌ Bu seans tamamen dolu!\n\n${time} seansında tüm koltuklar (12/12) dolu.\nLütfen başka bir saat seçin.`);
                                   return;
                                 }
-                                setSelectedTime(time);
-                                scrollToContinueButton();
-                              }}
+                              setSelectedTime(time);
+                              scrollToContinueButton();
+                            }}
                               disabled={isFullyOccupied || isPrivateBlocked}
                               className={`px-4 sm:px-6 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base relative ${
-                                selectedTime === time
-                                  ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-105'
+                              selectedTime === time
+                                ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-105'
                                   : isFullyOccupied || isPrivateBlocked
                                   ? 'bg-gradient-to-br from-red-400 to-red-500 text-white cursor-not-allowed opacity-75'
                                   : isPartiallyOccupied
                                   ? 'bg-gradient-to-br from-orange-100 to-orange-200 hover:from-orange-200 hover:to-orange-300 text-slate-800 border-2 border-orange-300'
                                   : 'bg-blue-50 hover:bg-blue-100 text-slate-800 border-2 border-blue-200'
-                              }`}
+                            }`}
                               title={
                                 isPrivateBlocked
                                   ? `Özel tur için müsait değil (${timeOccupancy}/12 dolu)`
@@ -1340,14 +1340,14 @@ export default function RandevuPage() {
                                 </div>
                               </div>
                               
-                              {(tourType === 'private' || tourType === 'fishing-swimming') && (
-                                <div className="text-xs mt-1 opacity-80">
-                                  {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel Tur'} - 6 Saat
+                            {(tourType === 'private' || tourType === 'fishing-swimming') && (
+                              <div className="text-xs mt-1 opacity-80">
+                                {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel Tur'} - 6 Saat
                                   {isPrivateBlocked && (
                                     <div className="text-xs mt-1 font-bold">
                                       ⚠️ Bu seans için özel tur alınamaz
-                                    </div>
-                                  )}
+                              </div>
+                            )}
                                 </div>
                               )}
                               
@@ -1359,7 +1359,7 @@ export default function RandevuPage() {
                                   ? '🟡 Kısmi Dolu' 
                                   : '🟢 Tamamen Boş'}
                               </div>
-                            </button>
+                          </button>
                           );
                         })}
                       </div>
@@ -1980,4 +1980,4 @@ export default function RandevuPage() {
       </div>
     </div>
   );
-}
+} 

@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
         port: '',
-        pathname: '/v0/b/tekne-randevu.firebasestorage.app/o/**',
+        pathname: '/v0/b/balik-sefasi.firebasestorage.app/o/**',
       },
     ],
     formats: ['image/webp', 'image/avif'],

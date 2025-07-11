@@ -2,14 +2,15 @@
 const { initializeApp } = require('firebase/app');
 const { getFirestore, doc, setDoc } = require('firebase/firestore');
 
+// Firebase config - firebase.ts'den güncellenmiş
 const firebaseConfig = {
-  apiKey: "AIzaSyCFlrUHTuU9n4_nW1yQFjWXHAz5xaTD9NM",
-  authDomain: "tekne-randevu.firebaseapp.com",
-  projectId: "tekne-randevu",
-  storageBucket: "tekne-randevu.firebasestorage.app",
-  messagingSenderId: "162410073718",
-  appId: "1:162410073718:web:c2399e4ba13a624422d957",
-  measurementId: "G-RHLNMLC4BW"
+  apiKey: "AIzaSyBqf2A1Imd_9IqCSNp2zyedYQBKyYNPNTc",
+  authDomain: "balik-sefasi.firebaseapp.com",
+  projectId: "balik-sefasi",
+  storageBucket: "balik-sefasi.firebasestorage.app",
+  messagingSenderId: "903043505535",
+  appId: "1:903043505535:web:583c2e8886c718f6a10e4a",
+  measurementId: "G-0WE5C1CJHE"
 };
 
 // Firebase'i başlat

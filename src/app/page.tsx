@@ -475,7 +475,7 @@ export default function Home() {
                 İstanbul Boğazı'nda Balık Avı Keyfi
               </p>
               <p className="text-slate-400 text-xs">
-                © 20253 Balık Sefası. Tüm hakları saklıdır.
+                © 2025 Balık Sefası. Tüm hakları saklıdır.
               </p>
             </div>
             
