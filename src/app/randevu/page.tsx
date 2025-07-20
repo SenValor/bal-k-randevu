@@ -20,6 +20,64 @@ export default function RandevuPage() {
   // Adım takibi
   const [currentStep, setCurrentStep] = useState<number>(1);
   
+  // Telefon numarası formatlaması
+  const formatPhoneNumber = (value: string): string => {
+    // Sadece rakamları al
+    let cleanValue = value.replace(/\D/g, '');
+    
+    // 0 ile başlamayan 10 haneli numaraları 0 ile başlat
+    if (cleanValue.length === 10 && !cleanValue.startsWith('0')) {
+      cleanValue = '0' + cleanValue;
+    }
+    
+    // Maksimum 11 haneli
+    cleanValue = cleanValue.slice(0, 11);
+    
+    // Format uygula: 0532 123 45 67
+    if (cleanValue.length <= 4) {
+      return cleanValue;
+    } else if (cleanValue.length <= 7) {
+      return `${cleanValue.slice(0, 4)} ${cleanValue.slice(4)}`;
+    } else if (cleanValue.length <= 9) {
+      return `${cleanValue.slice(0, 4)} ${cleanValue.slice(4, 7)} ${cleanValue.slice(7)}`;
+    } else {
+      return `${cleanValue.slice(0, 4)} ${cleanValue.slice(4, 7)} ${cleanValue.slice(7, 9)} ${cleanValue.slice(9)}`;
+    }
+  };
+
+  // Telefon numarası validasyon fonksiyonu
+  const validatePhoneNumber = (phone: string): { isValid: boolean; message: string } => {
+    // Boşluk ve özel karakterleri temizle
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    
+    // Türk telefon numarası formatı kontrolü
+    const phoneRegex = /^(0?)(50[0-9]|51[0-9]|52[0-9]|53[0-9]|54[0-9]|55[0-9]|56[0-9]|59[0-9])[0-9]{7}$/;
+    
+    if (!cleanPhone) {
+      return { isValid: false, message: 'Telefon numarası zorunludur' };
+    }
+    
+    if (cleanPhone.length < 10) {
+      return { isValid: false, message: 'Telefon numarası en az 10 haneli olmalıdır' };
+    }
+    
+    if (cleanPhone.length > 11) {
+      return { isValid: false, message: 'Telefon numarası en fazla 11 haneli olmalıdır' };
+    }
+    
+    // Sadece rakam kontrolü
+    if (!/^\d+$/.test(cleanPhone)) {
+      return { isValid: false, message: 'Telefon numarası sadece rakam içermelidir' };
+    }
+    
+    // Türk GSM operatör kodları kontrolü
+    if (!phoneRegex.test(cleanPhone)) {
+      return { isValid: false, message: 'Geçerli bir Türk telefon numarası giriniz (05XX XXX XX XX)' };
+    }
+    
+    return { isValid: true, message: '' };
+  };
+  
   // Scroll to continue button utility
   const scrollToContinueButton = () => {
     setTimeout(() => {
@@ -42,6 +100,99 @@ export default function RandevuPage() {
     privateTour: 12000,
     fishingSwimming: 15000
   });
+  // Yaş grubu bilgileri
+  const [ageGroups, setAgeGroups] = useState({
+    adults: 1,    // 7+ yaş - tam fiyat
+    children: 0,  // 3-6 yaş - %50 indirim
+    babies: 0     // 0-3 yaş - ücretsiz
+  });
+  
+  // Kişi bazında olta seçimi
+  const [equipmentChoices, setEquipmentChoices] = useState({
+    adults: { withEquipment: 0, ownEquipment: 1 },      // Yetişkinler için olta seçimi
+    children: { withEquipment: 0, ownEquipment: 0 },     // Çocuklar için olta seçimi
+    babies: { withEquipment: 0, ownEquipment: 0 }        // Bebekler için olta seçimi (kullanılmaz)
+  });
+  
+  // Toplam kişi sayısı hesaplama
+  const getTotalGuestCount = () => {
+    return ageGroups.adults + ageGroups.children + ageGroups.babies;
+  };
+  
+  // Koltuk gereksinimi hesaplama (bebekler koltuk gerektirmez)
+  const getRequiredSeatCount = () => {
+    return ageGroups.adults + ageGroups.children; // Bebekler hariç
+  };
+  
+  // Yaş gruplarına göre fiyat hesaplama
+  const calculateAgeBasedPrice = (basePrice: number) => {
+    const adultPrice = basePrice * ageGroups.adults;
+    const childPrice = basePrice * ageGroups.children * 0.5; // %50 indirim
+    const babyPrice = 0; // Bebekler ücretsiz
+    
+    return {
+      adultPrice,
+      childPrice,
+      babyPrice,
+      totalPrice: adultPrice + childPrice + babyPrice,
+      breakdown: {
+        adults: { count: ageGroups.adults, unitPrice: basePrice, totalPrice: adultPrice },
+        children: { count: ageGroups.children, unitPrice: basePrice * 0.5, totalPrice: childPrice },
+        babies: { count: ageGroups.babies, unitPrice: 0, totalPrice: babyPrice }
+      }
+    };
+  };
+  
+  // Yaş grupları değiştiğinde olta seçimlerini güncelle
+  useEffect(() => {
+    setEquipmentChoices(prev => ({
+      adults: { 
+        withEquipment: Math.min(prev.adults.withEquipment, ageGroups.adults),
+        ownEquipment: ageGroups.adults - Math.min(prev.adults.withEquipment, ageGroups.adults)
+      },
+      children: { 
+        withEquipment: Math.min(prev.children.withEquipment, ageGroups.children),
+        ownEquipment: ageGroups.children - Math.min(prev.children.withEquipment, ageGroups.children)
+      },
+      babies: { withEquipment: 0, ownEquipment: 0 } // Bebekler olta kullanmaz
+    }));
+  }, [ageGroups]);
+
+  // Esnek fiyat hesaplama (kişi bazında olta seçimi)
+  const calculateFlexiblePrice = () => {
+    if (tourType !== 'normal') return null;
+    
+    const adultWithEquipment = equipmentChoices.adults.withEquipment * prices.normalWithEquipment;
+    const adultOwnEquipment = equipmentChoices.adults.ownEquipment * prices.normalOwn;
+    const childWithEquipment = equipmentChoices.children.withEquipment * prices.normalWithEquipment * 0.5;
+    const childOwnEquipment = equipmentChoices.children.ownEquipment * prices.normalOwn * 0.5;
+    
+    const totalPrice = adultWithEquipment + adultOwnEquipment + childWithEquipment + childOwnEquipment;
+    
+    return {
+      totalPrice,
+      breakdown: {
+        adults: {
+          withEquipment: { count: equipmentChoices.adults.withEquipment, unitPrice: prices.normalWithEquipment, totalPrice: adultWithEquipment },
+          ownEquipment: { count: equipmentChoices.adults.ownEquipment, unitPrice: prices.normalOwn, totalPrice: adultOwnEquipment }
+        },
+        children: {
+          withEquipment: { count: equipmentChoices.children.withEquipment, unitPrice: prices.normalWithEquipment * 0.5, totalPrice: childWithEquipment },
+          ownEquipment: { count: equipmentChoices.children.ownEquipment, unitPrice: prices.normalOwn * 0.5, totalPrice: childOwnEquipment }
+        },
+        babies: { count: ageGroups.babies, unitPrice: 0, totalPrice: 0 }
+      }
+    };
+  };
+
+  // Normal tur için gerçek zamanlı fiyat hesaplama
+  const getCurrentPrice = () => {
+    if (tourType !== 'normal') return null;
+    
+    // Esnek olta sistemi kullan
+    return calculateFlexiblePrice();
+  };
+  
   const [guestCount, setGuestCount] = useState<number>(1);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
@@ -53,6 +204,9 @@ export default function RandevuPage() {
     email: ''
   });
   
+  // Telefon numarası hata mesajı
+  const [phoneError, setPhoneError] = useState<string>('');
+  
   // Sistem verileri
   const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']);
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
@@ -61,6 +215,14 @@ export default function RandevuPage() {
   const [sessionOccupancy, setSessionOccupancy] = useState<{[key: string]: number}>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  
+  // Rezervasyon tarih aralığı kontrolü
+  const [bookingDateRange, setBookingDateRange] = useState({
+    enabled: false,
+    startDate: '',
+    endDate: '',
+    disabledMessage: ''
+  });
 
   // Firebase'den fiyatları çek
   const fetchPrices = async () => {
@@ -77,6 +239,23 @@ export default function RandevuPage() {
       }
     } catch (error) {
       console.error('Fiyatlar çekilemedi:', error);
+    }
+  };
+
+  // Firebase'den tarih aralığı ayarlarını çek
+  const fetchBookingDateRange = async () => {
+    try {
+      const settingsDoc = await getDoc(doc(db, 'settings', 'general'));
+      if (settingsDoc.exists()) {
+        const data = settingsDoc.data();
+        const dateRange = data.bookingDateRange;
+        
+        if (dateRange) {
+          setBookingDateRange(dateRange);
+        }
+      }
+    } catch (error) {
+      console.error('Tarih aralığı ayarları çekilemedi:', error);
     }
   };
 
@@ -97,25 +276,55 @@ export default function RandevuPage() {
     }
   };
 
-  // Firebase'den saatleri ve fiyatları çek
-  useEffect(() => {
-    const fetchAvailableTimes = async () => {
-      try {
+  // Seçilen tarihe göre saatleri çek
+  const fetchAvailableTimesForDate = async (dateString: string) => {
+    try {
+      // Önce o güne özel saat var mı kontrol et
+      const scheduleDoc = await getDoc(doc(db, 'schedules', dateString));
+      
+      if (scheduleDoc.exists()) {
+        const scheduleData = scheduleDoc.data();
+        if (scheduleData.timeSlots && Array.isArray(scheduleData.timeSlots)) {
+          // Özel saat ayarları var, bunları kullan
+          const times = scheduleData.timeSlots.map((slot: any) => `${slot.start}-${slot.end}`);
+          setAvailableTimes(times);
+          return;
+        }
+      }
+      
+      // Özel ayar yoksa varsayılan saatleri kullan
         const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
         if (timesDoc.exists()) {
           const data = timesDoc.data();
           if (data.times && Array.isArray(data.times)) {
             setAvailableTimes(data.times);
+        } else {
+          // Firestore'da da yoksa hardcoded varsayılanları kullan
+          setAvailableTimes(['07:00-13:00', '14:00-20:00']);
           }
+      } else {
+        // Varsayılan saatler
+        setAvailableTimes(['07:00-13:00', '14:00-20:00']);
         }
       } catch (error) {
         console.error('Saatler çekilemedi:', error);
-      }
-    };
-    
-    fetchAvailableTimes();
+      // Hata durumunda varsayılan saatler
+      setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+    }
+  };
+
+  // Seçilen tarih değiştiğinde saatleri çek
+  useEffect(() => {
+    if (selectedDate) {
+      fetchAvailableTimesForDate(selectedDate);
+    }
+  }, [selectedDate]);
+
+  // Firebase'den fiyatları çek
+  useEffect(() => {
     fetchPrices(); // Fiyatları da çek
     fetchCustomTours(); // Özel turları da çek
+    fetchBookingDateRange(); // Tarih aralığı kontrolünü de çek
 
     // Fiyatları real-time dinle
     const unsubscribePrices = onSnapshot(doc(db, 'settings', 'prices'), (doc) => {
@@ -360,7 +569,8 @@ export default function RandevuPage() {
   const renderSeat = (seatId: string) => {
     const isOccupied = occupiedSeats.includes(seatId);
     const isSelected = selectedSeats.includes(seatId);
-    const canSelect = !isOccupied && (!isSelected && selectedSeats.length < guestCount || isSelected);
+    const requiredSeats = getRequiredSeatCount();
+    const canSelect = !isOccupied && (!isSelected && selectedSeats.length < requiredSeats || isSelected);
     
     return (
       <button
@@ -372,7 +582,7 @@ export default function RandevuPage() {
             if (isSelected) {
               // Koltuk seçimini kaldır
               setSelectedSeats(selectedSeats.filter(seat => seat !== seatId));
-            } else if (selectedSeats.length < guestCount) {
+            } else if (selectedSeats.length < requiredSeats) {
               // Yeni koltuk ekle
               setSelectedSeats([...selectedSeats, seatId]);
               scrollToContinueButton();
@@ -390,8 +600,8 @@ export default function RandevuPage() {
             ? 'Bu koltuk dolu' 
             : isSelected 
             ? 'Seçimi kaldırmak için tıklayın'
-            : selectedSeats.length >= guestCount
-            ? `Maksimum ${guestCount} koltuk seçebilirsiniz`
+                    : selectedSeats.length >= requiredSeats
+        ? `Maksimum ${requiredSeats} koltuk seçebilirsiniz`
             : 'Koltuğu seçmek için tıklayın'
         }
       >
@@ -555,6 +765,13 @@ export default function RandevuPage() {
 
   // Rezervasyon kaydetme
   const saveReservation = async () => {
+    // Telefon numarası validasyonu
+    const phoneValidation = validatePhoneNumber(guestInfo.phone);
+    if (!phoneValidation.isValid) {
+      alert(`Telefon numarası hatası: ${phoneValidation.message}`);
+      return;
+    }
+    
     setLoading(true);
     try {
       const isSpecial = isSpecialTour(tourType);
@@ -574,31 +791,35 @@ export default function RandevuPage() {
       let selectedPrice = 0;
       let priceDetails = '';
       let capacity = 12; // Varsayılan kapasite
+      let totalAmount = 0;
+      let ageBasedBreakdown = null;
       
       if (tourType === 'normal') {
-        if (priceOption === 'own-equipment') {
-          selectedPrice = prices.normalOwn;
-          priceDetails = 'Normal Tur - Kendi Ekipmanı';
-        } else {
-          selectedPrice = prices.normalWithEquipment;
-          priceDetails = 'Normal Tur - Ekipman Dahil';
-        }
+        // Esnek olta sistemi kullan
+        const priceCalculation = calculateFlexiblePrice();
+        selectedPrice = 0; // Artık tek bir fiyat yok, esnek sistem var
+        priceDetails = 'Normal Tur - Esnek Olta Seçimi';
+        totalAmount = priceCalculation ? priceCalculation.totalPrice : 0;
+        ageBasedBreakdown = priceCalculation ? priceCalculation.breakdown : null;
       } else if (tourType === 'private') {
         selectedPrice = prices.privateTour;
         priceDetails = 'Kapalı Tur (Özel) - Tüm Tekne';
+        totalAmount = selectedPrice;
       } else if (tourType === 'fishing-swimming') {
         selectedPrice = prices.fishingSwimming;
         priceDetails = 'Balık + Yüzme Turu - 6 Saat';
+        totalAmount = selectedPrice;
       } else if (customTour) {
         selectedPrice = customTour.price;
         priceDetails = `${customTour.name} - ${customTour.duration}`;
         capacity = customTour.capacity;
+        totalAmount = selectedPrice;
       }
       
       const reservationData = {
         tourType,
         reservationNumber: generateReservationNumber(),
-        guestCount: isSpecial ? capacity : guestCount,
+        guestCount: isSpecial ? capacity : getTotalGuestCount(),
         selectedDate,
         selectedTime: selectedTime, // Kullanıcının seçtiği saat dilimi her zaman korunur
         isPrivateTour: isSpecial,
@@ -609,8 +830,14 @@ export default function RandevuPage() {
         priceOption: tourType === 'normal' ? priceOption : 'with-equipment',
         selectedPrice: selectedPrice,
         priceDetails: priceDetails,
-        totalAmount: isSpecial ? selectedPrice : selectedPrice * guestCount,
+        totalAmount: totalAmount,
         createdAt: serverTimestamp(),
+        // Yaş grubu bilgileri (sadece normal tur için)
+        ...(tourType === 'normal' && {
+          ageGroups: ageGroups,
+          ageBasedPricing: ageBasedBreakdown,
+          equipmentChoices: equipmentChoices
+        }),
         // Custom tur detayları
         ...(customTour && {
           customTourDetails: {
@@ -635,6 +862,25 @@ export default function RandevuPage() {
   };
 
   const calendarDays = getCalendarDays(currentMonth);
+
+  // Belirli tarihin seçilebilir olup olmadığını kontrol et
+  const isDateSelectable = (dateString: string) => {
+    if (!bookingDateRange.enabled || !bookingDateRange.startDate || !bookingDateRange.endDate) {
+      return true; // Kısıtlama yoksa tüm tarihler seçilebilir
+    }
+
+    const checkDate = new Date(dateString);
+    const startDate = new Date(bookingDateRange.startDate);
+    const endDate = new Date(bookingDateRange.endDate);
+    
+    // Saat karşılaştırması için gün başına ayarla
+    checkDate.setHours(0, 0, 0, 0);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(0, 0, 0, 0);
+    
+    // İzin verilen tarih aralığı içindeyse seçilebilir
+    return checkDate >= startDate && checkDate <= endDate;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
@@ -965,25 +1211,164 @@ export default function RandevuPage() {
                     Kaç kişi katılacaksınız?
                   </h2>
                   
-                  <div className="flex items-center justify-center space-x-4 sm:space-x-6 mb-6 sm:mb-8">
+                  <div className="max-w-md mx-auto space-y-6 mb-6 sm:mb-8">
+                    {/* Yetişkin (7+ yaş) */}
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-left">
+                          <h3 className="text-lg font-bold text-blue-800">👨‍👩‍👦 Yetişkin (7+ yaş)</h3>
+                          <p className="text-sm text-blue-600">Tam fiyat</p>
+                        </div>
+                        <div className="flex items-center space-x-3">
                     <button
-                      onClick={() => setGuestCount(Math.max(1, guestCount - 1))}
-                      className="w-10 h-10 sm:w-12 sm:h-12 bg-red-500 text-white rounded-full font-bold text-lg sm:text-xl hover:bg-red-600 transition-all duration-300 touch-manipulation"
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              adults: Math.max(1, prev.adults - 1)
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
                     >
                       -
                     </button>
-                    
-                    <div className="bg-blue-50 px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl border-2 border-blue-200">
-                      <span className="text-2xl sm:text-4xl font-bold text-slate-800">{guestCount}</span>
-                      <p className="text-slate-600 text-xs sm:text-sm mt-1">kişi</p>
+                          <span className="text-xl font-bold text-blue-800 w-8 text-center">{ageGroups.adults}</span>
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              adults: Math.min(12 - prev.children - prev.babies, prev.adults + 1)
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Çocuk (3-6 yaş) */}
+                    <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-left">
+                          <h3 className="text-lg font-bold text-orange-800">👶 Çocuk (3-6 yaş)</h3>
+                          <p className="text-sm text-orange-600">%50 indirimli</p>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              children: Math.max(0, prev.children - 1)
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-xl font-bold text-orange-800 w-8 text-center">{ageGroups.children}</span>
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              children: Math.min(12 - prev.adults - prev.babies, prev.children + 1)
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     
+                    {/* Bebek (0-3 yaş) */}
+                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-left">
+                          <h3 className="text-lg font-bold text-green-800">🍼 Bebek (0-3 yaş)</h3>
+                          <p className="text-sm text-green-600">Ücretsiz</p>
+                        </div>
+                        <div className="flex items-center space-x-3">
                     <button
-                      onClick={() => setGuestCount(Math.min(12, guestCount + 1))}
-                      className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500 text-white rounded-full font-bold text-lg sm:text-xl hover:bg-green-600 transition-all duration-300 touch-manipulation"
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              babies: Math.max(0, prev.babies - 1)
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-xl font-bold text-green-800 w-8 text-center">{ageGroups.babies}</span>
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              babies: Math.min(12 - prev.adults - prev.children, prev.babies + 1)
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
                     >
                       +
                     </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Toplam özet ve fiyat */}
+                  <div className="bg-slate-100 border-2 border-slate-300 rounded-xl p-4 mb-6">
+                    <h3 className="text-lg font-bold text-slate-800 mb-2">📊 Rezervasyon Özeti</h3>
+                    <div className="text-slate-700 space-y-2">
+                      <p><strong>{getTotalGuestCount()} kişi</strong> katılacak</p>
+                      <div className="text-sm space-y-1">
+                        {ageGroups.adults > 0 && <p>• {ageGroups.adults} Yetişkin</p>}
+                        {ageGroups.children > 0 && <p>• {ageGroups.children} Çocuk (%50 indirimli)</p>}
+                        {ageGroups.babies > 0 && <p>• {ageGroups.babies} Bebek (ücretsiz)</p>}
+                      </div>
+                      
+                      {/* Fiyat hesaplama */}
+                      {(() => {
+                        const priceInfo = getCurrentPrice();
+                        if (!priceInfo) return null;
+                        
+                        return (
+                          <div className="mt-3 pt-3 border-t border-slate-300">
+                            <div className="space-y-1 text-sm">
+                              {/* Yetişkin Ekipman Dahil */}
+                              {priceInfo.breakdown.adults.withEquipment.count > 0 && (
+                                <div className="flex justify-between">
+                                  <span>{priceInfo.breakdown.adults.withEquipment.count} Yetişkin (Ekipman Dahil)</span>
+                                  <span>{priceInfo.breakdown.adults.withEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                                </div>
+                              )}
+                              {/* Yetişkin Kendi Ekipmanı */}
+                              {priceInfo.breakdown.adults.ownEquipment.count > 0 && (
+                                <div className="flex justify-between">
+                                  <span>{priceInfo.breakdown.adults.ownEquipment.count} Yetişkin (Kendi Ekipmanı)</span>
+                                  <span>{priceInfo.breakdown.adults.ownEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                                </div>
+                              )}
+                              {/* Çocuk Ekipman Dahil */}
+                              {priceInfo.breakdown.children.withEquipment.count > 0 && (
+                                <div className="flex justify-between">
+                                  <span>{priceInfo.breakdown.children.withEquipment.count} Çocuk (Ekipman Dahil)</span>
+                                  <span>{priceInfo.breakdown.children.withEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                                </div>
+                              )}
+                              {/* Çocuk Kendi Ekipmanı */}
+                              {priceInfo.breakdown.children.ownEquipment.count > 0 && (
+                                <div className="flex justify-between">
+                                  <span>{priceInfo.breakdown.children.ownEquipment.count} Çocuk (Kendi Ekipmanı)</span>
+                                  <span>{priceInfo.breakdown.children.ownEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                                </div>
+                              )}
+                              {/* Bebek */}
+                              {priceInfo.breakdown.babies.count > 0 && (
+                                <div className="flex justify-between">
+                                  <span>{priceInfo.breakdown.babies.count} Bebek (Ücretsiz)</span>
+                                  <span>{priceInfo.breakdown.babies.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex justify-between mt-2 pt-2 border-t border-slate-400 font-bold text-lg">
+                              <span>Toplam Tutar:</span>
+                              <span className="text-blue-700">{priceInfo.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                   
                   <p className="text-slate-500 mb-6 sm:mb-8 text-sm sm:text-base">
@@ -1072,7 +1457,283 @@ export default function RandevuPage() {
                 </button>
                 <button
                   data-continue-button
-                  onClick={() => setCurrentStep(3)}
+                  onClick={() => {
+                    // Normal tur ve olta kullanan kişi varsa olta seçim adımına git
+                    if (tourType === 'normal' && (ageGroups.adults > 0 || ageGroups.children > 0)) {
+                      setCurrentStep(2.5);
+                    } else {
+                      setCurrentStep(3);
+                    }
+                    scrollToContinueButton();
+                  }}
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 touch-manipulation"
+                >
+                  Devam Et →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Adım 2.5: Olta Seçimi (Sadece Normal Tur İçin) */}
+          {currentStep === 2.5 && (
+            <div className="text-center">
+              <h2 className="text-xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">
+                🎣 Olta Seçimi
+              </h2>
+              
+              <p className="text-slate-600 mb-6 sm:mb-8 text-sm sm:text-base">
+                Her kişi için olta durumunu belirleyin
+              </p>
+
+              <div className="max-w-2xl mx-auto space-y-6 mb-6 sm:mb-8">
+                {/* Yetişkinler için olta seçimi */}
+                {ageGroups.adults > 0 && (
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+                    <h3 className="text-lg font-bold text-blue-800 mb-4">
+                      👨‍👩‍👦 Yetişkinler ({ageGroups.adults} kişi)
+                    </h3>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Ekipman Dahil */}
+                      <div className="bg-white rounded-lg p-4 border-2 border-orange-200">
+                        <h4 className="font-bold text-orange-800 mb-2">🎣 Ekipman Dahil</h4>
+                        <p className="text-sm text-orange-600 mb-3">{prices.normalWithEquipment.toLocaleString('tr-TR')} ₺/kişi</p>
+                        
+                        <div className="flex items-center justify-center space-x-3">
+                          <button
+                            onClick={() => setEquipmentChoices(prev => ({
+                              ...prev,
+                              adults: {
+                                withEquipment: Math.max(0, prev.adults.withEquipment - 1),
+                                ownEquipment: Math.min(ageGroups.adults, prev.adults.ownEquipment + 1)
+                              }
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-xl font-bold text-orange-800 w-8 text-center">
+                            {equipmentChoices.adults.withEquipment}
+                          </span>
+                          <button
+                            onClick={() => setEquipmentChoices(prev => ({
+                              ...prev,
+                              adults: {
+                                withEquipment: Math.min(ageGroups.adults, prev.adults.withEquipment + 1),
+                                ownEquipment: Math.max(0, prev.adults.ownEquipment - 1)
+                              }
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Kendi Ekipmanı */}
+                      <div className="bg-white rounded-lg p-4 border-2 border-green-200">
+                        <h4 className="font-bold text-green-800 mb-2">🎒 Kendi Ekipmanı</h4>
+                        <p className="text-sm text-green-600 mb-3">{prices.normalOwn.toLocaleString('tr-TR')} ₺/kişi</p>
+                        
+                        <div className="flex items-center justify-center space-x-3">
+                          <button
+                            onClick={() => setEquipmentChoices(prev => ({
+                              ...prev,
+                              adults: {
+                                ownEquipment: Math.max(0, prev.adults.ownEquipment - 1),
+                                withEquipment: Math.min(ageGroups.adults, prev.adults.withEquipment + 1)
+                              }
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-xl font-bold text-green-800 w-8 text-center">
+                            {equipmentChoices.adults.ownEquipment}
+                          </span>
+                          <button
+                            onClick={() => setEquipmentChoices(prev => ({
+                              ...prev,
+                              adults: {
+                                ownEquipment: Math.min(ageGroups.adults, prev.adults.ownEquipment + 1),
+                                withEquipment: Math.max(0, prev.adults.withEquipment - 1)
+                              }
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Çocuklar için olta seçimi */}
+                {ageGroups.children > 0 && (
+                  <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-6">
+                    <h3 className="text-lg font-bold text-orange-800 mb-4">
+                      👶 Çocuklar ({ageGroups.children} kişi)
+                    </h3>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Ekipman Dahil */}
+                      <div className="bg-white rounded-lg p-4 border-2 border-orange-200">
+                        <h4 className="font-bold text-orange-800 mb-2">🎣 Ekipman Dahil</h4>
+                        <p className="text-sm text-orange-600 mb-3">{(prices.normalWithEquipment * 0.5).toLocaleString('tr-TR')} ₺/kişi (%50)</p>
+                        
+                        <div className="flex items-center justify-center space-x-3">
+                          <button
+                            onClick={() => setEquipmentChoices(prev => ({
+                              ...prev,
+                              children: {
+                                withEquipment: Math.max(0, prev.children.withEquipment - 1),
+                                ownEquipment: Math.min(ageGroups.children, prev.children.ownEquipment + 1)
+                              }
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-xl font-bold text-orange-800 w-8 text-center">
+                            {equipmentChoices.children.withEquipment}
+                          </span>
+                          <button
+                            onClick={() => setEquipmentChoices(prev => ({
+                              ...prev,
+                              children: {
+                                withEquipment: Math.min(ageGroups.children, prev.children.withEquipment + 1),
+                                ownEquipment: Math.max(0, prev.children.ownEquipment - 1)
+                              }
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Kendi Ekipmanı */}
+                      <div className="bg-white rounded-lg p-4 border-2 border-green-200">
+                        <h4 className="font-bold text-green-800 mb-2">🎒 Kendi Ekipmanı</h4>
+                        <p className="text-sm text-green-600 mb-3">{(prices.normalOwn * 0.5).toLocaleString('tr-TR')} ₺/kişi (%50)</p>
+                        
+                        <div className="flex items-center justify-center space-x-3">
+                          <button
+                            onClick={() => setEquipmentChoices(prev => ({
+                              ...prev,
+                              children: {
+                                ownEquipment: Math.max(0, prev.children.ownEquipment - 1),
+                                withEquipment: Math.min(ageGroups.children, prev.children.withEquipment + 1)
+                              }
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-xl font-bold text-green-800 w-8 text-center">
+                            {equipmentChoices.children.ownEquipment}
+                          </span>
+                          <button
+                            onClick={() => setEquipmentChoices(prev => ({
+                              ...prev,
+                              children: {
+                                ownEquipment: Math.min(ageGroups.children, prev.children.ownEquipment + 1),
+                                withEquipment: Math.max(0, prev.children.withEquipment - 1)
+                              }
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bebekler bilgi notu */}
+                {ageGroups.babies > 0 && (
+                  <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                    <div className="text-center">
+                      <h3 className="text-lg font-bold text-green-800 mb-2">
+                        🍼 Bebekler ({ageGroups.babies} kişi)
+                      </h3>
+                      <p className="text-sm text-green-600">
+                        Bebekler olta kullanmadığı için herhangi bir ekipman seçimi gerektirmez
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Fiyat Özeti */}
+              {(() => {
+                const priceInfo = getCurrentPrice();
+                if (!priceInfo) return null;
+                
+                return (
+                  <div className="bg-slate-100 border-2 border-slate-300 rounded-xl p-6 mb-6 max-w-md mx-auto">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">💰 Fiyat Özeti</h3>
+                    <div className="space-y-2 text-sm">
+                      {/* Yetişkin Ekipman Dahil */}
+                      {priceInfo.breakdown.adults.withEquipment.count > 0 && (
+                        <div className="flex justify-between">
+                          <span>{priceInfo.breakdown.adults.withEquipment.count} Yetişkin (Ekipman Dahil)</span>
+                          <span>{priceInfo.breakdown.adults.withEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                        </div>
+                      )}
+                      {/* Yetişkin Kendi Ekipmanı */}
+                      {priceInfo.breakdown.adults.ownEquipment.count > 0 && (
+                        <div className="flex justify-between">
+                          <span>{priceInfo.breakdown.adults.ownEquipment.count} Yetişkin (Kendi Ekipmanı)</span>
+                          <span>{priceInfo.breakdown.adults.ownEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                        </div>
+                      )}
+                      {/* Çocuk Ekipman Dahil */}
+                      {priceInfo.breakdown.children.withEquipment.count > 0 && (
+                        <div className="flex justify-between">
+                          <span>{priceInfo.breakdown.children.withEquipment.count} Çocuk (Ekipman Dahil)</span>
+                          <span>{priceInfo.breakdown.children.withEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                        </div>
+                      )}
+                      {/* Çocuk Kendi Ekipmanı */}
+                      {priceInfo.breakdown.children.ownEquipment.count > 0 && (
+                        <div className="flex justify-between">
+                          <span>{priceInfo.breakdown.children.ownEquipment.count} Çocuk (Kendi Ekipmanı)</span>
+                          <span>{priceInfo.breakdown.children.ownEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                        </div>
+                      )}
+                      {/* Bebek */}
+                      {priceInfo.breakdown.babies.count > 0 && (
+                        <div className="flex justify-between">
+                          <span>{priceInfo.breakdown.babies.count} Bebek (Ücretsiz)</span>
+                          <span>{priceInfo.breakdown.babies.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-between mt-4 pt-4 border-t border-slate-400 font-bold text-lg">
+                      <span>Toplam Tutar:</span>
+                      <span className="text-blue-700">{priceInfo.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Navigasyon Butonları */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+                <button
+                  onClick={() => setCurrentStep(2)}
+                  className="bg-gray-400 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-500 transition-all duration-300 touch-manipulation"
+                >
+                  ← Geri
+                </button>
+                <button
+                  data-continue-button
+                  onClick={() => {
+                    setCurrentStep(3);
+                    scrollToContinueButton();
+                  }}
                   className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 touch-manipulation"
                 >
                   Devam Et →
@@ -1115,10 +1776,17 @@ export default function RandevuPage() {
                              if (customTour) return `${customTour.capacity} kişi (${customTour.name})`;
                              if (tourType === 'fishing-swimming') return '12 kişi (Balık+Yüzme Tur)';
                              if (tourType === 'private') return '12 kişi (Özel Tur)';
-                             return `${guestCount} kişi`;
+                             return `${getTotalGuestCount()} kişi`;
                            })() : 
-                           `${guestCount} kişi`}
+                           `${getTotalGuestCount()} kişi`}
                     </p>
+                    {tourType === 'normal' && (getTotalGuestCount() > ageGroups.adults) && (
+                      <div className="text-xs text-gray-600 ml-4 mt-1">
+                        {ageGroups.adults > 0 && <span>• {ageGroups.adults} Yetişkin </span>}
+                        {ageGroups.children > 0 && <span>• {ageGroups.children} Çocuk </span>}
+                        {ageGroups.babies > 0 && <span>• {ageGroups.babies} Bebek</span>}
+                      </div>
+                    )}
                 </div>
               )}
 
@@ -1177,21 +1845,28 @@ export default function RandevuPage() {
                           return "Tüm seanslar boş";
                         };
                         
+                        const isDateNotSelectable = !isDateSelectable(dayInfo.date);
+                        
                         return (
                           <button
                             key={index}
                             onClick={() => {
-                              if (!dayInfo.isDisabled && !isFullyOccupied) {
+                              if (!dayInfo.isDisabled && !isFullyOccupied && !isDateNotSelectable) {
                                 // Tarih seçimi - özel tur kısıtlaması sadece tamamen dolu günler için
                                 // Kısmen dolu günlerde hangi seansın müsait olduğunu saat seçiminde göstereceğiz
                                 setSelectedDate(dayInfo.date);
                                 scrollToContinueButton();
+                              } else if (isDateNotSelectable && dayInfo.isCurrentMonth) {
+                                // Tarih aralığı dışı uyarısı
+                                alert(`❌ Bu tarih seçilemez!\n\n${bookingDateRange.disabledMessage || 'Bu tarih rezervasyon için kapalı'}\n\n📅 Rezervasyon yapılabilir tarihler:\n${new Date(bookingDateRange.startDate).toLocaleDateString('tr-TR')} - ${new Date(bookingDateRange.endDate).toLocaleDateString('tr-TR')}`);
                               }
                             }}
-                            disabled={dayInfo.isDisabled || isFullyOccupied}
+                            disabled={dayInfo.isDisabled || isFullyOccupied || isDateNotSelectable}
                             className={`aspect-square rounded-md sm:rounded-lg text-xs sm:text-sm font-bold transition-all duration-300 relative touch-manipulation ${
                               dayInfo.isDisabled 
                                 ? 'text-gray-300 cursor-not-allowed' 
+                                : isDateNotSelectable && dayInfo.isCurrentMonth
+                                ? 'bg-gradient-to-br from-purple-400 to-purple-500 text-white cursor-not-allowed opacity-60 line-through'
                                 : isSelected
                                 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-110 shadow-lg'
                                 : isFullyOccupied && dayInfo.isCurrentMonth
@@ -1205,6 +1880,8 @@ export default function RandevuPage() {
                             title={
                               dayInfo.isDisabled
                                 ? 'Geçmiş tarih seçilemez'
+                                : isDateNotSelectable && dayInfo.isCurrentMonth
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${bookingDateRange.disabledMessage || 'Bu tarih kapalı'}`
                                 : isFullyOccupied && dayInfo.isCurrentMonth
                                 ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen dolu (tüm seanslar) - Hiçbir tur türü için müsait değil`
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
@@ -1242,6 +1919,19 @@ export default function RandevuPage() {
                         <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-orange-400 to-orange-500 rounded shadow-sm"></div>
                         <span className="font-bold text-slate-800 text-xs">Kısmi</span>
                       </div>
+                      {bookingDateRange.enabled && (
+                        <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-purple-200">
+                          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-purple-400 to-purple-500 rounded shadow-sm line-through opacity-60"></div>
+                          <span className="font-bold text-slate-800 text-xs" title={bookingDateRange.disabledMessage || 'Bu tarihler kapalı'}>
+                            {(() => {
+                              const message = bookingDateRange.disabledMessage || 'Bu tarihler kapalı';
+                              return message.length > 20 
+                                ? message.substring(0, 17) + '...' 
+                                : message;
+                            })()}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-blue-200">
                         <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-100 rounded shadow-sm"></div>
                         <span className="font-bold text-slate-800 text-xs">Boş</span>
@@ -1404,15 +2094,20 @@ export default function RandevuPage() {
                     {tourType === 'normal' && (
                       <div className="mb-3 sm:mb-4 text-center">
                         <div className="bg-blue-50 border border-blue-200 rounded-xl p-2 sm:p-3 inline-block">
-                          <p className="text-blue-800 text-xs sm:text-sm font-medium">
-                            💡 <strong>{guestCount} kişi</strong> için <strong>{guestCount} koltuk</strong> seçin
-                          </p>
-                          {selectedSeats.length < guestCount && (
+                                                      <div className="text-blue-800 text-xs sm:text-sm font-medium">
+                              <p>💡 <strong>{getTotalGuestCount()} kişi</strong> için <strong>{getRequiredSeatCount()} koltuk</strong> seçin</p>
+                              {ageGroups.babies > 0 && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                  🍼 Bebekler kucakta oturacağı için koltuk gerekmez
+                                </p>
+                              )}
+                            </div>
+                                                      {selectedSeats.length < getRequiredSeatCount() && (
                             <p className="text-blue-700 text-xs mt-1">
-                              Henüz {guestCount - selectedSeats.length} koltuk daha seçmelisiniz
+                                Henüz {getRequiredSeatCount() - selectedSeats.length} koltuk daha seçmelisiniz
                             </p>
                           )}
-                          {selectedSeats.length === guestCount && (
+                            {selectedSeats.length === getRequiredSeatCount() && (
                             <p className="text-green-700 text-xs mt-1">
                               ✅ Tüm koltuklar seçildi!
                             </p>
@@ -1565,7 +2260,7 @@ export default function RandevuPage() {
                     {selectedSeats.length > 0 && (
                       <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-gradient-to-r from-green-100 to-emerald-100 rounded-xl border border-green-200 shadow-lg">
                         <p className="text-green-800 font-bold text-center text-xs sm:text-sm mb-2">
-                          ✅ Seçili Koltuklar ({selectedSeats.length}/{(tourType === 'private' || tourType === 'fishing-swimming') ? 12 : guestCount})
+                          ✅ Seçili Koltuklar ({selectedSeats.length}/{(tourType === 'private' || tourType === 'fishing-swimming') ? 12 : getRequiredSeatCount()})
                         </p>
                         <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
                           {selectedSeats.map((seat) => (
@@ -1574,9 +2269,9 @@ export default function RandevuPage() {
                             </span>
                           ))}
                         </div>
-                        {tourType === 'normal' && selectedSeats.length < guestCount && (
+                        {tourType === 'normal' && selectedSeats.length < getRequiredSeatCount() && (
                           <p className="text-green-700 text-xs text-center mt-2">
-                            {guestCount - selectedSeats.length} koltuk daha seçin
+                            {getRequiredSeatCount() - selectedSeats.length} koltuk daha seçin
                           </p>
                         )}
                       </div>
@@ -1598,20 +2293,20 @@ export default function RandevuPage() {
                   disabled={
                     !selectedDate || 
                     !selectedTime ||  // TÜM TUR TİPLERİ İÇİN SAAT SEÇİMİ ZORUNLU
-                    (tourType === 'normal' && selectedSeats.length !== guestCount) ||
+                    (tourType === 'normal' && selectedSeats.length !== getRequiredSeatCount()) ||
                     (isSpecialTour(tourType) && selectedSeats.length !== 12)
                   }
                   className={`px-6 sm:px-8 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
                     selectedDate && 
                     selectedTime &&  // TÜM TUR TİPLERİ İÇİN SAAT SEÇİMİ ZORUNLU
-                    ((tourType === 'normal' && selectedSeats.length === guestCount) || 
+                    ((tourType === 'normal' && selectedSeats.length === getRequiredSeatCount()) || 
                      (isSpecialTour(tourType) && selectedSeats.length === 12))
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  {tourType === 'normal' && selectedSeats.length < guestCount 
-                    ? `${guestCount - selectedSeats.length} koltuk daha seçin`
+                                  {tourType === 'normal' && selectedSeats.length < getRequiredSeatCount()
+                ? `${getRequiredSeatCount() - selectedSeats.length} koltuk daha seçin`
                     : 'Devam Et →'
                   }
                 </button>
@@ -1656,10 +2351,33 @@ export default function RandevuPage() {
                   <input
                     type="tel"
                     value={guestInfo.phone}
-                    onChange={(e) => setGuestInfo({...guestInfo, phone: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 text-slate-800 focus:ring-2 focus:ring-blue-400 focus:border-transparent text-base touch-manipulation"
+                    onChange={(e) => {
+                      const rawValue = e.target.value;
+                      const formattedPhone = formatPhoneNumber(rawValue);
+                      setGuestInfo({...guestInfo, phone: formattedPhone});
+                      
+                      // Gerçek zamanlı validasyon
+                      if (formattedPhone.trim()) {
+                        const validation = validatePhoneNumber(formattedPhone);
+                        setPhoneError(validation.isValid ? '' : validation.message);
+                      } else {
+                        setPhoneError('');
+                      }
+                    }}
+                    className={`w-full px-4 py-3 rounded-xl border text-slate-800 focus:ring-2 focus:border-transparent text-base touch-manipulation ${
+                      phoneError 
+                        ? 'border-red-500 focus:ring-red-400' 
+                        : 'border-gray-300 focus:ring-blue-400'
+                    }`}
                     placeholder="05XX XXX XX XX"
+                    maxLength={14}
                   />
+                  {phoneError && (
+                    <p className="text-red-500 text-sm mt-1 flex items-center">
+                      <span className="mr-1">⚠️</span>
+                      {phoneError}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1687,8 +2405,15 @@ export default function RandevuPage() {
                       const customTour = getSelectedCustomTour(tourType);
                       return customTour ? `${customTour.capacity} kişi (Tüm Tekne)` : '12 kişi (Tüm Tekne)';
                     })() : 
-                    `${guestCount} kişi`
+                    `${getTotalGuestCount()} kişi`
                   }</p>
+                  {tourType === 'normal' && (getTotalGuestCount() > ageGroups.adults) && (
+                    <div className="ml-6 text-xs space-y-1">
+                      {ageGroups.adults > 0 && <p>• {ageGroups.adults} Yetişkin</p>}
+                      {ageGroups.children > 0 && <p>• {ageGroups.children} Çocuk (3-6 yaş, %50 indirimli)</p>}
+                      {ageGroups.babies > 0 && <p>• {ageGroups.babies} Bebek (0-3 yaş, ücretsiz)</p>}
+                    </div>
+                  )}
                   <p>📅 <strong>Tarih:</strong> {new Date(selectedDate).toLocaleDateString('tr-TR', { 
                     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
                   })}</p>
@@ -1728,9 +2453,9 @@ export default function RandevuPage() {
                 </button>
                 <button
                   onClick={saveReservation}
-                  disabled={!guestInfo.name || !guestInfo.surname || !guestInfo.phone || loading}
+                  disabled={!guestInfo.name || !guestInfo.surname || !guestInfo.phone || loading || !!phoneError || !validatePhoneNumber(guestInfo.phone).isValid}
                   className={`px-6 sm:px-8 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
-                    guestInfo.name && guestInfo.surname && guestInfo.phone && !loading
+                    guestInfo.name && guestInfo.surname && guestInfo.phone && !loading && !phoneError && validatePhoneNumber(guestInfo.phone).isValid
                       ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
@@ -1884,9 +2609,19 @@ export default function RandevuPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-slate-600">👥 Kişi Sayısı:</span>
                           <span className="font-bold text-slate-800 text-xs sm:text-sm">
-                            {(tourType === 'private' || tourType === 'fishing-swimming') ? '12 kişi' : `${guestCount} kişi`}
+                            {isSpecialTour(tourType) ? (() => {
+                              const customTour = getSelectedCustomTour(tourType);
+                              return customTour ? `${customTour.capacity} kişi` : '12 kişi';
+                            })() : `${getTotalGuestCount()} kişi`}
                           </span>
                         </div>
+                        {tourType === 'normal' && (getTotalGuestCount() > ageGroups.adults) && (
+                          <div className="text-xs text-slate-600 space-y-1 ml-4">
+                            {ageGroups.adults > 0 && <p>• {ageGroups.adults} Yetişkin</p>}
+                            {ageGroups.children > 0 && <p>• {ageGroups.children} Çocuk (%50 indirimli)</p>}
+                            {ageGroups.babies > 0 && <p>• {ageGroups.babies} Bebek (ücretsiz)</p>}
+                          </div>
+                        )}
                         <div className="flex justify-between items-center">
                           <span className="text-slate-600">🪑 Koltuklar:</span>
                           <span className="font-bold text-slate-800 text-xs sm:text-sm">

@@ -35,6 +35,14 @@ export default function AdminPanel() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Yerel tarih formatı için yardımcı fonksiyon
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [adminPassword, setAdminPassword] = useState<string>('');
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(true);
@@ -92,7 +100,7 @@ export default function AdminPanel() {
   }, [isAuthenticated]);
 
   const calculateStats = (reservations: Reservation[]) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatLocalDate(new Date());
     
     const pending = reservations.filter(r => r.status === 'pending').length;
     const confirmed = reservations.filter(r => r.status === 'confirmed').length;
@@ -120,7 +128,7 @@ export default function AdminPanel() {
   // Otomatik tamamlanma kontrolü
   const checkAndCompleteReservations = async () => {
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = formatLocalDate(now);
     const currentTime = now.getHours() * 60 + now.getMinutes(); // Dakika cinsinden
     
     for (const reservation of reservations) {
@@ -226,6 +234,14 @@ export default function AdminPanel() {
       stats: `${stats.confirmed} onaylı`
     },
     {
+      title: 'Hakkımızda Düzenle',
+      description: 'Soru-cevap içeriklerini düzenle',
+      href: '/admin/hakkimizda',
+      icon: '📝',
+      color: 'bg-emerald-500 hover:bg-emerald-600',
+      stats: 'İçerik yönetimi'
+    },
+    {
       title: 'Fotoğraf Yönetimi',
       description: 'Website fotoğraflarını yönet',
       href: '/admin/photos',
@@ -240,6 +256,14 @@ export default function AdminPanel() {
       icon: '❓',
       color: 'bg-indigo-500 hover:bg-indigo-600',
       stats: 'Sorular & Cevaplar'
+    },
+    {
+      title: 'Saat Yönetimi',
+      description: 'Günlük çalışma saatlerini düzenle',
+      href: '/admin/schedule',
+      icon: '⏰',
+      color: 'bg-amber-500 hover:bg-amber-600',
+      stats: 'Gün bazlı saatler'
     },
     {
       title: 'Sistem Ayarları',

@@ -15,6 +15,12 @@ interface Settings {
   maintenanceMode: boolean;
   bookingEnabled: boolean;
   whatsappNumber: string;
+  bookingDateRange: {
+    enabled: boolean;
+    startDate: string;
+    endDate: string;
+    disabledMessage: string;
+  };
 }
 
 interface Prices {
@@ -51,7 +57,13 @@ export default function SettingsPage() {
     priceUpdateDate: '',
     maintenanceMode: false,
     bookingEnabled: true,
-    whatsappNumber: '+90 531 089 25 37'
+    whatsappNumber: '+90 531 089 25 37',
+    bookingDateRange: {
+      enabled: false,
+      startDate: '',
+      endDate: '',
+      disabledMessage: 'Bu tarihler rezervasyon için kapalı'
+    }
   });
   
   const [prices, setPrices] = useState<Prices>({
@@ -95,7 +107,13 @@ export default function SettingsPage() {
             priceUpdateDate: data.priceUpdateDate || '',
             maintenanceMode: data.maintenanceMode || false,
             bookingEnabled: data.bookingEnabled ?? true,
-            whatsappNumber: data.whatsappNumber || '+90 531 089 25 37'
+            whatsappNumber: data.whatsappNumber || '+90 531 089 25 37',
+            bookingDateRange: data.bookingDateRange || {
+              enabled: false,
+              startDate: '',
+              endDate: '',
+              disabledMessage: 'Bu tarihler rezervasyon için kapalı'
+            }
           });
         }
         
@@ -344,6 +362,21 @@ export default function SettingsPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Bakım Modu Uyarısı */}
+        {settings.maintenanceMode && (
+          <div className="mb-6 bg-orange-100 border-l-4 border-orange-500 p-4 rounded-lg">
+            <div className="flex items-center">
+              <div className="text-orange-500 text-xl mr-3">🔧</div>
+              <div>
+                <h3 className="text-orange-800 font-semibold">Bakım Modu Aktif!</h3>
+                <p className="text-orange-700 text-sm">
+                  Site şu anda ziyaretçiler için kapalı. Sadece admin paneli erişilebilir durumda.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="space-y-8">
           {/* Genel Bilgiler */}
           <div className="bg-white rounded-lg shadow-lg p-6">
@@ -501,6 +534,109 @@ export default function SettingsPage() {
                     }`}></div>
                   </div>
                 </label>
+              </div>
+
+              {/* Rezervasyon Tarih Aralığı */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-medium text-gray-900">📅 Rezervasyon Tarih Aralığı</h3>
+                    <p className="text-sm text-gray-600">
+                      Sadece belirtilen tarih aralığında rezervasyon alınır, diğer tarihler seçilemez
+                    </p>
+                  </div>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.bookingDateRange.enabled}
+                      onChange={(e) => setSettings({
+                        ...settings, 
+                        bookingDateRange: {
+                          ...settings.bookingDateRange,
+                          enabled: e.target.checked
+                        }
+                      })}
+                      className="sr-only"
+                    />
+                    <div className={`relative w-11 h-6 rounded-full transition-colors ${
+                      settings.bookingDateRange.enabled ? 'bg-blue-500' : 'bg-gray-300'
+                    }`}>
+                      <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                        settings.bookingDateRange.enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}></div>
+                    </div>
+                  </label>
+                </div>
+
+                {settings.bookingDateRange.enabled && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-blue-800 mb-1">
+                          Başlangıç Tarihi
+                        </label>
+                        <input
+                          type="date"
+                          value={settings.bookingDateRange.startDate}
+                          onChange={(e) => setSettings({
+                            ...settings,
+                            bookingDateRange: {
+                              ...settings.bookingDateRange,
+                              startDate: e.target.value
+                            }
+                          })}
+                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-blue-800 mb-1">
+                          Bitiş Tarihi
+                        </label>
+                        <input
+                          type="date"
+                          value={settings.bookingDateRange.endDate}
+                          onChange={(e) => setSettings({
+                            ...settings,
+                            bookingDateRange: {
+                              ...settings.bookingDateRange,
+                              endDate: e.target.value
+                            }
+                          })}
+                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Kapalı Olduğunda Gösterilecek Mesaj
+                      </label>
+                      <textarea
+                        value={settings.bookingDateRange.disabledMessage}
+                        onChange={(e) => setSettings({
+                          ...settings,
+                          bookingDateRange: {
+                            ...settings.bookingDateRange,
+                            disabledMessage: e.target.value
+                          }
+                        })}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        placeholder="Örn: Palamut sezonu nedeniyle bu tarihler kapalı"
+                      />
+                    </div>
+
+                    {settings.bookingDateRange.startDate && settings.bookingDateRange.endDate && (
+                      <div className="p-3 bg-blue-100 border border-blue-200 rounded-lg">
+                        <p className="text-blue-800 text-sm">
+                          📊 <strong>Aktif Rezervasyon Dönemi:</strong><br />
+                          {new Date(settings.bookingDateRange.startDate).toLocaleDateString('tr-TR')} - {new Date(settings.bookingDateRange.endDate).toLocaleDateString('tr-TR')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             

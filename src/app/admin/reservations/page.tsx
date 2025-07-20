@@ -28,6 +28,29 @@ interface Reservation {
   createdAt: string;
   totalAmount?: number;
   priceOption?: 'own-equipment' | 'with-equipment'; // Normal tur için ekipman seçeneği
+  // Yaş grubu bilgileri (normal turlar için)
+  ageGroups?: {
+    adults: number;
+    children: number;
+    babies: number;
+  };
+  ageBasedPricing?: {
+    adults: { 
+      withEquipment: { count: number; unitPrice: number; totalPrice: number };
+      ownEquipment: { count: number; unitPrice: number; totalPrice: number };
+    };
+    children: { 
+      withEquipment: { count: number; unitPrice: number; totalPrice: number };
+      ownEquipment: { count: number; unitPrice: number; totalPrice: number };
+    };
+    babies: { count: number; unitPrice: number; totalPrice: number };
+  };
+  // Esnek olta seçimi bilgileri
+  equipmentChoices?: {
+    adults: { withEquipment: number; ownEquipment: number };
+    children: { withEquipment: number; ownEquipment: number };
+    babies: { withEquipment: number; ownEquipment: number };
+  };
 }
 
 function ReservationsContent() {
@@ -283,7 +306,9 @@ Tekne randevunuz onaylandı! ✅
 📅 Tarih: ${date}
 ⏰ Saat: ${time}
 🚢 Tur Tipi: ${tourType}
-👥 Kişi Sayısı: ${reservation.guestCount}
+👥 Kişi Sayısı: ${reservation.guestCount}${reservation.ageGroups && (reservation.ageGroups.children > 0 || reservation.ageGroups.babies > 0) ? 
+  `\n   ${reservation.ageGroups.adults > 0 ? `${reservation.ageGroups.adults} Yetişkin` : ''}${reservation.ageGroups.children > 0 ? `, ${reservation.ageGroups.children} Çocuk (3-6 yaş)` : ''}${reservation.ageGroups.babies > 0 ? `, ${reservation.ageGroups.babies} Bebek (0-3 yaş)` : ''}` : ''}${reservation.equipmentChoices ? 
+  `\n🎣 Olta: ${reservation.equipmentChoices.adults.withEquipment > 0 ? `${reservation.equipmentChoices.adults.withEquipment} Yetişkin (Ekipman Dahil)` : ''}${reservation.equipmentChoices.adults.ownEquipment > 0 ? `${reservation.equipmentChoices.adults.withEquipment > 0 ? ', ' : ''}${reservation.equipmentChoices.adults.ownEquipment} Yetişkin (Kendi Ekipmanı)` : ''}${reservation.equipmentChoices.children.withEquipment > 0 ? `${(reservation.equipmentChoices.adults.withEquipment > 0 || reservation.equipmentChoices.adults.ownEquipment > 0) ? ', ' : ''}${reservation.equipmentChoices.children.withEquipment} Çocuk (Ekipman Dahil)` : ''}${reservation.equipmentChoices.children.ownEquipment > 0 ? `${(reservation.equipmentChoices.adults.withEquipment > 0 || reservation.equipmentChoices.adults.ownEquipment > 0 || reservation.equipmentChoices.children.withEquipment > 0) ? ', ' : ''}${reservation.equipmentChoices.children.ownEquipment} Çocuk (Kendi Ekipmanı)` : ''}` : ''}
 💺 Koltuk No: ${reservation.selectedSeats.join(', ')}
 
 Randevu No: ${reservation.reservationNumber}
@@ -312,8 +337,9 @@ Yarın tekne randevunuz var:
 📅 Tarih: ${date}
 ⏰ Saat: ${time}
 🚢 Tur Tipi: ${tourType}
-👥 Kişi Sayısı: ${reservation.guestCount}
-💺 Koltuk No: ${reservation.selectedSeats.join(', ')}
+  👥 Kişi Sayısı: ${reservation.guestCount}${reservation.ageGroups && (reservation.ageGroups.children > 0 || reservation.ageGroups.babies > 0) ? 
+    `\n     ${reservation.ageGroups.adults > 0 ? `${reservation.ageGroups.adults} Yetişkin` : ''}${reservation.ageGroups.children > 0 ? `, ${reservation.ageGroups.children} Çocuk (3-6 yaş)` : ''}${reservation.ageGroups.babies > 0 ? `, ${reservation.ageGroups.babies} Bebek (0-3 yaş)` : ''}` : ''}
+  💺 Koltuk No: ${reservation.selectedSeats.join(', ')}
 
 Randevu No: ${reservation.reservationNumber}
 
@@ -563,6 +589,11 @@ Anlayışınız için teşekkürler. 🙏`
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPaymentStatusColor(reservation.paymentStatus)}`}>
                       💳 {getPaymentStatusText(reservation.paymentStatus)}
                     </span>
+                    {reservation.totalAmount && (
+                      <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+                        💰 {reservation.totalAmount.toLocaleString('tr-TR')} ₺
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm text-gray-700 font-medium">
                     {reservation.reservationNumber}
@@ -577,6 +608,32 @@ Anlayışınız için teşekkürler. 🙏`
                       <p><strong>Telefon:</strong> {reservation.guestInfos[0]?.phone}</p>
                       <p><strong>Email:</strong> {reservation.guestInfos[0]?.email}</p>
                       <p><strong>Kişi Sayısı:</strong> {reservation.guestCount}</p>
+                      {reservation.ageGroups && (reservation.ageGroups.children > 0 || reservation.ageGroups.babies > 0) && (
+                        <div className="ml-4 text-xs space-y-1 text-gray-600">
+                          {reservation.ageGroups.adults > 0 && <p>• {reservation.ageGroups.adults} Yetişkin</p>}
+                          {reservation.ageGroups.children > 0 && <p>• {reservation.ageGroups.children} Çocuk (3-6 yaş, %50 indirimli)</p>}
+                          {reservation.ageGroups.babies > 0 && <p>• {reservation.ageGroups.babies} Bebek (0-3 yaş, ücretsiz)</p>}
+                        </div>
+                      )}
+                      {reservation.equipmentChoices && (
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-gray-700">🎣 Olta Seçimi:</p>
+                          <div className="ml-4 text-xs space-y-1 text-gray-600">
+                            {reservation.equipmentChoices.adults.withEquipment > 0 && (
+                              <p>• {reservation.equipmentChoices.adults.withEquipment} Yetişkin (Ekipman Dahil)</p>
+                            )}
+                            {reservation.equipmentChoices.adults.ownEquipment > 0 && (
+                              <p>• {reservation.equipmentChoices.adults.ownEquipment} Yetişkin (Kendi Ekipmanı)</p>
+                            )}
+                            {reservation.equipmentChoices.children.withEquipment > 0 && (
+                              <p>• {reservation.equipmentChoices.children.withEquipment} Çocuk (Ekipman Dahil)</p>
+                            )}
+                            {reservation.equipmentChoices.children.ownEquipment > 0 && (
+                              <p>• {reservation.equipmentChoices.children.ownEquipment} Çocuk (Kendi Ekipmanı)</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -587,6 +644,78 @@ Anlayışınız için teşekkürler. 🙏`
                       <p><strong>Saat:</strong> {reservation.selectedTime}</p>
                       <p><strong>Tur Tipi:</strong> {getReservationTourType(reservation)}</p>
                       <p><strong>Koltuklar:</strong> {reservation.selectedSeats.join(', ')}</p>
+                    </div>
+                  </div>
+
+                  {/* Fiyat Bilgileri */}
+                  <div>
+                    <h3 className="font-medium text-gray-900 mb-2">💰 Fiyat Bilgileri</h3>
+                    <div className="space-y-1 text-sm text-gray-700">
+                      {reservation.totalAmount && (
+                        <p><strong>Toplam Tutar:</strong> 
+                          <span className="text-green-600 font-bold ml-2">
+                            {reservation.totalAmount.toLocaleString('tr-TR')} ₺
+                          </span>
+                        </p>
+                      )}
+                      
+                      {/* Esnek olta sistemi fiyat detayları */}
+                      {reservation.ageBasedPricing && (
+                        <div className="mt-2 bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs font-medium text-gray-700 mb-2">📊 Fiyat Detayları:</p>
+                          <div className="space-y-1 text-xs text-gray-600">
+                            {/* Yetişkin Ekipman Dahil */}
+                            {reservation.ageBasedPricing.adults?.withEquipment?.count > 0 && (
+                              <div className="flex justify-between">
+                                <span>{reservation.ageBasedPricing.adults.withEquipment.count} Yetişkin (Ekipman Dahil)</span>
+                                <span className="font-medium">{reservation.ageBasedPricing.adults.withEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                              </div>
+                            )}
+                            {/* Yetişkin Kendi Ekipmanı */}
+                            {reservation.ageBasedPricing.adults?.ownEquipment?.count > 0 && (
+                              <div className="flex justify-between">
+                                <span>{reservation.ageBasedPricing.adults.ownEquipment.count} Yetişkin (Kendi Ekipmanı)</span>
+                                <span className="font-medium">{reservation.ageBasedPricing.adults.ownEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                              </div>
+                            )}
+                            {/* Çocuk Ekipman Dahil */}
+                            {reservation.ageBasedPricing.children?.withEquipment?.count > 0 && (
+                              <div className="flex justify-between">
+                                <span>{reservation.ageBasedPricing.children.withEquipment.count} Çocuk (Ekipman Dahil)</span>
+                                <span className="font-medium">{reservation.ageBasedPricing.children.withEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                              </div>
+                            )}
+                            {/* Çocuk Kendi Ekipmanı */}
+                            {reservation.ageBasedPricing.children?.ownEquipment?.count > 0 && (
+                              <div className="flex justify-between">
+                                <span>{reservation.ageBasedPricing.children.ownEquipment.count} Çocuk (Kendi Ekipmanı)</span>
+                                <span className="font-medium">{reservation.ageBasedPricing.children.ownEquipment.totalPrice.toLocaleString('tr-TR')} ₺</span>
+                              </div>
+                            )}
+                            {/* Bebek */}
+                            {reservation.ageBasedPricing.babies?.count > 0 && (
+                              <div className="flex justify-between">
+                                <span>{reservation.ageBasedPricing.babies.count} Bebek (Ücretsiz)</span>
+                                <span className="font-medium">0 ₺</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+
+                      
+                      {/* Ödeme Durumu */}
+                      <p><strong>Ödeme Durumu:</strong> 
+                        <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
+                          reservation.paymentStatus === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          reservation.paymentStatus === 'received' ? 'bg-blue-100 text-blue-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {reservation.paymentStatus === 'confirmed' ? 'Onaylandı' :
+                           reservation.paymentStatus === 'received' ? 'Alındı' : 'Bekliyor'}
+                        </span>
+                      </p>
                     </div>
                   </div>
                 </div>

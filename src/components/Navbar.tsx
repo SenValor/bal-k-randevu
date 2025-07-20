@@ -14,6 +14,7 @@ export default function Navbar() {
     { name: 'Hakkımızda', href: '/hakkimizda', icon: '👥' },
     { name: 'Görsellerimiz', href: '/gorsellerimiz', icon: '📸' },
     { name: 'Randevu Al', href: '/randevu', icon: '🎣' },
+    { name: 'Rezervasyon Sorgula', href: '/rezervasyon-sorgula', icon: '🔍' },
     { name: 'SSS', href: '/sss', icon: '❓' },
     { name: 'İletişim', href: '/iletisim', icon: '📞' },
   ];
