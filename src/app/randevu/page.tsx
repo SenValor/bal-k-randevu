@@ -20,6 +20,13 @@ export default function RandevuPage() {
   // Adım takibi
   const [currentStep, setCurrentStep] = useState<number>(1);
   
+  // Sayfa yüklendiğinde üstte başla
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+  
   // Telefon numarası formatlaması
   const formatPhoneNumber = (value: string): string => {
     // Sadece rakamları al
@@ -78,17 +85,34 @@ export default function RandevuPage() {
     return { isValid: true, message: '' };
   };
   
-  // Scroll to continue button utility
-  const scrollToContinueButton = () => {
+  // Scroll to continue button utility - iyileştirilmiş versiyon
+  const scrollToContinueButton = (forceScroll = false) => {
+    // Browser kontrolü (SSR uyumluluğu)
+    if (typeof window === 'undefined') return;
+    
+    // Sadece mobil cihazlarda veya force edildiğinde scroll yap
+    const isMobile = window.innerWidth < 768;
+    
+    if (!forceScroll && !isMobile) {
+      return; // Desktop'ta otomatik scroll yapma
+    }
+    
     setTimeout(() => {
       const continueButton = document.querySelector('[data-continue-button]') as HTMLElement;
       if (continueButton) {
-        continueButton.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
-        });
+        // Butonun görünür olup olmadığını kontrol et
+        const rect = continueButton.getBoundingClientRect();
+        const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+        
+        // Sadece buton görünmüyorsa scroll yap
+        if (!isVisible) {
+          continueButton.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
       }
-    }, 300);
+    }, 150);
   };
   
   // Form verileri
@@ -585,7 +609,8 @@ export default function RandevuPage() {
             } else if (selectedSeats.length < requiredSeats) {
               // Yeni koltuk ekle
               setSelectedSeats([...selectedSeats, seatId]);
-              scrollToContinueButton();
+              // Koltuk seçiminde sadece gerekirse scroll yap
+              setTimeout(() => scrollToContinueButton(), 300);
             }
           }
         }}
@@ -938,7 +963,8 @@ export default function RandevuPage() {
                   onClick={() => {
                     setTourType('normal');
                     setPriceOption('own-equipment');
-                    scrollToContinueButton();
+                    // Tur seçiminde hafif scroll yap
+                    setTimeout(() => scrollToContinueButton(), 500);
                   }}
                   className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                     tourType === 'normal' && priceOption === 'own-equipment'
@@ -971,7 +997,8 @@ export default function RandevuPage() {
                   onClick={() => {
                     setTourType('normal');
                     setPriceOption('with-equipment');
-                    scrollToContinueButton();
+                    // Tur seçiminde hafif scroll yap
+                    setTimeout(() => scrollToContinueButton(), 500);
                   }}
                   className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                     tourType === 'normal' && priceOption === 'with-equipment'
@@ -1009,7 +1036,8 @@ export default function RandevuPage() {
                       return;
                     }
                     setTourType('private');
-                    scrollToContinueButton();
+                    // Tur seçiminde hafif scroll yap
+                    setTimeout(() => scrollToContinueButton(), 500);
                   }}
                   className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                     tourType === 'private'
@@ -1047,7 +1075,8 @@ export default function RandevuPage() {
                       return;
                     }
                     setTourType('fishing-swimming');
-                    scrollToContinueButton();
+                    // Tur seçiminde hafif scroll yap
+                    setTimeout(() => scrollToContinueButton(), 500);
                   }}
                   className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                     tourType === 'fishing-swimming'
@@ -1129,7 +1158,8 @@ export default function RandevuPage() {
                           return;
                         }
                         setTourType(customTour.id);
-                        scrollToContinueButton();
+                        // Tur seçiminde hafif scroll yap
+                        setTimeout(() => scrollToContinueButton(), 500);
                       }}
                       className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                         tourType === customTour.id
@@ -1187,18 +1217,26 @@ export default function RandevuPage() {
                 </div>
               </div>
 
-              <button
-                data-continue-button
-                onClick={() => setCurrentStep(2)}
-                disabled={!tourType}
-                className={`mt-6 sm:mt-8 px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all duration-300 shadow-lg w-full sm:w-auto ${
-                  tourType 
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                Devam Et →
-              </button>
+                              <button
+                  data-continue-button
+                  onClick={() => {
+                    setCurrentStep(2);
+                    // Adım geçişinde sayfayı üste scroll yap
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
+                  }}
+                  disabled={!tourType}
+                  className={`mt-6 sm:mt-8 px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all duration-300 shadow-lg w-full sm:w-auto ${
+                    tourType 
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  Devam Et →
+                </button>
             </div>
           )}
 
@@ -1450,7 +1488,15 @@ export default function RandevuPage() {
               
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
-                  onClick={() => setCurrentStep(1)}
+                  onClick={() => {
+                    setCurrentStep(1);
+                    // Geri giderken sayfayı üste scroll yap
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
+                  }}
                   className="bg-gray-400 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-500 transition-all duration-300 touch-manipulation"
                 >
                   ← Geri
@@ -1464,7 +1510,12 @@ export default function RandevuPage() {
                     } else {
                       setCurrentStep(3);
                     }
-                    scrollToContinueButton();
+                    // Adım geçişinde sayfayı üste scroll yap
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
                   }}
                   className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 touch-manipulation"
                 >
@@ -1723,7 +1774,15 @@ export default function RandevuPage() {
               {/* Navigasyon Butonları */}
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => {
+                    setCurrentStep(2);
+                    // Geri giderken sayfayı üste scroll yap
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
+                  }}
                   className="bg-gray-400 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-500 transition-all duration-300 touch-manipulation"
                 >
                   ← Geri
@@ -1732,7 +1791,12 @@ export default function RandevuPage() {
                   data-continue-button
                   onClick={() => {
                     setCurrentStep(3);
-                    scrollToContinueButton();
+                    // Adım geçişinde sayfayı üste scroll yap
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
                   }}
                   className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 touch-manipulation"
                 >
@@ -1855,7 +1919,8 @@ export default function RandevuPage() {
                                 // Tarih seçimi - özel tur kısıtlaması sadece tamamen dolu günler için
                                 // Kısmen dolu günlerde hangi seansın müsait olduğunu saat seçiminde göstereceğiz
                                 setSelectedDate(dayInfo.date);
-                                scrollToContinueButton();
+                                // Tarih seçiminde hafif scroll yap
+                                setTimeout(() => scrollToContinueButton(), 400);
                               } else if (isDateNotSelectable && dayInfo.isCurrentMonth) {
                                 // Tarih aralığı dışı uyarısı
                                 alert(`❌ Bu tarih seçilemez!\n\n${bookingDateRange.disabledMessage || 'Bu tarih rezervasyon için kapalı'}\n\n📅 Rezervasyon yapılabilir tarihler:\n${new Date(bookingDateRange.startDate).toLocaleDateString('tr-TR')} - ${new Date(bookingDateRange.endDate).toLocaleDateString('tr-TR')}`);
@@ -1991,7 +2056,8 @@ export default function RandevuPage() {
                                   return;
                                 }
                               setSelectedTime(time);
-                              scrollToContinueButton();
+                              // Saat seçiminde hafif scroll yap
+                              setTimeout(() => scrollToContinueButton(), 400);
                             }}
                               disabled={isFullyOccupied || isPrivateBlocked}
                               className={`px-4 sm:px-6 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base relative ${
@@ -2282,14 +2348,30 @@ export default function RandevuPage() {
                
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => {
+                    setCurrentStep(2);
+                    // Geri giderken sayfayı üste scroll yap
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
+                  }}
                   className="bg-gray-400 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-500 transition-all duration-300 touch-manipulation"
                 >
                   ← Geri
                 </button>
                 <button
                   data-continue-button
-                  onClick={() => setCurrentStep(4)}
+                  onClick={() => {
+                    setCurrentStep(4);
+                    // Adım geçişinde sayfayı üste scroll yap
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
+                  }}
                   disabled={
                     !selectedDate || 
                     !selectedTime ||  // TÜM TUR TİPLERİ İÇİN SAAT SEÇİMİ ZORUNLU
@@ -2446,7 +2528,15 @@ export default function RandevuPage() {
               
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
-                  onClick={() => setCurrentStep(3)}
+                  onClick={() => {
+                    setCurrentStep(3);
+                    // Geri giderken sayfayı üste scroll yap
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
+                  }}
                   className="bg-gray-400 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-500 transition-all duration-300 touch-manipulation"
                 >
                   ← Geri
@@ -2692,6 +2782,12 @@ export default function RandevuPage() {
                             phone: '',
                             email: ''
                           });
+                          // Yeni rezervasyon başlarken sayfayı üste scroll yap
+                          setTimeout(() => {
+                            if (typeof window !== 'undefined') {
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                          }, 100);
                         }}
                         className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base touch-manipulation"
                       >
