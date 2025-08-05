@@ -1022,7 +1022,6 @@ export default function RandevuPage() {
                     <div className="text-right">
                       <div className="text-2xl sm:text-3xl font-bold text-blue-600">{prices.normalWithEquipment.toLocaleString('tr-TR')} TL</div>
                       <div className="text-xs sm:text-sm text-slate-500">kişi başı</div>
-                      <div className="text-xs text-blue-600 font-medium">+{(prices.normalWithEquipment - prices.normalOwn).toLocaleString('tr-TR')} TL ekipman</div>
                     </div>
                   </div>
                 </div>
