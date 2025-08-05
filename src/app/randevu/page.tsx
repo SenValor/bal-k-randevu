@@ -791,6 +791,54 @@ export default function RandevuPage() {
     
     setLoading(true);
     try {
+      // ✅ ÇAKIŞMA KONTROLÜ - Aynı tarih/saat/koltuk var mı?
+      if (tourType === 'normal' && selectedSeats.length > 0) {
+        const conflictQuery = query(
+          collection(db, 'reservations'),
+          where('selectedDate', '==', selectedDate),
+          where('selectedTime', '==', selectedTime),
+          where('status', 'in', ['pending', 'confirmed']) // Pending ve confirmed'ı kontrol et
+        );
+        
+        const conflictSnapshot = await getDocs(conflictQuery);
+        const conflictingSeats: string[] = [];
+        
+        conflictSnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
+            conflictingSeats.push(...data.selectedSeats);
+          }
+        });
+        
+        // Seçilen koltuklar ile mevcut rezervasyonlar çakışıyor mu?
+        const hasConflict = selectedSeats.some(seat => conflictingSeats.includes(seat));
+        
+        if (hasConflict) {
+          const conflictingSeatsStr = selectedSeats.filter(seat => conflictingSeats.includes(seat)).join(', ');
+          alert(`❌ Koltuk Çakışması!\n\nSeçtiğiniz koltuklar (${conflictingSeatsStr}) bu tarih ve saatte başka bir rezervasyonda bulunuyor.\n\nLütfen farklı koltuklar seçin veya başka bir tarih/saat tercih edin.`);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // ✅ ÖZEL TUR ÇAKIŞMA KONTROLÜ
+      if (isSpecialTour(tourType)) {
+        const specialTourQuery = query(
+          collection(db, 'reservations'),
+          where('selectedDate', '==', selectedDate),
+          where('selectedTime', '==', selectedTime),
+          where('status', 'in', ['pending', 'confirmed'])
+        );
+        
+        const specialSnapshot = await getDocs(specialTourQuery);
+        
+        if (!specialSnapshot.empty) {
+          alert(`❌ Tarih/Saat Çakışması!\n\nBu tarih ve saatte başka bir rezervasyon bulunuyor.\n\nÖzel turlar için tamamen boş tarih/saat gereklidir.\n\nLütfen farklı bir tarih veya saat seçin.`);
+          setLoading(false);
+          return;
+        }
+      }
+      
       const isSpecial = isSpecialTour(tourType);
       const customTour = getSelectedCustomTour(tourType);
       

@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Ana sayfa fotoğrafları - herkes okuyabilir
+    match /settings/boatPhotos {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // SSS verileri - herkes okuyabilir
+    match /settings/sss {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Fiyat bilgileri - herkes okuyabilir
+    match /settings/prices {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Özel turlar - herkes okuyabilir
+    match /settings/customTours {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Hakkımızda içeriği - herkes okuyabilir
+    match /settings/hakkimizda {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Varsayılan çalışma saatleri - herkes okuyabilir
+    match /settings/availableTimes {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // 🆕 Genel ayarlar (bakım modu dahil) - herkes okuyabilir
+    match /settings/general {
+      allow read: if true;  // ✅ Bakım modu kontrolü için herkese açık
+      allow write: if request.auth != null;  // 🔒 Sadece admin değiştirebilir
+    }
+    
+    // Günlük saat programları - herkes okuyabilir
+    match /schedules/{scheduleId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // 🎯 REZERVASYONLAR - MÜŞTERİLER İÇİN AÇILDI
+    match /reservations/{reservationId} {
+      allow read: if true;  // ✅ Herkes okuyabilir (sorgulama için)
+      allow create: if true;  // ✅ Herkes rezervasyon oluşturabilir
+      allow update, delete: if request.auth != null;  // 🔒 Sadece admin güncelleyebilir/silebilir
+    }
+    
+    // Admin profilleri - sadece authenticated
+    match /admin_profiles/{profileId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Diğer ayarlar - sadece authenticated
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
