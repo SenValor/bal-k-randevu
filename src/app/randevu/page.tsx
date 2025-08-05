@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, query, where, getDocs, doc, getDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 interface CustomTour {
   id: string;
@@ -27,7 +27,7 @@ export default function RandevuPage() {
     }
   }, []);
   
-  // Telefon numarası formatlaması
+  // Telefon numarası formatlaması - Mobil uyumlu basitleştirilmiş versiyon
   const formatPhoneNumber = (value: string): string => {
     // Sadece rakamları al
     let cleanValue = value.replace(/\D/g, '');
@@ -40,16 +40,8 @@ export default function RandevuPage() {
     // Maksimum 11 haneli
     cleanValue = cleanValue.slice(0, 11);
     
-    // Format uygula: 0532 123 45 67
-    if (cleanValue.length <= 4) {
-      return cleanValue;
-    } else if (cleanValue.length <= 7) {
-      return `${cleanValue.slice(0, 4)} ${cleanValue.slice(4)}`;
-    } else if (cleanValue.length <= 9) {
-      return `${cleanValue.slice(0, 4)} ${cleanValue.slice(4, 7)} ${cleanValue.slice(7)}`;
-    } else {
-      return `${cleanValue.slice(0, 4)} ${cleanValue.slice(4, 7)} ${cleanValue.slice(7, 9)} ${cleanValue.slice(9)}`;
-    }
+    // Basit format: sadece rakamlar (mobil klavyede sorun yaşanmaması için)
+    return cleanValue;
   };
 
   // Telefon numarası validasyon fonksiyonu
@@ -789,7 +781,7 @@ export default function RandevuPage() {
   }, [selectedDate, availableTimes]);
 
   // Rezervasyon kaydetme
-  const saveReservation = async () => {
+  const saveReservation = async (retryCount = 0) => {
     // Telefon numarası validasyonu
     const phoneValidation = validatePhoneNumber(guestInfo.phone);
     if (!phoneValidation.isValid) {
@@ -856,7 +848,7 @@ export default function RandevuPage() {
         selectedPrice: selectedPrice,
         priceDetails: priceDetails,
         totalAmount: totalAmount,
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
         // Yaş grubu bilgileri (sadece normal tur için)
         ...(tourType === 'normal' && {
           ageGroups: ageGroups,
@@ -878,9 +870,53 @@ export default function RandevuPage() {
 
       await addDoc(collection(db, 'reservations'), reservationData);
       setCurrentStep(5); // Başarı sayfası
-    } catch (error) {
+    } catch (error: any) {
       console.error('Rezervasyon kaydedilemedi:', error);
-      alert('Rezervasyon sırasında bir hata oluştu. Lütfen tekrar deneyin.');
+      console.error('Error details:', {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+        userAgent: navigator?.userAgent,
+        timestamp: new Date().toISOString(),
+        reservationData: {
+          tourType,
+          selectedDate,
+          selectedTime,
+          guestInfo: {
+            name: guestInfo.name,
+            surname: guestInfo.surname,
+            phone: guestInfo.phone,
+            email: guestInfo.email
+          }
+        }
+      });
+      
+      // Daha kullanıcı dostu hata mesajı
+      let errorMessage = 'Rezervasyon sırasında bir hata oluştu.';
+      
+      if (error?.code === 'permission-denied') {
+        errorMessage = 'İzin hatası. Lütfen sayfayı yenileyip tekrar deneyin.';
+      } else if (error?.code === 'unavailable') {
+        errorMessage = 'Bağlantı sorunu. İnternet bağlantınızı kontrol edip tekrar deneyin.';
+      } else if (error?.message?.includes('network')) {
+        errorMessage = 'Ağ bağlantısı sorunu. Lütfen tekrar deneyin.';
+      }
+      
+      // Mobil cihazlarda ağ sorunları için retry mekanizması
+      if (retryCount < 2 && (
+        error?.code === 'unavailable' || 
+        error?.message?.includes('network') ||
+        error?.message?.includes('timeout')
+      )) {
+        console.log(`Rezervasyon kaydı tekrar deneniyor... (${retryCount + 1}/3)`);
+        setLoading(false);
+        setTimeout(() => {
+          saveReservation(retryCount + 1);
+        }, 1000 * (retryCount + 1)); // Artan gecikme: 1s, 2s
+        return;
+      }
+      
+      alert(`${errorMessage}\n\nHata devam ederse lütfen WhatsApp ile iletişime geçin: +90 531 089 25 37`);
     } finally {
       setLoading(false);
     }
@@ -2541,7 +2577,7 @@ export default function RandevuPage() {
                   ← Geri
                 </button>
                 <button
-                  onClick={saveReservation}
+                  onClick={() => saveReservation()}
                   disabled={!guestInfo.name || !guestInfo.surname || !guestInfo.phone || loading || !!phoneError || !validatePhoneNumber(guestInfo.phone).isValid}
                   className={`px-6 sm:px-8 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
                     guestInfo.name && guestInfo.surname && guestInfo.phone && !loading && !phoneError && validatePhoneNumber(guestInfo.phone).isValid
