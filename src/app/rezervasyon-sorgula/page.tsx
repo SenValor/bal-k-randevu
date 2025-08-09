@@ -64,22 +64,38 @@ export default function ReservationSearchPage() {
       })) as Reservation[];
 
       // Client-side'da isim ve telefon ile filtreleme
-      const filteredReservations = reservationList.filter(reservation => 
-        reservation.guestInfos && reservation.guestInfos.some(guest => {
-          const guestName = guest.name?.toLowerCase() || '';
-          const guestSurname = guest.surname?.toLowerCase() || '';
-          const guestPhone = guest.phone?.replace(/\s/g, '') || '';
-          
-          const searchName = searchForm.name.toLowerCase().trim();
-          const searchPhone = searchForm.phone.replace(/\s/g, '').trim();
-          
-          // İsim + soyisim eşleşmesi ve telefon eşleşmesi
-          const nameMatch = guestName.includes(searchName) || 
-                          guestSurname.includes(searchName) ||
-                          `${guestName} ${guestSurname}`.includes(searchName);
-          
-          const phoneMatch = guestPhone.includes(searchPhone);
-          
+      const normalizeText = (val: string) =>
+        (val || '')
+          .toLocaleLowerCase('tr-TR')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+
+      const digitsOnly = (val: string) => (val || '').replace(/\D/g, '');
+      const last10 = (val: string) => {
+        const d = digitsOnly(val);
+        return d.length >= 10 ? d.slice(-10) : d; // 10 haneli TR numaranın son 10'u
+      };
+
+      const searchName = normalizeText(searchForm.name);
+      const searchPhone10 = last10(searchForm.phone);
+
+      const filteredReservations = reservationList.filter(reservation =>
+        Array.isArray(reservation.guestInfos) && reservation.guestInfos.some(guest => {
+          const guestName = normalizeText(guest.name);
+          const guestSurname = normalizeText(guest.surname);
+          const fullName = `${guestName} ${guestSurname}`.trim();
+          const guestPhone10 = last10(guest.phone);
+
+          const nameMatch =
+            guestName.includes(searchName) ||
+            guestSurname.includes(searchName) ||
+            fullName.includes(searchName);
+
+          const phoneMatch = guestPhone10 !== '' && searchPhone10 !== ''
+            ? guestPhone10 === searchPhone10
+            : digitsOnly(guest.phone).includes(digitsOnly(searchForm.phone));
+
           return nameMatch && phoneMatch;
         })
       );
@@ -165,7 +181,7 @@ export default function ReservationSearchPage() {
                   id="name"
                   value={searchForm.name}
                   onChange={(e) => setSearchForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-500"
                   placeholder="Örn: Ahmet Yılmaz"
                   required
                 />
@@ -180,7 +196,7 @@ export default function ReservationSearchPage() {
                   id="phone"
                   value={searchForm.phone}
                   onChange={(e) => setSearchForm(prev => ({ ...prev, phone: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-500"
                   placeholder="Örn: 0532 123 45 67"
                   required
                 />
@@ -249,7 +265,7 @@ export default function ReservationSearchPage() {
                 </h3>
                 
                 {reservations.map((reservation) => (
-                  <div key={reservation.id} className="bg-white rounded-xl shadow-lg p-6">
+                  <div key={reservation.id} className="bg-white rounded-xl shadow-lg p-6 text-gray-800">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4">
                       <div>
                         <h4 className="text-lg font-semibold text-gray-900 mb-1">

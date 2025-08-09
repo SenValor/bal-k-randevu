@@ -67,6 +67,12 @@ function ReservationsContent() {
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [editForm, setEditForm] = useState<Partial<Reservation>>({});
   const [customTours, setCustomTours] = useState<any[]>([]);
+  // Tarih ve saat filtresi
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterTime, setFilterTime] = useState<string>('');
+  // Sayfalama
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   // Custom turları çek
   useEffect(() => {
@@ -133,8 +139,35 @@ function ReservationsContent() {
         );
       });
     }
-    
-    return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Tarih filtresi (YYYY-MM-DD)
+    if (filterDate) {
+      filtered = filtered.filter(r => (r.selectedDate || '').slice(0, 10) === filterDate);
+    }
+
+    // Saat filtresi (07:00-13:00 gibi tam eşleşme)
+    if (filterTime) {
+      filtered = filtered.filter(r => (r.selectedTime || '') === filterTime);
+    }
+
+    // Sıralama: Tarih (artan) → Saat başlangıcı (artan) → Rezervasyon No
+    const getStartMinutes = (timeRange?: string) => {
+      if (!timeRange) return Number.MAX_SAFE_INTEGER;
+      const start = timeRange.split('-')[0]?.trim();
+      const [h, m] = (start || '').split(':').map(Number);
+      if (Number.isFinite(h) && Number.isFinite(m)) return h * 60 + m;
+      return Number.MAX_SAFE_INTEGER;
+    };
+
+    return filtered.sort((a, b) => {
+      const da = (a.selectedDate || '').slice(0, 10);
+      const db = (b.selectedDate || '').slice(0, 10);
+      if (da !== db) return da.localeCompare(db);
+      const ta = getStartMinutes(a.selectedTime);
+      const tb = getStartMinutes(b.selectedTime);
+      if (ta !== tb) return ta - tb;
+      return (a.reservationNumber || '').localeCompare(b.reservationNumber || '');
+    });
   };
 
   const approveReservation = async (reservationId: string) => {
@@ -232,19 +265,33 @@ function ReservationsContent() {
   };
 
   // WhatsApp mesaj şablonları
-  const sendWhatsAppMessage = (phone: string, message: string, fromBusinessNumber: boolean = true) => {
-    let targetPhone = phone;
-    
-    if (fromBusinessNumber) {
-      // İşletme numarasını kullan (ayarlarda tanımlı WhatsApp numarası)
-      // Bu durumda işletme numarasından müşteriye mesaj gönderilir
-      targetPhone = phone;
+  const sendWhatsAppMessage = (phone: string, message: string) => {
+    // 1) Telefonu normalize et
+    const digitsOnly = (phone || '').replace(/\D/g, '');
+    let formattedPhone = digitsOnly;
+    if (digitsOnly.startsWith('0')) {
+      formattedPhone = '90' + digitsOnly.substring(1);
     }
-    
-    const cleanPhone = targetPhone.replace(/\D/g, ''); // Sadece rakamları al
-    const formattedPhone = cleanPhone.startsWith('0') ? '90' + cleanPhone.substring(1) : cleanPhone;
-    const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+    // Eğer 10 haneli (5xx...) gelirse ülke kodu ekle
+    if (/^5\d{9}$/.test(digitsOnly)) {
+      formattedPhone = '90' + digitsOnly;
+    }
+
+    // 2) Mesajı encode et (satır sonları dahil)
+    const encodedMessage = encodeURIComponent(message || '').replace(/%20/g, '+');
+
+    // 3) WhatsApp URL'leri (api -> wa fallback)
+    const apiUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodedMessage}`;
+    const waUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
+
+    // 4) Yeni sekmede aç (bazı masaüstü kurulumlarda api.whatsapp daha stabil)
+    const win = window.open(apiUrl, '_blank');
+    // Fallback: yeni pencere blokluysa veya tarayıcı engellerse ikinci URL dene
+    setTimeout(() => {
+      if (!win || win.closed) {
+        window.open(waUrl, '_blank');
+      }
+    }, 300);
   };
 
   // Rezervasyon tur tipini belirleme fonksiyonu
@@ -439,12 +486,33 @@ Anlayışınız için teşekkürler. 🙏`
   };
 
   const filteredReservations = getFilteredReservations();
+  const totalPages = Math.max(1, Math.ceil(filteredReservations.length / pageSize));
+  const safePage = Math.min(Math.max(currentPage, 1), totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredReservations.length);
+  const pagedReservations = filteredReservations.slice(startIndex, endIndex);
   const stats = {
     pending: reservations.filter(r => r.status === 'pending').length,
     confirmed: reservations.filter(r => r.status === 'confirmed').length,
     completed: reservations.filter(r => r.status === 'completed').length,
     total: reservations.length
   };
+
+  // Filtre değişince sayfayı başa al
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterDate, filterTime, activeTab]);
+
+  // Sayfa değiştiğinde en üste kaydır
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      (mainEl as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [currentPage, pageSize]);
 
   if (loading) {
     return (
@@ -470,12 +538,21 @@ Anlayışınız için teşekkürler. 🙏`
               <h1 className="text-xl font-bold text-gray-900">📋 Randevu Yönetimi</h1>
             </div>
             
-            <Link
-              href="/admin/reservations/add"
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              ➕ Randevu Ekle
-            </Link>
+            <div className="flex items-center space-x-2">
+              <Link
+                href="/admin/calendar"
+                className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                title="Takvim Görünümü"
+              >
+                📅 Takvim
+              </Link>
+              <Link
+                href="/admin/reservations/add"
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                ➕ Randevu Ekle
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -527,8 +604,8 @@ Anlayışınız için teşekkürler. 🙏`
           </nav>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-6">
+        {/* Arama ve Filtreler */}
+        <div className="mb-6 space-y-3">
           <div className="relative">
             <input
               type="text"
@@ -546,22 +623,71 @@ Anlayışınız için teşekkürler. 🙏`
               </button>
             )}
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">📅 Tarih</label>
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">🕐 Saat Dilimi</label>
+              <select
+                value={filterTime}
+                onChange={(e) => setFilterTime(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
+              >
+                <option value="">Tümü</option>
+                {Array.from(new Set(reservations.map(r => r.selectedTime).filter(Boolean))).sort().map((time) => (
+                  <option key={time as string} value={time as string}>{time as string}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={() => { setFilterDate(''); setFilterTime(''); }}
+                className="w-full md:w-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg"
+              >
+                🔄 Filtreleri Temizle
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Results Info */}
+        {/* Results Info + Page Size */}
         {(searchTerm || filteredReservations.length > 0) && (
           <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-700">
-              {searchTerm ? (
-                <><strong>"{searchTerm}"</strong> araması için {filteredReservations.length} sonuç bulundu</>
-              ) : (
-                <><strong>{filteredReservations.length}</strong> randevu gösteriliyor</>
-              )}
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm text-blue-700">
+                {searchTerm ? (
+                  <><strong>"{searchTerm}"</strong> araması için {filteredReservations.length} sonuç bulundu</>
+                ) : (
+                  <><strong>{filteredReservations.length}</strong> randevu listelendi</>
+                )}
+                {filteredReservations.length > 0 && (
+                  <> • <strong>{startIndex + 1}-{endIndex}</strong> arası gösteriliyor</>
+                )}
+              </p>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-blue-700">Sayfa başına:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(parseInt(e.target.value) || 20)}
+                  className="px-2 py-1 border border-blue-300 rounded text-sm text-gray-900 bg-white"
+                >
+                  {[10, 20, 50, 100].map(size => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Reservation Cards */}
+        {/* Reservation Cards (tarih ve saat bazında gruplanmış) */}
         <div className="space-y-6">
           {filteredReservations.length === 0 ? (
             <div className="text-center py-12">
@@ -579,8 +705,37 @@ Anlayışınız için teşekkürler. 🙏`
               </p>
             </div>
           ) : (
-            filteredReservations.map((reservation) => (
-              <div key={reservation.id} className="bg-white rounded-lg shadow-lg p-6">
+            (() => {
+              const blocks: React.ReactNode[] = [];
+              let lastDate = '';
+              let lastTime = '';
+              pagedReservations.forEach((reservation) => {
+                const dateKey = (reservation.selectedDate || '').slice(0, 10);
+                if (dateKey !== lastDate) {
+                  lastDate = dateKey;
+                  lastTime = '';
+                  blocks.push(
+                    <div key={`date-${dateKey}`} className="pt-2">
+                      <div className="text-xl font-bold text-gray-800 flex items-center space-x-2">
+                        <span>📅</span>
+                        <span>{new Date(dateKey + 'T12:00:00').toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                const timeKey = reservation.selectedTime || '';
+                if (timeKey !== lastTime) {
+                  lastTime = timeKey;
+                  blocks.push(
+                    <div key={`time-${dateKey}-${timeKey}`} className="mt-2">
+                      <div className="inline-flex items-center space-x-2 bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm font-semibold">
+                        <span>🕐</span><span>{timeKey || 'Saat belirtilmemiş'}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                blocks.push(
+                  <div key={reservation.id} className="bg-white rounded-lg shadow-lg p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-4">
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(reservation.status)}`}>
@@ -831,10 +986,42 @@ Anlayışınız için teşekkürler. 🙏`
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+                  </div>
+                );
+              });
+              return blocks;
+            })()
           )}
         </div>
+
+        {/* Pagination */}
+        {filteredReservations.length > 0 && (
+          <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+              className={`px-3 py-1 rounded border ${safePage === 1 ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              ← Önceki
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }).slice(0, 7).map((_, idx) => {
+                // Basit: İlk 5 sayfa + son sayfa, araya '...'
+                const pageNumbers: number[] = [];
+                return null;
+              })}
+              {/* Basit sayfa göstergesi */}
+              <span className="px-3 py-1 text-sm text-gray-700">Sayfa {safePage} / {totalPages}</span>
+            </div>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+              className={`px-3 py-1 rounded border ${safePage === totalPages ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              Sonraki →
+            </button>
+          </div>
+        )}
       </main>
 
       {/* WhatsApp Mesaj Önizleme Modal */}
