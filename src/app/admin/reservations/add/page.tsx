@@ -6,6 +6,13 @@ import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, onSnapshot, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
+interface TimeSlot {
+  id: string;
+  start: string;
+  end: string;
+  isActive: boolean;
+}
+
 interface CustomTour {
   id: string;
   name: string;
@@ -15,6 +22,12 @@ interface CustomTour {
   description: string;
   isActive: boolean;
   createdAt: Date;
+  // Çalışma saatleri
+  customSchedule?: {
+    enabled: boolean;
+    timeSlots: TimeSlot[];
+    note?: string;
+  };
 }
 
 interface NewReservation {
@@ -23,6 +36,7 @@ interface NewReservation {
   guestCount: number;
   selectedDate: string;
   selectedTime: string;
+  selectedBoat: string; // Tekne ID'si
   selectedSeats: string[];
   guestInfo: {
     name: string;
@@ -50,6 +64,7 @@ export default function AddReservationPage() {
   const [occupiedDates, setOccupiedDates] = useState<{[key: string]: number}>({});
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
+  const [boats, setBoats] = useState<any[]>([]); // Tekne bilgileri için
   
   const [newReservation, setNewReservation] = useState<NewReservation>({
     tourType: 'normal',
@@ -57,6 +72,7 @@ export default function AddReservationPage() {
     guestCount: 1,
     selectedDate: '',
     selectedTime: '',
+    selectedBoat: '',
     selectedSeats: [],
     guestInfo: {
       name: '',
@@ -69,8 +85,33 @@ export default function AddReservationPage() {
   });
 
   const availableTimes = ['07:00-13:00', '14:00-20:00'];
-  const iskeleSeat = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6'];
-  const sancakSeat = ['SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
+  
+  // Tekne sırasını bul (randevu sayfasındaki getBoatOrder mantığı)
+  const getBoatOrder = (boatId: string): string => {
+    const sortedBoats = boats.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
+    const index = sortedBoats.findIndex(boat => boat.id === boatId);
+    return index >= 0 ? `T${index + 1}` : 'T1';
+  };
+
+  // Tekne bazlı koltuk düzeni oluştur
+  const getSeatingLayout = () => {
+    if (!newReservation.selectedBoat) {
+      return {
+        iskele: ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6'],
+        sancak: ['SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6']
+      };
+    }
+    
+    const prefix = `${getBoatOrder(newReservation.selectedBoat)}_`;
+    return {
+      iskele: [`${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`],
+      sancak: [`${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`]
+    };
+  };
+
+  const seatingLayout = getSeatingLayout();
+  const iskeleSeat = seatingLayout.iskele;
+  const sancakSeat = seatingLayout.sancak;
 
   // Randevu numarası oluşturma
   const generateReservationNumber = () => {
@@ -210,7 +251,9 @@ export default function AddReservationPage() {
     const isSpecial = isSpecialTour(newReservation.tourType);
     
     if (isSpecial) {
-      const allSeats = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
+      // Tekne seçiliyse tekne ID'si ile birlikte koltukları oluştur
+      const layout = getSeatingLayout();
+      const allSeats = [...layout.iskele, ...layout.sancak];
       const customTour = getSelectedCustomTour(newReservation.tourType);
       const capacity = customTour ? customTour.capacity : 12;
       
@@ -229,12 +272,45 @@ export default function AddReservationPage() {
     }
   }, [newReservation.tourType, customTours]); // Sadece tur tipi değişiminde çalışsın
 
+  // Tekne değiştiğinde koltuk seçimini güncelle
+  useEffect(() => {
+    if (newReservation.selectedBoat) {
+      // Normal tur için mevcut seçilen koltukları güncelle
+      if (!isSpecialTour(newReservation.tourType) && newReservation.selectedSeats.length > 0) {
+        // Mevcut koltukları temizle ve yeniden seçilmesini bekle
+        setNewReservation(prev => ({
+          ...prev,
+          selectedSeats: []
+        }));
+      }
+      // Özel tur için otomatik seçim zaten yukarıdaki useEffect'te yapılıyor
+    }
+  }, [newReservation.selectedBoat]);
 
+  // Tekneleri çek
+  const fetchBoats = async () => {
+    try {
+      const boatsRef = collection(db, 'boats');
+      const q = query(boatsRef, where('isActive', '==', true));
+      const snapshot = await getDocs(q);
+      
+      const boatList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+      }));
+      
+      setBoats(boatList);
+    } catch (error) {
+      console.error('Tekneler çekilemedi:', error);
+    }
+  };
 
   // Sayfa yüklendiğinde doluluk hesapla ve özel turları çek
   useEffect(() => {
     calculateDateOccupancy();
     fetchCustomTours();
+    fetchBoats();
   }, []);
 
   // Koltuk durumu

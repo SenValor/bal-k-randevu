@@ -7,6 +7,15 @@ import { signOut, onAuthStateChanged, signInWithEmailAndPassword } from 'firebas
 import { auth, db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 
+interface Boat {
+  id: string;
+  name: string;
+  isActive: boolean;
+  status?: 'active' | 'inactive' | 'coming-soon' | 'maintenance';
+  statusMessage?: string;
+  createdAt: string;
+}
+
 interface Reservation {
   id: string;
   reservationNumber: string;
@@ -16,6 +25,8 @@ interface Reservation {
   selectedSeats: string[];
   isPrivateTour: boolean;
   tourType?: 'normal' | 'private' | 'fishing-swimming'; // Tur tipi bilgisi
+  selectedBoat?: string; // Seçilen tekne ID'si
+  boatName?: string; // Seçilen tekne adı
   guestInfos: Array<{
     name: string;
     surname: string;
@@ -33,6 +44,8 @@ interface Reservation {
 export default function AdminPanel() {
   const router = useRouter();
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [boats, setBoats] = useState<Boat[]>([]);
+  const [selectedBoat, setSelectedBoat] = useState<string>('all'); // 'all' veya tekne ID'si
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -73,6 +86,31 @@ export default function AdminPanel() {
     return () => unsubscribe();
   }, []);
 
+  // Tekneleri dinle
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'boats'),
+      (snapshot) => {
+        const boatList: Boat[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          boatList.push({
+            id: doc.id,
+            name: data.name,
+            isActive: data.isActive,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+          });
+        });
+        
+        setBoats(boatList.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+      }
+    );
+
+    return () => unsubscribe();
+  }, [isAuthenticated]);
+
   // Rezervasyonları dinle
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -91,13 +129,26 @@ export default function AdminPanel() {
         });
         
         setReservations(reservationList);
-        calculateStats(reservationList);
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
   }, [isAuthenticated]);
+
+  // Rezervasyonlar veya seçilen tekne değiştiğinde istatistikleri güncelle
+  useEffect(() => {
+    const filteredReservations = getFilteredReservations();
+    calculateStats(filteredReservations);
+  }, [reservations, selectedBoat]);
+
+  // Seçilen tekneye göre rezervasyonları filtrele
+  const getFilteredReservations = (): Reservation[] => {
+    if (selectedBoat === 'all') {
+      return reservations;
+    }
+    return reservations.filter(r => r.selectedBoat === selectedBoat);
+  };
 
   const calculateStats = (reservations: Reservation[]) => {
     const today = formatLocalDate(new Date());
@@ -266,6 +317,22 @@ export default function AdminPanel() {
       stats: 'Gün bazlı saatler'
     },
     {
+      title: 'Tekne Yönetimi',
+      description: 'Tekneleri yönet, fotoğraf ekle, oturma düzeni ayarla',
+      href: '/admin/boats',
+      icon: '⛵',
+      color: 'bg-cyan-500 hover:bg-cyan-600',
+      stats: 'Tekne ayarları'
+    },
+    {
+      title: 'Kara Liste',
+      description: 'Gelmeyen müşterileri yönet',
+      href: '/admin/blacklist',
+      icon: '🚫',
+      color: 'bg-red-500 hover:bg-red-600',
+      stats: 'Müşteri takip'
+    },
+    {
       title: 'Sistem Ayarları',
       description: 'Uygulama ayarlarını düzenle',
       href: '/admin/settings',
@@ -275,7 +342,9 @@ export default function AdminPanel() {
     }
   ];
 
-  const recentReservations = reservations
+  const filteredReservations = getFilteredReservations();
+  
+  const recentReservations = filteredReservations
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
@@ -285,7 +354,7 @@ export default function AdminPanel() {
     const threeDaysLater = new Date();
     threeDaysLater.setDate(today.getDate() + 3);
     
-    return reservations
+    return filteredReservations
       .filter(r => r.status === 'confirmed' || r.status === 'pending')
       .filter(r => {
         const reservationDate = new Date(r.selectedDate);
@@ -384,6 +453,23 @@ export default function AdminPanel() {
                 🎣 Balık Sefası
               </Link>
               <span className="hidden sm:block text-sm text-gray-500">Admin Dashboard</span>
+              
+              {/* Tekne Seçici */}
+              <div className="hidden md:flex items-center space-x-2">
+                <span className="text-sm text-gray-600">⛵</span>
+                <select
+                  value={selectedBoat}
+                  onChange={(e) => setSelectedBoat(e.target.value)}
+                  className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="all">Tüm Tekneler</option>
+                  {boats.map((boat, index) => (
+                    <option key={boat.id} value={boat.id}>
+                      {boat.name} (T{index + 1})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             
             <div className="flex items-center space-x-2 sm:space-x-4">
@@ -413,12 +499,53 @@ export default function AdminPanel() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Admin Dashboard'a Hoş Geldiniz! 👋
-          </h1>
-          <p className="text-gray-600">
-            Rezervasyon sisteminizi tek yerden yönetin
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+            <div className="mb-4 sm:mb-0">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Admin Dashboard'a Hoş Geldiniz! 👋
+              </h1>
+              <p className="text-gray-600">
+                Rezervasyon sisteminizi tek yerden yönetin
+              </p>
+            </div>
+            
+            {/* Mobil Tekne Seçici */}
+            <div className="md:hidden">
+              <div className="flex items-center space-x-2 bg-white rounded-lg border border-gray-300 px-3 py-2">
+                <span className="text-blue-600">⛵</span>
+                <select
+                  value={selectedBoat}
+                  onChange={(e) => setSelectedBoat(e.target.value)}
+                  className="text-sm focus:outline-none bg-transparent flex-1"
+                >
+                  <option value="all">Tüm Tekneler</option>
+                  {boats.map((boat, index) => (
+                    <option key={boat.id} value={boat.id}>
+                      {boat.name} (T{index + 1})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          {/* Seçilen Tekne Bilgisi */}
+          {selectedBoat !== 'all' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-blue-600">⛵</span>
+                <span className="text-blue-800 font-medium">
+                  {boats.find(b => b.id === selectedBoat)?.name} istatistikleri gösteriliyor
+                </span>
+                <button
+                  onClick={() => setSelectedBoat('all')}
+                  className="ml-auto text-blue-600 hover:text-blue-800 text-sm underline"
+                >
+                  Tüm tekneleri göster
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Stats Grid */}
@@ -545,6 +672,19 @@ export default function AdminPanel() {
                           'Normal Tur'
                         } • 💺 {reservation.selectedSeats.join(', ')}
                           </p>
+                          {reservation.boatName && (
+                            <p className="text-sm opacity-75">
+                              ⛵ Tekne: {reservation.boatName}
+                            </p>
+                          )}
+                          <p className="text-xs text-blue-600 mt-1">
+                            📝 Rezervasyon: {new Date(reservation.createdAt).toLocaleDateString('tr-TR', { 
+                              day: 'numeric', 
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
                         </div>
                       </div>
                       
@@ -615,7 +755,15 @@ export default function AdminPanel() {
                         {reservation.guestInfos[0]?.name} {reservation.guestInfos[0]?.surname}
                       </p>
                       <p className="text-sm text-gray-600">
-                        {new Date(reservation.selectedDate).toLocaleDateString('tr-TR')} • {reservation.selectedTime}
+                        Randevu: {new Date(reservation.selectedDate).toLocaleDateString('tr-TR')} • {reservation.selectedTime}
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        Rezervasyon: {new Date(reservation.createdAt).toLocaleDateString('tr-TR', { 
+                          day: 'numeric', 
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </p>
                     </div>
                   </div>

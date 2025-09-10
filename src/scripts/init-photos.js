@@ -1,3 +1,5 @@
+
+
 // Firebase'e fotoğraf ayarlarını başlatma scripti
 const { initializeApp } = require('firebase/app');
 const { getFirestore, doc, setDoc } = require('firebase/firestore');
@@ -16,6 +18,8 @@ const firebaseConfig = {
 // Firebase'i başlat
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+
 
 async function initializePhotos() {
   try {

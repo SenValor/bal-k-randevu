@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 
-interface CustomTour {
+interface CustomTour
+ {
   id: string;
   name: string;
   price: number;
@@ -14,12 +16,164 @@ interface CustomTour {
   description: string;
   isActive: boolean;
   createdAt: Date;
+  // Çalışma saatleri
+  customSchedule?: {
+    enabled: boolean;
+    timeSlots: TimeSlot[];
+    note?: string;
+  };
+}
+
+interface TimeSlot {
+  id: string;
+  start: string;
+  end: string;
+  isActive: boolean;
+}
+
+interface Boat {
+  id: string;
+  name: string;
+  imageUrl: string;
+  description: string;
+  capacity: number;
+  seatingLayout: 'single' | 'double';
+  isActive: boolean;
+  status?: 'active' | 'inactive' | 'coming-soon' | 'maintenance'; // Tekne durumu
+  statusMessage?: string; // Özel durum mesajı (örn: "Çok yakında hizmetinizde")
+  createdAt?: string;
+  updatedAt?: string;
+  // Tarih aralığı bilgileri
+  dateRange?: {
+    enabled: boolean;
+    startDate: string;
+    endDate: string;
+    note?: string;
+  };
+  // Çalışma saatleri
+  customSchedule?: {
+    enabled: boolean;
+    timeSlots: TimeSlot[];
+    note?: string;
+  };
 }
 
 export default function RandevuPage() {
   // Adım takibi
   const [currentStep, setCurrentStep] = useState<number>(1);
   
+  // Tekne seçimi
+  const [selectedBoat, setSelectedBoat] = useState<Boat | null>(null);
+  const [boatName, setBoatName] = useState<string>('');
+  
+  // Tekneler verisi
+  // Tekneler - Firebase'den dinamik çekilecek
+  const [boats, setBoats] = useState<Boat[]>([]);
+  const [boatsLoading, setBoatsLoading] = useState<boolean>(true);
+  const [imageLoadingStates, setImageLoadingStates] = useState<{[key: string]: boolean}>({});
+  
+  // Tekne seçimi handler
+  const handleSelectBoat = (boatId: string) => {
+    const boatToSelect = boats.find(b => b.id === boatId);
+    if (boatToSelect) {
+      setSelectedBoat(boatToSelect);
+      setBoatName(boatToSelect.name);
+    }
+  };
+  
+  // Helper fonksiyonlar
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  // Tarih aralığı kontrolü
+  const isDateInBoatRange = (date: string, boat: Boat): boolean => {
+    if (!boat.dateRange?.enabled) return true;
+    
+    const checkDate = new Date(date);
+    const startDate = new Date(boat.dateRange.startDate);
+    const endDate = new Date(boat.dateRange.endDate);
+    
+    return checkDate >= startDate && checkDate <= endDate;
+  };
+  
+  // Seçili tarih için geçerli tekneleri filtrele
+  const getAvailableBoatsForDate = (date: string): Boat[] => {
+    return boats.filter(boat => isDateInBoatRange(date, boat));
+  };
+  
+  // Image loading handlers
+  const handleImageLoad = (boatId: string) => {
+    setImageLoadingStates(prev => ({...prev, [boatId]: false}));
+  };
+  
+  const handleImageError = (boatId: string) => {
+    setImageLoadingStates(prev => ({...prev, [boatId]: false}));
+  };
+
+  // Tekneleri Firebase'den çek
+  useEffect(() => {
+    setLoading(true); // Yükleme başladı
+    setBoatsLoading(true);
+    const unsubscribe = onSnapshot(
+      collection(db, 'boats'),
+      (snapshot) => {
+        const boatList: Boat[] = [];
+        const initialImageStates: {[key: string]: boolean} = {};
+        
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const boat = {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
+          } as Boat;
+          
+          boatList.push(boat);
+          initialImageStates[boat.id] = true; // Başlangıçta loading state true
+        });
+        
+        setBoats(boatList.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime()));
+        setImageLoadingStates(initialImageStates);
+        setBoatsLoading(false);
+        setLoading(false); // Yükleme bitti
+      },
+      (error) => {
+        console.error('Tekne verileri alınamadı:', error);
+        // Hata durumunda varsayılan tekneleri kullan
+        setBoats([
+          {
+            id: 'boat1',
+            name: '1. Tekne',
+            imageUrl: '/tekne-gorseller/tekne-1.jpg',
+            description: 'Konforlu ve güvenli balık avı teknesi',
+            capacity: 12,
+            seatingLayout: 'single',
+            isActive: true,
+            status: 'active'
+          },
+          {
+            id: 'boat2',
+            name: '2. Tekne',
+            imageUrl: '/tekne-gorseller/tekne-2.jpg',
+            description: 'Geniş ve ferah balık avı teknesi',
+            capacity: 12,
+            seatingLayout: 'double',
+            isActive: true,
+            status: 'active'
+          }
+        ]);
+        setLoading(false); // Yükleme bitti (hata durumunda da)
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
   // Sayfa yüklendiğinde üstte başla
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -137,8 +291,12 @@ export default function RandevuPage() {
   
   // Koltuk gereksinimi hesaplama (bebekler koltuk gerektirmez)
   const getRequiredSeatCount = () => {
-    return ageGroups.adults + ageGroups.children; // Bebekler hariç
+    const totalPeople = ageGroups.adults + ageGroups.children; // Bebekler hariç
+    // Her iki tekne için de 1 kişi = 1 koltuk mantığı
+    return totalPeople;
   };
+
+
   
   // Yaş gruplarına göre fiyat hesaplama
   const calculateAgeBasedPrice = (basePrice: number) => {
@@ -163,16 +321,33 @@ export default function RandevuPage() {
   useEffect(() => {
     setEquipmentChoices(prev => ({
       adults: { 
-        withEquipment: Math.min(prev.adults.withEquipment, ageGroups.adults),
-        ownEquipment: ageGroups.adults - Math.min(prev.adults.withEquipment, ageGroups.adults)
+        withEquipment: priceOption === 'with-equipment' ? ageGroups.adults : 0,
+        ownEquipment: priceOption === 'own-equipment' ? ageGroups.adults : 0
       },
       children: { 
-        withEquipment: Math.min(prev.children.withEquipment, ageGroups.children),
-        ownEquipment: ageGroups.children - Math.min(prev.children.withEquipment, ageGroups.children)
+        withEquipment: priceOption === 'with-equipment' ? ageGroups.children : 0,
+        ownEquipment: priceOption === 'own-equipment' ? ageGroups.children : 0
       },
       babies: { withEquipment: 0, ownEquipment: 0 } // Bebekler olta kullanmaz
     }));
-  }, [ageGroups]);
+  }, [ageGroups, priceOption]); // priceOption dependency eklendi
+
+  // Tur tipi değiştiğinde equipmentChoices'ı sıfırla ve priceOption'a göre ayarla
+  useEffect(() => {
+    if (tourType === 'normal') {
+      setEquipmentChoices({
+        adults: { 
+          withEquipment: priceOption === 'with-equipment' ? ageGroups.adults : 0,
+          ownEquipment: priceOption === 'own-equipment' ? ageGroups.adults : 0
+        },
+        children: { 
+          withEquipment: priceOption === 'with-equipment' ? ageGroups.children : 0,
+          ownEquipment: priceOption === 'own-equipment' ? ageGroups.children : 0
+        },
+        babies: { withEquipment: 0, ownEquipment: 0 }
+      });
+    }
+  }, [tourType, priceOption, ageGroups]); // Tur tipi ve priceOption değiştiğinde hemen güncelle
 
   // Esnek fiyat hesaplama (kişi bazında olta seçimi)
   const calculateFlexiblePrice = () => {
@@ -227,8 +402,8 @@ export default function RandevuPage() {
   const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']);
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
-  const [occupiedDates, setOccupiedDates] = useState<{[key: string]: number}>({});
-  const [sessionOccupancy, setSessionOccupancy] = useState<{[key: string]: number}>({});
+  const [occupiedDates, setOccupiedDates] = useState<{[boatId: string]: {[key: string]: number}}>({});
+  const [sessionOccupancy, setSessionOccupancy] = useState<{[boatId: string]: {[key: string]: number}}>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   
@@ -292,10 +467,37 @@ export default function RandevuPage() {
     }
   };
 
-  // Seçilen tarihe göre saatleri çek
+  // Seçilen tekne/tur ve tarihe göre saatleri çek
   const fetchAvailableTimesForDate = async (dateString: string) => {
     try {
-      // Önce o güne özel saat var mı kontrol et
+      // Öncelik 1: Özel tur seçildi ve o turun özel saatleri varsa
+      if (tourType !== 'normal' && tourType !== 'private') {
+        const selectedCustomTour = customTours.find(tour => tour.id === tourType);
+        if (selectedCustomTour?.customSchedule?.enabled) {
+          const activeSlots = selectedCustomTour.customSchedule.timeSlots
+            .filter(slot => slot.isActive && slot.start && slot.end)
+            .map(slot => `${slot.start}-${slot.end}`);
+          
+          if (activeSlots.length > 0) {
+            setAvailableTimes(activeSlots);
+            return;
+          }
+        }
+      }
+      
+      // Öncelik 2: Tekne seçildi ve o teknenin özel saatleri varsa
+      if (selectedBoat?.customSchedule?.enabled) {
+        const activeSlots = selectedBoat.customSchedule.timeSlots
+          .filter(slot => slot.isActive && slot.start && slot.end)
+          .map(slot => `${slot.start}-${slot.end}`);
+        
+        if (activeSlots.length > 0) {
+          setAvailableTimes(activeSlots);
+          return;
+        }
+      }
+      
+      // Öncelik 3: Tarih bazlı özel sistem saatleri
       const scheduleDoc = await getDoc(doc(db, 'schedules', dateString));
       
       if (scheduleDoc.exists()) {
@@ -308,39 +510,60 @@ export default function RandevuPage() {
         }
       }
       
-      // Özel ayar yoksa varsayılan saatleri kullan
-        const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
-        if (timesDoc.exists()) {
-          const data = timesDoc.data();
-          if (data.times && Array.isArray(data.times)) {
-            setAvailableTimes(data.times);
+      // Öncelik 4: Genel sistem saatleri
+      const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
+      if (timesDoc.exists()) {
+        const data = timesDoc.data();
+        if (data.times && Array.isArray(data.times)) {
+          setAvailableTimes(data.times);
         } else {
           // Firestore'da da yoksa hardcoded varsayılanları kullan
           setAvailableTimes(['07:00-13:00', '14:00-20:00']);
-          }
+        }
       } else {
         // Varsayılan saatler
         setAvailableTimes(['07:00-13:00', '14:00-20:00']);
-        }
-      } catch (error) {
-        console.error('Saatler çekilemedi:', error);
+      }
+    } catch (error) {
+      console.error('Saatler çekilemedi:', error);
       // Hata durumunda varsayılan saatler
       setAvailableTimes(['07:00-13:00', '14:00-20:00']);
     }
   };
 
-  // Seçilen tarih değiştiğinde saatleri çek
+  // Seçilen tarih, tekne veya tur değiştiğinde saatleri çek
   useEffect(() => {
+    let isCancelled = false; // Cleanup kontrolü için flag
+    
     if (selectedDate) {
-      fetchAvailableTimesForDate(selectedDate);
+      fetchAvailableTimesForDate(selectedDate).catch((error) => {
+        // Promise rejection'ları da yakala
+        if (!isCancelled) {
+          console.error('fetchAvailableTimesForDate Promise hatası:', error);
+        }
+      });
     }
-  }, [selectedDate]);
+    
+    // Cleanup function
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedDate, selectedBoat?.id, selectedBoat?.customSchedule, tourType, customTours]);
 
   // Firebase'den fiyatları çek
   useEffect(() => {
-    fetchPrices(); // Fiyatları da çek
-    fetchCustomTours(); // Özel turları da çek
-    fetchBookingDateRange(); // Tarih aralığı kontrolünü de çek
+    // Promise rejection'ları yakala
+    fetchPrices().catch((error) => {
+      console.error('fetchPrices Promise hatası:', error);
+    });
+    
+    fetchCustomTours().catch((error) => {
+      console.error('fetchCustomTours Promise hatası:', error);
+    });
+    
+    fetchBookingDateRange().catch((error) => {
+      console.error('fetchBookingDateRange Promise hatası:', error);
+    });
 
     // Fiyatları real-time dinle
     const unsubscribePrices = onSnapshot(doc(db, 'settings', 'prices'), (doc) => {
@@ -380,7 +603,11 @@ export default function RandevuPage() {
 
   // Ayın dolu günlerini seans bazlı çek
   useEffect(() => {
+    let isCancelled = false; // Cleanup kontrolü için flag
+    
     const fetchOccupiedDates = async () => {
+      if (!selectedBoat?.id) return; // Tekne seçilmemişse çekme
+      
       try {
         const year = currentMonth.getFullYear();
         const month = currentMonth.getMonth();
@@ -390,10 +617,15 @@ export default function RandevuPage() {
         const q = query(
           collection(db, 'reservations'),
           where('selectedDate', '>=', firstDay),
-          where('selectedDate', '<=', lastDay)
+          where('selectedDate', '<=', lastDay),
+          where('selectedBoat', '==', selectedBoat.id) // Sadece seçili tekneye ait rezervasyonlar
         );
         
         const querySnapshot = await getDocs(q);
+        
+        // Component unmount olduysa state güncellemesi yapma
+        if (isCancelled) return;
+        
         const dateTimeOccupancy: {[key: string]: {[key: string]: number}} = {};
         
         querySnapshot.forEach((doc) => {
@@ -431,6 +663,9 @@ export default function RandevuPage() {
           }
         });
         
+        // Component unmount olduysa state güncellemesi yapma
+        if (isCancelled) return;
+        
         // Eski formatta uyumlu olması için toplam doluluk da hesapla
         const dateOccupancy: {[key: string]: number} = {};
         Object.keys(dateTimeOccupancy).forEach((date) => {
@@ -454,14 +689,33 @@ export default function RandevuPage() {
           }
         });
         
-        setOccupiedDates(dateOccupancy);
+        // Tekne bazlı state güncelle - sadece component hala mount ise
+        if (!isCancelled) {
+          setOccupiedDates(prev => ({
+            ...prev,
+            [selectedBoat.id]: dateOccupancy
+          }));
+        }
       } catch (error) {
-        console.error('Dolu günler çekilemedi:', error);
+        // Component unmount olduysa error handling yapma
+        if (!isCancelled) {
+          console.error('Dolu günler çekilemedi:', error);
+        }
       }
     };
     
-    fetchOccupiedDates();
-  }, [currentMonth]);
+    fetchOccupiedDates().catch((error) => {
+      // Promise rejection'ları da yakala
+      if (!isCancelled) {
+        console.error('fetchOccupiedDates Promise hatası:', error);
+      }
+    });
+    
+    // Cleanup function
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentMonth, selectedBoat?.id]); // selectedBoat dependency eklendi
 
   // Yardımcı fonksiyonlar
   const isSpecialTour = (type: string) => {
@@ -561,9 +815,33 @@ export default function RandevuPage() {
     }
   };
 
-  // Tekne koltuk düzeni
-  const iskeleSeat = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6'];
-  const sancakSeat = ['SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
+  // Tekne sırası belirleme (daha okunakli koltuk ID'leri için)
+  const getBoatOrder = (boatId: string) => {
+    const sortedBoats = boats.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
+    const index = sortedBoats.findIndex(boat => boat.id === boatId);
+    return index >= 0 ? `T${index + 1}` : 'T1'; // T1, T2, T3...
+  };
+
+  // Tekne koltuk düzeni - Her tekne için ayrı koltuk ID'leri (okunakli format)
+  const getSeatingLayout = () => {
+    // Seçili tekneyi bul
+    const currentBoat = boats.find(boat => boat.id === selectedBoat?.id);
+    const layoutType = currentBoat?.seatingLayout || 'single';
+    const boatId = selectedBoat?.id || 'default';
+    
+    // Okunakli prefix oluştur (T1, T2, T3...)
+    const prefix = boatId === 'default' ? '' : `${getBoatOrder(boatId)}_`;
+    
+    return {
+      iskele: [`${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`],
+      sancak: [`${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`],
+      type: layoutType // Firebase'den gelen seatingLayout kullan
+    };
+  };
+
+  const seatingLayout = getSeatingLayout();
+  const iskeleSeat = seatingLayout.iskele;
+  const sancakSeat = seatingLayout.sancak;
 
   // Koltuk durumu kontrolü
   const getSeatStatus = (seat: string) => {
@@ -581,66 +859,169 @@ export default function RandevuPage() {
     }
   };
 
-  // Koltuk render fonksiyonu
-  const renderSeat = (seatId: string) => {
-    const isOccupied = occupiedSeats.includes(seatId);
-    const isSelected = selectedSeats.includes(seatId);
-    const requiredSeats = getRequiredSeatCount();
-    const canSelect = !isOccupied && (!isSelected && selectedSeats.length < requiredSeats || isSelected);
+  // Koltuk çifti belirleme (sadece görünüm için)
+  const getSeatPair = (seatId: string) => {
+    // Okunakli tekne prefixli ID'ler için çalışacak şekilde güncellendi
+    // Örnek: T1_IS2 -> T1_IS1, T2_IS4 -> T2_IS3
+    const parts = seatId.split('_');
+    if (parts.length !== 2) return undefined;
     
-    return (
-      <button
-        key={seatId}
-        onClick={() => {
-          if (isSpecialTour(tourType)) return; // Özel turda koltuk seçimi yok
-          
-          if (!isOccupied) {
-            if (isSelected) {
-              // Koltuk seçimini kaldır
-              setSelectedSeats(selectedSeats.filter(seat => seat !== seatId));
-            } else if (selectedSeats.length < requiredSeats) {
-              // Yeni koltuk ekle
-              setSelectedSeats([...selectedSeats, seatId]);
-              // Koltuk seçiminde sadece gerekirse scroll yap
-              setTimeout(() => scrollToContinueButton(), 300);
-            }
-          }
-        }}
-        disabled={isOccupied || isSpecialTour(tourType)}
-        className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center text-white text-xs sm:text-sm font-bold transition-all duration-300 shadow-lg border-2 ${getSeatColor(getSeatStatus(seatId))} ${
-          (!canSelect && !isOccupied && !isSelected) || isSpecialTour(tourType) ? 'opacity-50 cursor-not-allowed' : ''
-        }`}
-        title={
-          isSpecialTour(tourType)
-            ? `${getTourDisplayName(tourType)} - tüm koltuklar otomatik seçilmiştir`
-            : isOccupied 
-            ? 'Bu koltuk dolu' 
-            : isSelected 
-            ? 'Seçimi kaldırmak için tıklayın'
-                    : selectedSeats.length >= requiredSeats
-        ? `Maksimum ${requiredSeats} koltuk seçebilirsiniz`
-            : 'Koltuğu seçmek için tıklayın'
-        }
-      >
-        <div className="relative">
-          <span className="relative z-10">{seatId.slice(-1)}</span>
-          <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-6 h-0.5 bg-black/30 rounded-full"></div>
-        </div>
-      </button>
-    );
+    const prefix = parts[0]; // T1, T2, etc.
+    const seat = parts[1];   // IS1, IS2, etc.
+    
+    const seatMap: { [key: string]: string } = {
+      'IS1': 'IS2', 'IS2': 'IS1',
+      'IS3': 'IS4', 'IS4': 'IS3', 
+      'IS5': 'IS6', 'IS6': 'IS5',
+      'SA1': 'SA2', 'SA2': 'SA1',
+      'SA3': 'SA4', 'SA4': 'SA3',
+      'SA5': 'SA6', 'SA6': 'SA5'
+    };
+    
+    const pairSeat = seatMap[seat];
+    return pairSeat ? `${prefix}_${pairSeat}` : undefined;
   };
 
-  // Seçili tarih için seans bazlı doluluk bilgisini çek
-  const fetchSessionOccupancy = async (date: string) => {
-    if (!date) return;
+  // Koltuk render fonksiyonu
+  const renderSeat = (seatId: string) => {
+    const isDoubleSeat = selectedBoat?.seatingLayout === 'double';
+    const isOccupied = occupiedSeats.includes(seatId);
+    const isSelected = selectedSeats.includes(seatId);
+    
+    const handleSeatClick = () => {
+      if (isSpecialTour(tourType)) return;
+      
+      if (!isOccupied) {
+        if (isSelected) {
+          setSelectedSeats(selectedSeats.filter(seat => seat !== seatId));
+        } else if (selectedSeats.length < getRequiredSeatCount()) {
+          setSelectedSeats([...selectedSeats, seatId]);
+          setTimeout(() => scrollToContinueButton(), 300);
+        }
+      }
+    };
+    
+    if (isDoubleSeat) {
+      // 2. Tekne: Çiftli görünüm ama bağımsız seçim
+      const pairSeat = getSeatPair(seatId);
+      const isPairSelected = pairSeat ? selectedSeats.includes(pairSeat) : false;
+      const isPairOccupied = pairSeat ? occupiedSeats.includes(pairSeat) : false;
+      
+      // Çiftli görünümde sadece çift numaralı koltukları render et (boat1_IS2, boat1_IS4, boat1_IS6, etc.)
+      // Her çift koltuk içinde hem tek (boat1_IS1) hem çift (boat1_IS2) butonları olacak
+      const seatNumber = seatId.split('_')[1]; // boat1_IS2 -> IS2
+      const isEvenSeat = parseInt(seatNumber.slice(-1)) % 2 === 0; // IS2 -> 2 -> çift
+      if (!isEvenSeat) return null; // Tek numaralı koltuklarda render yapma, çift olanında ikisini birden göster
+      
+      const oddSeat = getSeatPair(seatId); // IS1, IS3, IS5, SA1, SA3, SA5
+      const oddIsSelected = selectedSeats.includes(oddSeat || '');
+      const oddIsOccupied = occupiedSeats.includes(oddSeat || '');
+      
+      return (
+        <div key={seatId} className="w-8 h-16 sm:w-9 sm:h-18 md:w-10 md:h-20 rounded-lg md:rounded-xl overflow-hidden shadow-lg border-2 border-gray-300 bg-white">
+          {/* Üst koltuk (tek numaralı) */}
+          <button
+            onClick={() => {
+              if (isSpecialTour(tourType) || !oddSeat) return;
+              
+              if (!oddIsOccupied) {
+                if (oddIsSelected) {
+                  setSelectedSeats(selectedSeats.filter(seat => seat !== oddSeat));
+                } else if (selectedSeats.length < getRequiredSeatCount()) {
+                  setSelectedSeats([...selectedSeats, oddSeat]);
+                  setTimeout(() => scrollToContinueButton(), 300);
+                }
+              }
+            }}
+            disabled={oddIsOccupied || isSpecialTour(tourType)}
+            className={`w-full h-1/2 flex items-center justify-center text-white text-xs font-bold transition-all duration-300 ${getSeatColor(oddIsSelected ? 'selected' : oddIsOccupied ? 'occupied' : 'available')} ${
+              oddIsOccupied || isSpecialTour(tourType) ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+            }`}
+            title={
+              isSpecialTour(tourType)
+                ? `${getTourDisplayName(tourType)} - tüm koltuklar otomatik seçilmiştir`
+                : oddIsOccupied 
+                ? `${oddSeat} koltuğu dolu` 
+                : oddIsSelected 
+                ? `${oddSeat} seçimini kaldır`
+                : `${oddSeat} koltuğunu seç`
+            }
+          >
+            <div className="relative flex items-center justify-center">
+              <span className="relative z-10">{oddSeat?.split('_')[1]?.slice(-1)}</span>
+              <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-4 h-0.5 bg-black/30 rounded-full"></div>
+            </div>
+          </button>
+          
+          {/* Alt koltuk (çift numaralı) */}
+          <button
+            onClick={handleSeatClick}
+            disabled={isOccupied || isSpecialTour(tourType)}
+            className={`w-full h-1/2 flex items-center justify-center text-white text-xs font-bold transition-all duration-300 ${getSeatColor(isSelected ? 'selected' : isOccupied ? 'occupied' : 'available')} ${
+              isOccupied || isSpecialTour(tourType) ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+            }`}
+            title={
+              isSpecialTour(tourType)
+                ? `${getTourDisplayName(tourType)} - tüm koltuklar otomatik seçilmiştir`
+                : isOccupied 
+                ? `${seatId} koltuğu dolu` 
+                : isSelected 
+                ? `${seatId} seçimini kaldır`
+                : `${seatId} koltuğunu seç`
+            }
+          >
+            <div className="relative flex items-center justify-center">
+              <span className="relative z-10">{seatId.split('_')[1]?.slice(-1)}</span>
+              <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-4 h-0.5 bg-black/30 rounded-full"></div>
+            </div>
+          </button>
+        </div>
+      );
+    } else {
+      // 1. Tekne: Normal tekli koltuk
+      return (
+        <button
+          key={seatId}
+          onClick={handleSeatClick}
+          disabled={isOccupied || isSpecialTour(tourType)}
+          className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center text-white text-xs sm:text-sm font-bold transition-all duration-300 shadow-lg border-2 ${getSeatColor(getSeatStatus(seatId))} ${
+            isOccupied || isSpecialTour(tourType) ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+          }`}
+          title={
+            isSpecialTour(tourType)
+              ? `${getTourDisplayName(tourType)} - tüm koltuklar otomatik seçilmiştir`
+              : isOccupied 
+              ? `${seatId} koltuğu dolu` 
+              : isSelected 
+              ? `${seatId} seçimini kaldır`
+              : `${seatId} koltuğunu seç`
+          }
+        >
+          <div className="relative flex items-center justify-center">
+            <span className="relative z-10">{seatId.slice(-1)}</span>
+            <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-6 h-0.5 bg-black/30 rounded-full"></div>
+          </div>
+        </button>
+      );
+    }
+  };
+
+  // Seçili tarih için seans bazlı doluluk bilgisini çek (tekne bazlı)
+  const fetchSessionOccupancy = async (date: string, isCancelled?: () => boolean) => {
+    if (!date || !selectedBoat?.id) return;
     
     try {
       const q = query(
         collection(db, 'reservations'),
-        where('selectedDate', '==', date)
+        where('selectedDate', '==', date),
+        where('selectedBoat', '==', selectedBoat.id) // Sadece seçili tekneye ait rezervasyonlar
       );
       
       const querySnapshot = await getDocs(q);
+      
+      // Component unmount olduysa state güncellemesi yapma
+      if (isCancelled && isCancelled()) return;
+      
       const sessionOccupancyMap: {[key: string]: number} = {};
       
       // Her saat için doluluk sayısını hesapla
@@ -664,9 +1045,19 @@ export default function RandevuPage() {
         }
       });
       
-      setSessionOccupancy(sessionOccupancyMap);
+      // Component unmount olduysa state güncellemesi yapma
+      if (isCancelled && isCancelled()) return;
+      
+      // Tekne bazlı state güncelle
+      setSessionOccupancy(prev => ({
+        ...prev,
+        [selectedBoat.id]: sessionOccupancyMap
+      }));
     } catch (error) {
-      console.error('Seans doluluk bilgisi çekilemedi:', error);
+      // Component unmount olduysa error handling yapma
+      if (!isCancelled || !isCancelled()) {
+        console.error('Seans doluluk bilgisi çekilemedi:', error);
+      }
     }
   };
 
@@ -692,14 +1083,21 @@ export default function RandevuPage() {
             occupied.push(...data.selectedSeats);
           }
           
-          if (data.isPrivateTour) {
-            const allSeats = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
-            allSeats.forEach(seat => {
-              if (!occupied.includes(seat)) {
-                occupied.push(seat);
-              }
-            });
-          }
+                      if (data.isPrivateTour && data.selectedBoat) {
+              // Özel tur için ilgili teknenin tüm koltukları dolu sayılır
+              const boatId = data.selectedBoat;
+              const boatOrder = getBoatOrder(boatId);
+              const prefix = `${boatOrder}_`;
+              const allSeats = [
+                `${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`,
+                `${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`
+              ];
+              allSeats.forEach(seat => {
+                if (!occupied.includes(seat)) {
+                  occupied.push(seat);
+                }
+              });
+            }
         }
       });
       
@@ -712,7 +1110,10 @@ export default function RandevuPage() {
   // Tarih ve saat seçildiğinde dolu koltukları çek ve real-time dinle
   useEffect(() => {
     if (selectedDate && selectedTime && tourType === 'normal') {
-      fetchOccupiedSeats(selectedDate, selectedTime);
+      // Promise rejection'ını yakala
+      fetchOccupiedSeats(selectedDate, selectedTime).catch((error) => {
+        console.error('fetchOccupiedSeats Promise hatası:', error);
+      });
 
       const q = query(
         collection(db, 'reservations'),
@@ -731,8 +1132,15 @@ export default function RandevuPage() {
               occupied.push(...data.selectedSeats);
             }
             
-            if (data.isPrivateTour) {
-              const allSeats = ['IS1', 'IS2', 'IS3', 'IS4', 'IS5', 'IS6', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6'];
+            if (data.isPrivateTour && data.selectedBoat) {
+              // Özel tur için ilgili teknenin tüm koltukları dolu sayılır
+              const boatId = data.selectedBoat;
+              const boatOrder = getBoatOrder(boatId);
+              const prefix = `${boatOrder}_`;
+              const allSeats = [
+                `${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`,
+                `${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`
+              ];
               allSeats.forEach(seat => {
                 if (!occupied.includes(seat)) {
                   occupied.push(seat);
@@ -757,28 +1165,68 @@ export default function RandevuPage() {
 
   // Özel tur seçildiğinde tüm koltukları seç
   useEffect(() => {
-    if (isSpecialTour(tourType)) {
-      setSelectedSeats([...iskeleSeat, ...sancakSeat]);
+    if (isSpecialTour(tourType) && selectedBoat) {
+      // Seçili tekneye özel okunakli koltuk ID'lerini kullan
+      const boatOrder = getBoatOrder(selectedBoat.id);
+      const prefix = `${boatOrder}_`;
+      const allSeats = [
+        `${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`,
+        `${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`
+      ];
+      setSelectedSeats(allSeats);
     } else {
       setSelectedSeats([]);
     }
-  }, [tourType, customTours]); // customTours dependency eklendi
+  }, [tourType, selectedBoat, customTours]); // selectedBoat dependency eklendi
 
   // Özel tur için tarih seçildiğinde de koltukları seç
   useEffect(() => {
-    if (isSpecialTour(tourType) && selectedDate) {
-      setSelectedSeats([...iskeleSeat, ...sancakSeat]);
+    if (isSpecialTour(tourType) && selectedDate && selectedBoat) {
+      // Seçili tekneye özel okunakli koltuk ID'lerini kullan
+      const boatOrder = getBoatOrder(selectedBoat.id);
+      const prefix = `${boatOrder}_`;
+      const allSeats = [
+        `${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`,
+        `${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`
+      ];
+      setSelectedSeats(allSeats);
     }
-  }, [selectedDate, tourType, customTours]); // customTours dependency eklendi
+  }, [selectedDate, tourType, selectedBoat, customTours]); // selectedBoat dependency eklendi
 
   // Tarih seçildiğinde seans bazlı doluluk bilgisini çek
   useEffect(() => {
-    if (selectedDate) {
-      fetchSessionOccupancy(selectedDate);
+    let isCancelled = false; // Cleanup kontrolü için flag
+    
+    if (selectedDate && selectedBoat?.id) {
+      fetchSessionOccupancy(selectedDate, () => isCancelled).catch((error) => {
+        // Promise rejection'ları da yakala
+        if (!isCancelled) {
+          console.error('fetchSessionOccupancy Promise hatası:', error);
+        }
+      });
     } else {
       setSessionOccupancy({});
     }
-  }, [selectedDate, availableTimes]);
+    
+    // Cleanup function
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedDate, selectedBoat?.id, availableTimes]); // selectedBoat dependency eklendi
+
+  // Tekne değiştiğinde seçili tarihin geçerliliğini kontrol et
+  useEffect(() => {
+    if (selectedBoat && selectedDate) {
+      // Eğer seçili tarih bu tekne için geçerli değilse tarihi temizle
+      if (!isDateSelectable(selectedDate)) {
+        setSelectedDate('');
+        setSelectedTime('');
+        setSelectedSeats([]);
+        // Kullanıcıyı bilgilendir
+        alert(`📅 Seçili tarih bu tekne için uygun değil!\n\nTekne: ${selectedBoat.name}\n\nLütfen bu tekne için uygun bir tarih seçin.`);
+      }
+    }
+  }, [selectedBoat?.id]); // Sadece tekne değiştiğinde çalış
 
   // Rezervasyon kaydetme
   const saveReservation = async (retryCount = 0) => {
@@ -883,6 +1331,8 @@ export default function RandevuPage() {
       
       const reservationData = {
         tourType,
+        selectedBoat: selectedBoat?.id, // Sadece ID'sini kaydediyoruz
+        boatName: boatName,
         reservationNumber: generateReservationNumber(),
         guestCount: isSpecial ? capacity : getTotalGuestCount(),
         selectedDate,
@@ -917,7 +1367,7 @@ export default function RandevuPage() {
       };
 
       await addDoc(collection(db, 'reservations'), reservationData);
-      setCurrentStep(5); // Başarı sayfası
+      setCurrentStep(6); // Başarı sayfası
     } catch (error: any) {
       console.error('Rezervasyon kaydedilemedi:', error);
       console.error('Error details:', {
@@ -974,21 +1424,29 @@ export default function RandevuPage() {
 
   // Belirli tarihin seçilebilir olup olmadığını kontrol et
   const isDateSelectable = (dateString: string) => {
-    if (!bookingDateRange.enabled || !bookingDateRange.startDate || !bookingDateRange.endDate) {
-      return true; // Kısıtlama yoksa tüm tarihler seçilebilir
+    // 1. Genel sistem tarih aralığı kontrolü
+    if (bookingDateRange.enabled && bookingDateRange.startDate && bookingDateRange.endDate) {
+      const checkDate = new Date(dateString);
+      const startDate = new Date(bookingDateRange.startDate);
+      const endDate = new Date(bookingDateRange.endDate);
+      
+      // Saat karşılaştırması için gün başına ayarla
+      checkDate.setHours(0, 0, 0, 0);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(0, 0, 0, 0);
+      
+      // Genel tarih aralığı dışındaysa seçilemez
+      if (checkDate < startDate || checkDate > endDate) {
+        return false;
+      }
     }
-
-    const checkDate = new Date(dateString);
-    const startDate = new Date(bookingDateRange.startDate);
-    const endDate = new Date(bookingDateRange.endDate);
     
-    // Saat karşılaştırması için gün başına ayarla
-    checkDate.setHours(0, 0, 0, 0);
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(0, 0, 0, 0);
+    // 2. Seçili teknenin tarih aralığı kontrolü
+    if (selectedBoat && selectedBoat.dateRange?.enabled) {
+      return isDateInBoatRange(dateString, selectedBoat);
+    }
     
-    // İzin verilen tarih aralığı içindeyse seçilebilir
-    return checkDate >= startDate && checkDate <= endDate;
+    return true; // Hiçbir kısıtlama yoksa seçilebilir
   };
 
   return (
@@ -1009,7 +1467,7 @@ export default function RandevuPage() {
       {/* Adım İndikatörü */}
       <div className="max-w-2xl mx-auto px-4 py-4 sm:py-8">
         <div className="flex items-center justify-center mb-4 sm:mb-8">
-          {[1, 2, 3, 4].map((step) => (
+          {[1, 2, 3, 4, 5].map((step) => (
             <div key={step} className="flex items-center">
               <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-sm sm:text-base ${
                 currentStep >= step 
@@ -1018,7 +1476,7 @@ export default function RandevuPage() {
               }`}>
                 {step}
               </div>
-              {step < 4 && (
+              {step < 5 && (
                 <div className={`w-8 sm:w-16 h-1 ${
                   currentStep > step ? 'bg-green-500' : 'bg-gray-200'
                 }`}></div>
@@ -1030,8 +1488,246 @@ export default function RandevuPage() {
         {/* Form İçeriği */}
         <div className="bg-white rounded-xl sm:rounded-3xl shadow-2xl p-4 sm:p-8 border border-blue-200">
 
-          {/* Adım 1: Tur Tipi ve Fiyat Seçimi */}
+          {/* Adım 1: Tekne Seçimi */}
           {currentStep === 1 && (
+            <div className="text-center">
+              <h2 className="text-xl sm:text-3xl font-bold text-slate-800 mb-2 sm:mb-4">
+                🚢 Tekne Seçimi
+              </h2>
+              <p className="text-slate-600 mb-4 sm:mb-6 text-sm sm:text-base">
+                Balık avı için hangi teknemizi tercih edersiniz?
+              </p>
+              
+              {/* Seçili tarih bilgisi */}
+              {selectedDate && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 max-w-md mx-auto">
+                  <div className="flex items-center justify-center space-x-2 mb-2">
+                    <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.89-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.11-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                    </svg>
+                    <p className="text-blue-700 font-bold text-sm">
+                      Seçili Tarih: {new Date(selectedDate).toLocaleDateString('tr-TR')}
+                    </p>
+                  </div>
+                  <p className="text-blue-600 text-xs text-center">
+                    Bu tarih için uygun tekneler gösteriliyor
+                  </p>
+                  {getAvailableBoatsForDate(selectedDate).length < boats.length && (
+                    <p className="text-orange-600 text-xs text-center mt-1">
+                      ⚠️ {boats.length - getAvailableBoatsForDate(selectedDate).length} tekne bu tarih için uygun değil
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {loading ? (
+                <div className="py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Tekneler yükleniyor...</p>
+                </div>
+              ) : boatsLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-4xl mx-auto">
+                  {/* Skeleton Loading - 2 tekne placeholder */}
+                  {[1, 2].map((index) => (
+                    <div key={index} className="bg-white border-2 border-gray-200 rounded-xl sm:rounded-2xl p-4 sm:p-6 animate-pulse">
+                      {/* Image skeleton */}
+                      <div className="aspect-video w-full bg-gradient-to-br from-gray-200 to-gray-300 rounded-xl mb-4"></div>
+                      
+                      {/* Title skeleton */}
+                      <div className="h-6 bg-gray-200 rounded-lg mb-3 w-3/4"></div>
+                      
+                      {/* Description skeleton */}
+                      <div className="space-y-2 mb-4">
+                        <div className="h-4 bg-gray-200 rounded w-full"></div>
+                        <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                      </div>
+                      
+                      {/* Button skeleton */}
+                      <div className="h-12 bg-gray-200 rounded-lg w-full"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : boats.length === 0 ? (
+                <div className="py-8">
+                  <div className="text-6xl mb-4">❌</div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">Tekne Bulunamadı</h3>
+                  <p className="text-gray-600">Lütfen admin panelden tekne ekleyin.</p>
+                  <p className="text-sm text-gray-500 mt-2">(/admin/boats adresinden ekleyebilirsiniz)</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-4xl mx-auto">
+                  {boats
+                    .filter(boat => !selectedDate || isDateInBoatRange(selectedDate, boat))
+                    .map((boat) => (
+                    <button
+                      key={boat.id}
+                      onClick={() => {
+                        if (selectedDate && !isDateInBoatRange(selectedDate, boat)) {
+                          alert(`📅 Bu tekne seçili tarih için uygun değil.\n\nTekne: ${boat.name}\nSeçili Tarih: ${new Date(selectedDate).toLocaleDateString('tr-TR')}\n\nLütfen farklı bir tarih seçin veya başka bir tekne tercih edin.`);
+                          return;
+                        }
+                        handleSelectBoat(boat.id);
+                      }}
+                      className={`relative flex flex-col items-start rounded-xl overflow-hidden border-2 transition-all duration-300 transform hover:scale-103 ${
+                        selectedDate && !isDateInBoatRange(selectedDate, boat)
+                          ? 'border-red-300 bg-red-50 opacity-60 cursor-not-allowed'
+                          : selectedBoat?.id === boat.id
+                          ? 'border-blue-500 bg-blue-50 shadow-lg'
+                          : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-md'
+                        }
+                      ${(boat.status && boat.status !== 'active') || !boat.isActive ? 'opacity-60 cursor-not-allowed' : ''}
+                      ${boat.status === 'coming-soon' ? 'border-blue-400 bg-blue-50' : ''}
+                      ${boat.status === 'maintenance' ? 'border-yellow-400 bg-yellow-50' : ''}
+                      `}
+                      disabled={(boat.status && boat.status !== 'active') || !boat.isActive || (selectedDate && !isDateInBoatRange(selectedDate, boat))}
+                    >
+                      {(boat.status && boat.status !== 'active') || !boat.isActive ? (
+                        <div className={`absolute inset-0 flex items-center justify-center rounded-xl z-10 ${
+                          boat.status === 'coming-soon' ? 'bg-blue-500 bg-opacity-80' :
+                          boat.status === 'maintenance' ? 'bg-yellow-500 bg-opacity-80' :
+                          'bg-black bg-opacity-40'
+                        }`}>
+                          <div className="text-center text-white font-bold drop-shadow-lg px-4">
+                            {boat.status === 'coming-soon' && (
+                              <>
+                                <div className="text-2xl mb-1">🔜</div>
+                                <div className="text-lg mb-1">YAKINDA</div>
+                                {boat.statusMessage && (
+                                  <div className="text-sm font-normal opacity-90">{boat.statusMessage}</div>
+                                )}
+                              </>
+                            )}
+                            {boat.status === 'maintenance' && (
+                              <>
+                                <div className="text-2xl mb-1">🔧</div>
+                                <div className="text-lg mb-1">BAKIMDA</div>
+                                {boat.statusMessage && (
+                                  <div className="text-sm font-normal opacity-90">{boat.statusMessage}</div>
+                                )}
+                              </>
+                            )}
+                            {boat.status === 'inactive' && (
+                              <>
+                                <div className="text-2xl mb-1">❌</div>
+                                <div className="text-lg mb-1">PASİF</div>
+                                {boat.statusMessage && (
+                                  <div className="text-sm font-normal opacity-90">{boat.statusMessage}</div>
+                                )}
+                              </>
+                            )}
+                            {(!boat.status || boat.status === 'active') && !boat.isActive && (
+                              <span className="text-xl">PASİF</span>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                      
+                      {selectedDate && !isDateInBoatRange(selectedDate, boat) && (
+                        <div className="absolute inset-0 bg-red-500 bg-opacity-40 flex items-center justify-center rounded-xl z-10">
+                          <div className="text-center text-white font-bold drop-shadow-lg">
+                            <div className="text-3xl mb-2">📅</div>
+                            <div className="text-lg">TARIH ARALIK</div>
+                            <div className="text-lg">DİŞINDA</div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="aspect-video w-full overflow-hidden relative">
+                        {/* Loading placeholder */}
+                        {imageLoadingStates[boat.id] && (
+                          <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                              <p className="text-sm text-blue-600">Yükleniyor...</p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <Image
+                          src={boat.imageUrl}
+                          alt={boat.name}
+                          fill
+                          className={`object-cover transition-all duration-300 hover:scale-110 ${
+                            imageLoadingStates[boat.id] ? 'opacity-0' : 'opacity-100'
+                          }`}
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          priority={selectedDate ? getAvailableBoatsForDate(selectedDate).length <= 3 : false}
+                          onLoad={() => handleImageLoad(boat.id)}
+                          onError={() => handleImageError(boat.id)}
+                          placeholder="blur"
+                          blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+                        />
+                      </div>
+                      
+                      <div className="p-4 sm:p-5 flex-1 flex flex-col items-start text-left w-full">
+                        <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">
+                          {boat.name}
+                        </h3>
+                        <p className="text-slate-600 text-sm sm:text-base mb-4 flex-1">
+                          {boat.description}
+                        </p>
+                        {/* Tarih aralığı uyarısı */}
+                        {boat.dateRange?.enabled && (
+                          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <svg className="w-4 h-4 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.89-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.11-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                              </svg>
+                              <span className="text-orange-700 font-medium text-sm">
+                                Aktif Tarih Aralığı
+                              </span>
+                            </div>
+                            <p className="text-orange-600 text-xs">
+                              {new Date(boat.dateRange.startDate).toLocaleDateString('tr-TR')} - {new Date(boat.dateRange.endDate).toLocaleDateString('tr-TR')}
+                            </p>
+                            {boat.dateRange.note && (
+                              <p className="text-orange-600 text-xs mt-1">
+                                💬 {boat.dateRange.note}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500 mt-auto pt-4 border-t border-gray-100 w-full">
+                          <span className="flex items-center space-x-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h-2A2 2 0 0113 18V8a2 2 0 012-2h2a2 2 0 012 2v10a2 2 0 01-2 2z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20H7a2 2 0 01-2-2V8a2 2 0 012-2h2a2 2 0 012 2v10a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>{boat.capacity} Kişi</span>
+                          </span>
+                          <span className="flex items-center space-x-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v2a2 2 0 01-2 2h-4m-6 0H5a2 2 0 01-2-2v-2a2 2 0 012-2h4m6 0a2 2 0 002-2V9a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m-6 0a2 2 0 01-2-2V9a2 2 0 012-2h4a2 2 0 012 2v2" />
+                            </svg>
+                            <span>
+                              {boat.seatingLayout === 'single' ? 'Tekli Koltuk' : 'Çiftli Koltuk'}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-8 sm:mt-10">
+                <button
+                  onClick={() => setCurrentStep(2)}
+                  disabled={!selectedBoat?.id}
+                  className={`px-6 sm:px-8 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
+                    selectedBoat?.id
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                >
+                  Devam Et →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Adım 2: Tur Tipi ve Fiyat Seçimi */}
+          {currentStep === 2 && (
             <div className="text-center">
               <h2 className="text-xl sm:text-3xl font-bold text-slate-800 mb-2 sm:mb-4">
                 Hangi türde bir tur istiyorsunuz?
@@ -1114,8 +1810,8 @@ export default function RandevuPage() {
                 <div 
                   onClick={() => {
                     // Seçili tarih kısmi dolu ise uyarı ver
-                    if (selectedDate && occupiedDates[selectedDate] > 0) {
-                      alert(`❌ Özel tur alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedDate]} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
+                    if (selectedDate && selectedBoat?.id && occupiedDates[selectedBoat.id]?.[selectedDate] > 0) {
+                      alert(`❌ Özel tur alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedBoat.id]?.[selectedDate]} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
                       return;
                     }
                     setTourType('private');
@@ -1153,8 +1849,8 @@ export default function RandevuPage() {
                 <div 
                   onClick={() => {
                     // Seçili tarih kısmi dolu ise uyarı ver
-                    if (selectedDate && occupiedDates[selectedDate] > 0) {
-                      alert(`❌ Balık + Yüzme turu alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedDate]} koltuk dolu olduğu için balık+yüzme turu seçimi yapılamaz.\n\nBu özel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
+                    if (selectedDate && selectedBoat?.id && occupiedDates[selectedBoat.id]?.[selectedDate] > 0) {
+                      alert(`❌ Balık + Yüzme turu alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedBoat.id]?.[selectedDate]} koltuk dolu olduğu için balık+yüzme turu seçimi yapılamaz.\n\nBu özel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
                       return;
                     }
                     setTourType('fishing-swimming');
@@ -1236,8 +1932,8 @@ export default function RandevuPage() {
                       key={customTour.id}
                       onClick={() => {
                         // Seçili tarih kısmi dolu ise uyarı ver
-                        if (selectedDate && occupiedDates[selectedDate] > 0) {
-                          alert(`❌ ${customTour.name} alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedDate]} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
+                        if (selectedDate && selectedBoat?.id && occupiedDates[selectedBoat.id]?.[selectedDate] > 0) {
+                          alert(`❌ ${customTour.name} alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedBoat.id]?.[selectedDate]} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
                           return;
                         }
                         setTourType(customTour.id);
@@ -1303,7 +1999,7 @@ export default function RandevuPage() {
                               <button
                   data-continue-button
                   onClick={() => {
-                    setCurrentStep(2);
+                    setCurrentStep(3);
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -1323,8 +2019,8 @@ export default function RandevuPage() {
             </div>
           )}
 
-          {/* Adım 2: Kişi Sayısı (Sadece Normal Tur İçin) */}
-          {currentStep === 2 && (
+          {/* Adım 3: Kişi Sayısı (Sadece Normal Tur İçin) */}
+          {currentStep === 3 && (
             <div className="text-center">
               {tourType === 'normal' ? (
                 <>
@@ -1483,7 +2179,7 @@ export default function RandevuPage() {
                               )}
                             </div>
                             <div className="flex justify-between mt-2 pt-2 border-t border-slate-400 font-bold text-lg">
-                              <span>Toplam Tutar:</span>
+                              <span className="text-slate-800">Toplam Tutar:</span>
                               <span className="text-blue-700">{priceInfo.totalPrice.toLocaleString('tr-TR')} ₺</span>
                             </div>
                           </div>
@@ -1572,7 +2268,7 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(1);
+                    setCurrentStep(3);
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -1589,9 +2285,9 @@ export default function RandevuPage() {
                   onClick={() => {
                     // Normal tur ve olta kullanan kişi varsa olta seçim adımına git
                     if (tourType === 'normal' && (ageGroups.adults > 0 || ageGroups.children > 0)) {
-                      setCurrentStep(2.5);
+                      setCurrentStep(3.5);
                     } else {
-                      setCurrentStep(3);
+                      setCurrentStep(4);
                     }
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
@@ -1608,8 +2304,8 @@ export default function RandevuPage() {
             </div>
           )}
 
-          {/* Adım 2.5: Olta Seçimi (Sadece Normal Tur İçin) */}
-          {currentStep === 2.5 && (
+          {/* Adım 3.5: Olta Seçimi (Sadece Normal Tur İçin) */}
+          {currentStep === 3.5 && (
             <div className="text-center">
               <h2 className="text-xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">
                 🎣 Olta Seçimi
@@ -1809,7 +2505,7 @@ export default function RandevuPage() {
                 return (
                   <div className="bg-slate-100 border-2 border-slate-300 rounded-xl p-6 mb-6 max-w-md mx-auto">
                     <h3 className="text-lg font-bold text-slate-800 mb-4">💰 Fiyat Özeti</h3>
-                    <div className="space-y-2 text-sm">
+                    <div className="space-y-2 text-sm text-slate-800">
                       {/* Yetişkin Ekipman Dahil */}
                       {priceInfo.breakdown.adults.withEquipment.count > 0 && (
                         <div className="flex justify-between">
@@ -1847,7 +2543,7 @@ export default function RandevuPage() {
                       )}
                     </div>
                     <div className="flex justify-between mt-4 pt-4 border-t border-slate-400 font-bold text-lg">
-                      <span>Toplam Tutar:</span>
+                      <span className="text-slate-800">Toplam Tutar:</span>
                       <span className="text-blue-700">{priceInfo.totalPrice.toLocaleString('tr-TR')} ₺</span>
                     </div>
                   </div>
@@ -1858,7 +2554,7 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(2);
+                    setCurrentStep(3);
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -1873,7 +2569,7 @@ export default function RandevuPage() {
                 <button
                   data-continue-button
                   onClick={() => {
-                    setCurrentStep(3);
+                    setCurrentStep(4);
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -1889,8 +2585,8 @@ export default function RandevuPage() {
             </div>
           )}
 
-                    {/* Adım 3: Tarih ve Saat Seçimi */}
-          {currentStep === 3 && (
+                    {/* Adım 4: Tarih ve Saat Seçimi */}
+          {currentStep === 4 && (
             <div>
               <h2 className="text-lg sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6 text-center">
                 Tarih {tourType === 'normal' ? 've Saat' : ''} Seçin
@@ -1979,7 +2675,7 @@ export default function RandevuPage() {
                     {/* Takvim Günleri */}
                     <div className="grid grid-cols-7 gap-1">
                       {calendarDays.map((dayInfo, index) => {
-                        const occupiedCount = occupiedDates[dayInfo.date] || 0;
+                        const occupiedCount = selectedBoat?.id ? (occupiedDates[selectedBoat.id]?.[dayInfo.date] || 0) : 0;
                         const isSelected = selectedDate === dayInfo.date;
                         const isFullyOccupied = occupiedCount >= 24; // Her iki seans da tamamen dolu
                         const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < 24;
@@ -2005,8 +2701,24 @@ export default function RandevuPage() {
                                 // Tarih seçiminde hafif scroll yap
                                 setTimeout(() => scrollToContinueButton(), 400);
                               } else if (isDateNotSelectable && dayInfo.isCurrentMonth) {
-                                // Tarih aralığı dışı uyarısı
-                                alert(`❌ Bu tarih seçilemez!\n\n${bookingDateRange.disabledMessage || 'Bu tarih rezervasyon için kapalı'}\n\n📅 Rezervasyon yapılabilir tarihler:\n${new Date(bookingDateRange.startDate).toLocaleDateString('tr-TR')} - ${new Date(bookingDateRange.endDate).toLocaleDateString('tr-TR')}`);
+                                // Tarih aralığı dışı uyarısı - tekne ve genel tarih aralığı kontrolü
+                                let alertMessage = '❌ Bu tarih seçilemez!\n\n';
+                                
+                                // Tekne tarih aralığı kontrolü
+                                if (selectedBoat && selectedBoat.dateRange?.enabled && !isDateInBoatRange(dayInfo.date, selectedBoat)) {
+                                  alertMessage += `🚤 Seçili tekne (${selectedBoat.name}) bu tarihte hizmet vermiyor.\n\n`;
+                                  alertMessage += `📅 Bu tekne için geçerli tarihler:\n${new Date(selectedBoat.dateRange.startDate).toLocaleDateString('tr-TR')} - ${new Date(selectedBoat.dateRange.endDate).toLocaleDateString('tr-TR')}`;
+                                  if (selectedBoat.dateRange.note) {
+                                    alertMessage += `\n\n💬 Not: ${selectedBoat.dateRange.note}`;
+                                  }
+                                } 
+                                // Genel sistem tarih aralığı kontrolü  
+                                else if (bookingDateRange.enabled && bookingDateRange.startDate && bookingDateRange.endDate) {
+                                  alertMessage += `${bookingDateRange.disabledMessage || 'Bu tarih rezervasyon için kapalı'}\n\n`;
+                                  alertMessage += `📅 Rezervasyon yapılabilir tarihler:\n${new Date(bookingDateRange.startDate).toLocaleDateString('tr-TR')} - ${new Date(bookingDateRange.endDate).toLocaleDateString('tr-TR')}`;
+                                }
+                                
+                                alert(alertMessage);
                               }
                             }}
                             disabled={dayInfo.isDisabled || isFullyOccupied || isDateNotSelectable}
@@ -2029,7 +2741,14 @@ export default function RandevuPage() {
                               dayInfo.isDisabled
                                 ? 'Geçmiş tarih seçilemez'
                                 : isDateNotSelectable && dayInfo.isCurrentMonth
-                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${bookingDateRange.disabledMessage || 'Bu tarih kapalı'}`
+                                ? (() => {
+                                    // Tekne tarih aralığı kontrolü
+                                    if (selectedBoat && selectedBoat.dateRange?.enabled && !isDateInBoatRange(dayInfo.date, selectedBoat)) {
+                                      return `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${selectedBoat.name} bu tarihte hizmet vermiyor`;
+                                    }
+                                    // Genel tarih aralığı kontrolü
+                                    return `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${bookingDateRange.disabledMessage || 'Bu tarih kapalı'}`;
+                                  })()
                                 : isFullyOccupied && dayInfo.isCurrentMonth
                                 ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen dolu (tüm seanslar) - Hiçbir tur türü için müsait değil`
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
@@ -2092,15 +2811,79 @@ export default function RandevuPage() {
                     <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 p-3 sm:p-6">
                       <h3 className="text-base sm:text-xl font-bold text-slate-800 mb-3 sm:mb-4 text-center">🕐 Saat Seçin</h3>
                       
-                      {/* Seçili Tarih İçin Durum Bilgisi */}
-                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                        <div className="text-center">
-                          <p className="text-blue-800 font-bold text-sm mb-2">
-                            📅 {new Date(selectedDate).toLocaleDateString('tr-TR', { 
-                              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
-                            })}
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      {/* Seçili Tarih ve Tekne Bilgisi */}
+                      <div className="mb-4 space-y-3">
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                          <div className="text-center">
+                            <p className="text-blue-800 font-bold text-sm mb-2">
+                              📅 {new Date(selectedDate).toLocaleDateString('tr-TR', { 
+                                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
+                              })}
+                            </p>
+                            {selectedBoat && (
+                              <p className="text-blue-700 font-medium text-sm">
+                                ⛵ {selectedBoat.name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Özel tur saatleri uyarısı */}
+                        {tourType !== 'normal' && tourType !== 'private' && (() => {
+                          const selectedCustomTour = customTours.find(tour => tour.id === tourType);
+                          return selectedCustomTour?.customSchedule?.enabled;
+                        })() && (() => {
+                          const selectedCustomTour = customTours.find(tour => tour.id === tourType);
+                          return (
+                            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                              <div className="flex items-center justify-center space-x-2 mb-2">
+                                <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                                <p className="text-purple-700 font-bold text-sm">
+                                  🎆 {selectedCustomTour?.name} - Özel Saatler
+                                </p>
+                              </div>
+                              <p className="text-purple-600 text-xs text-center">
+                                Bu özel tur sadece belirlenen saatlerde rezervasyon alabilir
+                              </p>
+                              {selectedCustomTour?.customSchedule?.note && (
+                                <p className="text-purple-600 text-xs text-center mt-1">
+                                  💬 {selectedCustomTour.customSchedule.note}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        
+                        {/* Tekne özel saatleri uyarısı (sadece özel tur aktif değilse) */}
+                        {(tourType === 'normal' || tourType === 'private' || !(() => {
+                          const selectedCustomTour = customTours.find(tour => tour.id === tourType);
+                          return selectedCustomTour?.customSchedule?.enabled;
+                        })()) && selectedBoat?.customSchedule?.enabled && (
+                          <div className="p-3 bg-green-50 border border-green-200 rounded-xl">
+                            <div className="flex items-center justify-center space-x-2 mb-2">
+                              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                              </svg>
+                              <p className="text-green-700 font-bold text-sm">
+                                🕰️ Bu teknenin özel çalışma saatleri
+                              </p>
+                            </div>
+                            <p className="text-green-600 text-xs text-center">
+                              Sadece aşağıdaki saatlerde rezervasyon yapılabilir
+                            </p>
+                            {selectedBoat.customSchedule.note && (
+                              <p className="text-green-600 text-xs text-center mt-1">
+                                💬 {selectedBoat.customSchedule.note}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                          <div className="text-center">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                             <div className="flex items-center justify-center space-x-1 bg-white/60 px-2 py-1 rounded-full">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-green-700 font-bold">Boş Seans</span>
@@ -2113,12 +2896,13 @@ export default function RandevuPage() {
                               <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                               <span className="text-red-700 font-bold">Tamamen Dolu</span>
                             </div>
+                            </div>
                           </div>
                         </div>
                       </div>
                       <div className="flex flex-col gap-2 sm:gap-3">
                         {availableTimes.map((time) => {
-                          const timeOccupancy = sessionOccupancy[time] || 0;
+                          const timeOccupancy = selectedBoat?.id ? (sessionOccupancy[selectedBoat.id]?.[time] || 0) : 0;
                           const isFullyOccupied = timeOccupancy >= 12;
                           const isPartiallyOccupied = timeOccupancy > 0 && timeOccupancy < 12;
                           const canSelectPrivate = timeOccupancy === 0; // Özel tur için tamamen boş olmalı
@@ -2244,23 +3028,27 @@ export default function RandevuPage() {
                       <div className="mb-3 sm:mb-4 text-center">
                         <div className="bg-blue-50 border border-blue-200 rounded-xl p-2 sm:p-3 inline-block">
                                                       <div className="text-blue-800 text-xs sm:text-sm font-medium">
-                              <p>💡 <strong>{getTotalGuestCount()} kişi</strong> için <strong>{getRequiredSeatCount()} koltuk</strong> seçin</p>
+                                <p>💡 <strong>{getTotalGuestCount()} kişi</strong> için <strong>{getRequiredSeatCount()} koltuk</strong> seçin</p>
                               {ageGroups.babies > 0 && (
                                 <p className="text-xs text-blue-600 mt-1">
                                   🍼 Bebekler kucakta oturacağı için koltuk gerekmez
                                 </p>
                               )}
+                              {selectedBoat?.seatingLayout === 'double' && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                  👥 Koltuklar çiftli görünür ama her kişi için ayrı koltuk seçin
+                                </p>
+                              )}
                             </div>
-                                                      {selectedSeats.length < getRequiredSeatCount() && (
-                            <p className="text-blue-700 text-xs mt-1">
-                                Henüz {getRequiredSeatCount() - selectedSeats.length} koltuk daha seçmelisiniz
-                            </p>
-                          )}
-                            {selectedSeats.length === getRequiredSeatCount() && (
-                            <p className="text-green-700 text-xs mt-1">
-                              ✅ Tüm koltuklar seçildi!
-                            </p>
-                          )}
+                                                      {selectedSeats.length < getRequiredSeatCount() ? (
+                              <p className="text-blue-700 text-xs mt-1">
+                                  Henüz {getRequiredSeatCount() - selectedSeats.length} koltuk daha seçmelisiniz
+                              </p>
+                            ) : (
+                              <p className="text-green-700 text-xs mt-1">
+                                ✅ Tüm koltuklar seçildi!
+                              </p>
+                            )}
                         </div>
                       </div>
                     )}
@@ -2432,7 +3220,7 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(2);
+                    setCurrentStep(3);
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -2447,7 +3235,7 @@ export default function RandevuPage() {
                 <button
                   data-continue-button
                   onClick={() => {
-                    setCurrentStep(4);
+                    setCurrentStep(5);
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -2479,8 +3267,8 @@ export default function RandevuPage() {
             </div>
           )}
 
-          {/* Adım 4: İletişim Bilgileri */}
-          {currentStep === 4 && (
+          {/* Adım 5: İletişim Bilgileri */}
+          {currentStep === 5 && (
             <div className="text-center">
               <h2 className="text-xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">
                 İletişim Bilgileriniz
@@ -2604,7 +3392,7 @@ export default function RandevuPage() {
                   <p>👤 <strong>İletişim:</strong> {guestInfo.name} {guestInfo.surname}</p>
                   <p>📞 <strong>Telefon:</strong> {guestInfo.phone}</p>
                   {tourType === 'normal' && (
-                    <p>⚓ <strong>Ekipman:</strong> {priceOption === 'own-equipment' ? 'Kendi ekipmanım var' : 'Ekipman dahil (+150 TL)'}</p>
+                    <p>⚓ <strong>Ekipman:</strong> {priceOption === 'own-equipment' ? 'Kendi ekipmanım var' : 'Ekipman dahil'}</p>
                   )}
                 </div>
               </div>
@@ -2612,7 +3400,7 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(3);
+                    setCurrentStep(5);
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -2639,8 +3427,8 @@ export default function RandevuPage() {
             </div>
           )}
 
-          {/* Adım 5: Başarı Sayfası */}
-          {currentStep === 5 && (
+          {/* Adım 6: Başarı Sayfası */}
+          {currentStep === 6 && (
             <div className="text-center">
               <div className="relative max-w-2xl mx-auto">
                 {/* Kutlama Animasyonu */}
@@ -2824,13 +3612,17 @@ export default function RandevuPage() {
                         <div className="flex justify-between items-center border-t pt-2">
                           <span className="text-slate-600 font-bold">🧾 Toplam Tutar:</span>
                           <span className="font-bold text-green-700 text-sm sm:text-base">
-                            {(tourType === 'private' || tourType === 'fishing-swimming') ? 
-                              (tourType === 'private' ? 
-                                `${prices.privateTour.toLocaleString('tr-TR')} TL` : 
-                                `${prices.fishingSwimming.toLocaleString('tr-TR')} TL`) :
-                              (priceOption === 'own-equipment' ? 
-                                `${(prices.normalOwn * guestCount).toLocaleString('tr-TR')} TL` : 
-                                `${(prices.normalWithEquipment * guestCount).toLocaleString('tr-TR')} TL`)}
+                            {(() => {
+                              if (tourType === 'private') {
+                                return `${prices.privateTour.toLocaleString('tr-TR')} TL`;
+                              } else if (tourType === 'fishing-swimming') {
+                                return `${prices.fishingSwimming.toLocaleString('tr-TR')} TL`;
+                              } else {
+                                // Normal tur için esnek fiyatlama sistemini kullan
+                                const priceInfo = getCurrentPrice();
+                                return priceInfo ? `${priceInfo.totalPrice.toLocaleString('tr-TR')} TL` : '0 TL';
+                              }
+                            })()}
                           </span>
                         </div>
                       </div>
@@ -2892,6 +3684,22 @@ export default function RandevuPage() {
 
         </div>
       </div>
+      
+      {/* Floating WhatsApp Button */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <a
+          href="https://wa.me/905310892537?text=Merhaba,%20Balık%20Sefası%20balık%20avı%20turları%20hakkında%20bilgi%20almak%20istiyorum.%20Konum:%20https://maps.app.goo.gl/fVPxCBB9JphkEMBH7"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center animate-pulse"
+          title="WhatsApp ile iletişim kurun"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.465 3.488"/>
+          </svg>
+        </a>
+      </div>
     </div>
   );
 } 
+

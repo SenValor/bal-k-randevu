@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   images: {
@@ -57,6 +58,13 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ['react', 'react-dom'],
+  },
+  webpack: (config: any) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname, 'src'),
+    };
+    return config;
   },
   redirects: async () => {
     return [

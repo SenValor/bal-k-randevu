@@ -5,6 +5,13 @@ import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 
+interface Boat {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 interface Reservation {
   id: string;
   reservationNumber: string;
@@ -13,6 +20,8 @@ interface Reservation {
   selectedTime: string;
   selectedSeats: string[];
   isPrivateTour: boolean;
+  selectedBoat?: string; // Seçilen tekne ID'si
+  boatName?: string; // Seçilen tekne adı
   guestInfos: Array<{
     name: string;
     surname: string;
@@ -42,6 +51,37 @@ export default function AdminCalendarPage() {
   const [monthStats, setMonthStats] = useState<{[key: string]: DayStats}>({});
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [boats, setBoats] = useState<Boat[]>([]);
+  const [selectedBoatFilter, setSelectedBoatFilter] = useState<string>(''); // '' = Tüm Tekneler
+
+  // Tekneleri çek
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, 'boats'),
+      (snapshot) => {
+        const boatList: Boat[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          boatList.push({
+            id: doc.id,
+            name: data.name,
+            isActive: data.isActive,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+          });
+        });
+        
+        setBoats(boatList.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Tekne sırası belirleme (T1, T2, T3...)
+  const getBoatOrder = (boatId: string) => {
+    const index = boats.findIndex(boat => boat.id === boatId);
+    return index >= 0 ? `T${index + 1}` : 'T?';
+  };
 
   // Ayın rezervasyonlarını çek
   useEffect(() => {
@@ -53,11 +93,24 @@ export default function AdminCalendarPage() {
         const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
         const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
         
-        const q = query(
-          collection(db, 'reservations'),
-          where('selectedDate', '>=', firstDay),
-          where('selectedDate', '<=', lastDay)
-        );
+        // Tekne filtresi ile query oluştur
+        let q;
+        if (selectedBoatFilter) {
+          // Belirli tekne seçildi
+          q = query(
+            collection(db, 'reservations'),
+            where('selectedDate', '>=', firstDay),
+            where('selectedDate', '<=', lastDay),
+            where('selectedBoat', '==', selectedBoatFilter)
+          );
+        } else {
+          // Tüm tekneler
+          q = query(
+            collection(db, 'reservations'),
+            where('selectedDate', '>=', firstDay),
+            where('selectedDate', '<=', lastDay)
+          );
+        }
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
           const allReservations: Reservation[] = [];
@@ -115,7 +168,7 @@ export default function AdminCalendarPage() {
     };
 
     fetchMonthReservations();
-  }, [currentMonth]);
+  }, [currentMonth, selectedBoatFilter]); // selectedBoatFilter dependency eklendi
 
   // Takvim günlerini oluştur
   const getCalendarDays = (month: Date) => {
@@ -187,7 +240,9 @@ export default function AdminCalendarPage() {
     if (isToday) return 'bg-blue-100 border-2 border-blue-500 text-blue-800 font-bold';
     if (!stats || stats.total === 0) return 'text-gray-700 hover:bg-gray-100';
     
-    const occupancyRate = stats.seats / 24; // 24 = maksimum koltuk (2 seans x 12 koltuk)
+    // Tekne filtresi varsa tek tekne (24), yoksa tüm tekneler (boats.length * 24)
+    const maxSeats = selectedBoatFilter ? 24 : (boats.length * 24 || 24);
+    const occupancyRate = stats.seats / maxSeats;
     
     if (occupancyRate >= 1) return 'bg-red-100 text-red-800 border border-red-300';
     if (occupancyRate >= 0.75) return 'bg-orange-100 text-orange-800 border border-orange-300';
@@ -237,6 +292,23 @@ export default function AdminCalendarPage() {
                 ← Dashboard
               </Link>
               <h1 className="text-xl font-bold text-gray-900">📅 Rezervasyon Takvimi</h1>
+            </div>
+            
+            {/* Tekne Filtresi */}
+            <div className="flex items-center space-x-3">
+              <span className="text-sm font-medium text-gray-700">🚢 Tekne:</span>
+              <select
+                value={selectedBoatFilter}
+                onChange={(e) => setSelectedBoatFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Tüm Tekneler</option>
+                {boats.map((boat) => (
+                  <option key={boat.id} value={boat.id}>
+                    {boat.name} ({getBoatOrder(boat.id)})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -313,7 +385,7 @@ export default function AdminCalendarPage() {
                             </div>
                             <div className="flex items-center justify-between">
                               <span>💺</span>
-                              <span className="font-medium">{stats.seats}/24</span>
+                              <span className="font-medium">{stats.seats}/{selectedBoatFilter ? 24 : (boats.length * 24 || 24)}</span>
                             </div>
                             {stats.revenue > 0 && (
                               <div className="text-green-700 font-bold text-xs">
@@ -451,6 +523,10 @@ export default function AdminCalendarPage() {
                           <div>👤 {reservation.guestInfos?.[0]?.name} {reservation.guestInfos?.[0]?.surname}</div>
                           <div>🕐 {reservation.selectedTime}</div>
                           <div>👥 {reservation.guestCount} kişi</div>
+                          {reservation.selectedBoat && (
+                            <div>🚢 {reservation.boatName || getBoatOrder(reservation.selectedBoat)}</div>
+                          )}
+                          <div>💺 {reservation.selectedSeats.join(', ')}</div>
                           {reservation.totalAmount && (
                             <div>💰 {formatCurrency(reservation.totalAmount)}</div>
                           )}

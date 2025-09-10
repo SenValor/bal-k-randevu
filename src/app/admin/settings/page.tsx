@@ -36,6 +36,13 @@ interface AvailableTimes {
   updatedBy: string;
 }
 
+interface TimeSlot {
+  id: string;
+  start: string;
+  end: string;
+  isActive: boolean;
+}
+
 interface CustomTour {
   id: string;
   name: string;
@@ -45,6 +52,18 @@ interface CustomTour {
   description: string;
   isActive: boolean;
   createdAt: Date;
+  // Çalışma saatleri
+  customSchedule?: {
+    enabled: boolean;
+    timeSlots: TimeSlot[];
+    note?: string;
+  };
+}
+
+interface TourScheduleModalProps {
+  tour: CustomTour;
+  onClose: () => void;
+  onSave: (tourId: string, schedule: CustomTour['customSchedule']) => void;
 }
 
 export default function SettingsPage() {
@@ -81,6 +100,7 @@ export default function SettingsPage() {
   const [newTimeSlot, setNewTimeSlot] = useState({ start: '', end: '' });
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
   const [editingTours, setEditingTours] = useState(false);
+  const [scheduleModal, setScheduleModal] = useState<CustomTour | null>(null);
   const [newTour, setNewTour] = useState({
     name: '',
     price: 0,
@@ -329,6 +349,28 @@ export default function SettingsPage() {
       alert('Tur silinirken hata oluştu');
       // Hata durumunda state'i geri al
       setCustomTours(customTours);
+    }
+  };
+  
+  // Özel tur çalışma saatleri kaydetme
+  const handleSaveTourSchedule = async (tourId: string, schedule: CustomTour['customSchedule']) => {
+    try {
+      const updatedTours = customTours.map(tour => 
+        tour.id === tourId ? { ...tour, customSchedule: schedule } : tour
+      );
+      
+      await setDoc(doc(db, 'settings', 'customTours'), {
+        tours: updatedTours,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      setCustomTours(updatedTours);
+      setScheduleModal(null);
+      alert('Çalışma saatleri başarıyla güncellendi!');
+    } catch (error) {
+      console.error('Çalışma saatleri güncellenirken hata:', error);
+      alert('Çalışma saatleri güncellenirken hata oluştu');
     }
   };
 
@@ -916,13 +958,48 @@ export default function SettingsPage() {
                             </button>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between">
+                        
+                        {/* Durum ve Tarih */}
+                        <div className="flex items-center justify-between mb-3">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${tour.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                             {tour.isActive ? '✅ Aktif' : '❌ Pasif'}
                           </span>
                           <span className="text-xs text-gray-500">
                             {new Date(tour.createdAt).toLocaleDateString('tr-TR')}
                           </span>
+                        </div>
+                        
+                        {/* Çalışma Saatleri Yönetimi */}
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => setScheduleModal(tour)}
+                            className={`w-full px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
+                              tour.customSchedule?.enabled 
+                                ? 'bg-blue-500 hover:bg-blue-600 text-white' 
+                                : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                            }`}
+                          >
+                            🕰️ Çalışma Saatleri {tour.customSchedule?.enabled ? '(✓)' : ''}
+                          </button>
+                          
+                          {/* Aktif çalışma saatleri gösterimi */}
+                          {tour.customSchedule?.enabled && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs">
+                              <p className="text-blue-700 font-medium mb-1">🕰️ Özel Çalışma Saatleri:</p>
+                              <div className="text-blue-600 space-y-1">
+                                {tour.customSchedule.timeSlots?.filter(slot => slot.isActive).map((slot, index) => (
+                                  <p key={slot.id}>
+                                    • {slot.start} - {slot.end}
+                                  </p>
+                                ))}
+                              </div>
+                              {tour.customSchedule.note && (
+                                <p className="text-blue-600 mt-1">
+                                  💬 {tour.customSchedule.note}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1059,6 +1136,245 @@ export default function SettingsPage() {
           </div>
         </div>
       </main>
+      
+      {/* Tour Schedule Modal */}
+      {scheduleModal && (
+        <TourScheduleModal
+          tour={scheduleModal}
+          onClose={() => setScheduleModal(null)}
+          onSave={handleSaveTourSchedule}
+        />
+      )}
+    </div>
+  );
+}
+
+// Özel tur çalışma saatleri modal komponenti
+function TourScheduleModal({ tour, onClose, onSave }: TourScheduleModalProps) {
+  const [schedule, setSchedule] = useState<CustomTour['customSchedule']>({
+    enabled: tour.customSchedule?.enabled || false,
+    timeSlots: tour.customSchedule?.timeSlots || [
+      { id: 'morning', start: '09:00', end: '15:00', isActive: true },
+      { id: 'afternoon', start: '16:00', end: '20:00', isActive: true }
+    ],
+    note: tour.customSchedule?.note || ''
+  });
+  
+  const addTimeSlot = () => {
+    const newSlot: TimeSlot = {
+      id: `slot_${Date.now()}`,
+      start: '10:00',
+      end: '16:00',
+      isActive: true
+    };
+    setSchedule({
+      ...schedule,
+      timeSlots: [...schedule.timeSlots, newSlot]
+    });
+  };
+  
+  const updateTimeSlot = (id: string, field: keyof TimeSlot, value: string | boolean) => {
+    setSchedule({
+      ...schedule,
+      timeSlots: schedule.timeSlots.map(slot => 
+        slot.id === id ? { ...slot, [field]: value } : slot
+      )
+    });
+  };
+  
+  const deleteTimeSlot = (id: string) => {
+    if (schedule.timeSlots.length <= 1) {
+      alert('En az 1 saat dilimi bulunmalıdır!');
+      return;
+    }
+    setSchedule({
+      ...schedule,
+      timeSlots: schedule.timeSlots.filter(slot => slot.id !== id)
+    });
+  };
+  
+  const handleSave = () => {
+    if (schedule.enabled) {
+      const activeSlots = schedule.timeSlots.filter(slot => slot.isActive);
+      if (activeSlots.length === 0) {
+        alert('Özel saatler aktifse en az 1 aktif saat dilimi bulunmalıdır.');
+        return;
+      }
+      
+      // Saat doğrulama
+      for (const slot of activeSlots) {
+        if (!slot.start || !slot.end) {
+          alert('Tüm aktif saat dilimlerinin başlangıç ve bitiş saatleri belirtilmelidir.');
+          return;
+        }
+        if (slot.start >= slot.end) {
+          alert('Bitiş saati başlangıç saatinden sonra olmalıdır.');
+          return;
+        }
+      }
+    }
+    
+    onSave(tour.id, schedule);
+  };
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900">
+              🕰️ {tour.name} - Çalışma Saatleri
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Özel saatler aktif/pasif */}
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="scheduleEnabled"
+                  checked={schedule.enabled}
+                  onChange={(e) => setSchedule({ ...schedule, enabled: e.target.checked })}
+                  className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                />
+                <label htmlFor="scheduleEnabled" className="font-medium text-purple-800">
+                  Bu özel tur için özel çalışma saatleri aktif
+                </label>
+              </div>
+              <p className="text-purple-600 text-sm mt-2">
+                ℹ️ Aktif olduğunda bu özel tur sadece belirlenen saatlerde rezervasyon alabilir.
+              </p>
+            </div>
+
+            {/* Saat dilimleri (sadece aktifse) */}
+            {schedule.enabled && (
+              <>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium text-gray-900">Çalışma Saatleri</h3>
+                    <button
+                      onClick={addTimeSlot}
+                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium"
+                    >
+                      + Saat Ekle
+                    </button>
+                  </div>
+                  
+                  {schedule.timeSlots.map((slot) => (
+                    <div key={slot.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-center space-x-3 mb-3">
+                        <input
+                          type="checkbox"
+                          checked={slot.isActive}
+                          onChange={(e) => updateTimeSlot(slot.id, 'isActive', e.target.checked)}
+                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                        />
+                        <span className="font-medium text-gray-700">Aktif</span>
+                        {schedule.timeSlots.length > 1 && (
+                          <button
+                            onClick={() => deleteTimeSlot(slot.id)}
+                            className="ml-auto text-red-500 hover:text-red-700 font-medium text-sm"
+                          >
+                            🗑️ Sil
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Başlangıç Saati
+                          </label>
+                          <input
+                            type="time"
+                            value={slot.start}
+                            onChange={(e) => updateTimeSlot(slot.id, 'start', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Bitiş Saati
+                          </label>
+                          <input
+                            type="time"
+                            value={slot.end}
+                            onChange={(e) => updateTimeSlot(slot.id, 'end', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Açıklama (Opsiyonel)
+                  </label>
+                  <textarea
+                    value={schedule.note}
+                    onChange={(e) => setSchedule({ ...schedule, note: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder="Örn: Günbatımı turu, gece balık avlama, özel etkinlik saatleri..."
+                  />
+                </div>
+                
+                {/* Önizleme */}
+                {schedule.timeSlots.filter(slot => slot.isActive && slot.start && slot.end).length > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-green-700 font-medium text-sm mb-2">
+                      🕰️ Aktif Çalışma Saatleri:
+                    </p>
+                    <div className="space-y-1">
+                      {schedule.timeSlots
+                        .filter(slot => slot.isActive && slot.start && slot.end)
+                        .map((slot) => (
+                          <p key={slot.id} className="text-green-600 text-sm">
+                            • {slot.start} - {slot.end}
+                          </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            
+            {/* Pasif durum açıklaması */}
+            {!schedule.enabled && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-gray-600 text-sm">
+                  ℹ️ Özel çalışma saatleri pasifken bu tur varsayılan sistem saatlerini kullanır.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex space-x-3 mt-6">
+            <button
+              onClick={onClose}
+              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              İptal
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              💾 Kaydet
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 
