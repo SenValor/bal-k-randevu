@@ -263,7 +263,7 @@ export default function RootLayout({
               
               <div className="flex items-center justify-center">
                 <a
-                  href="mailto:info@msvsoft.dev"
+                  href="mailto:h.48demir@hotmail.com"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-500 hover:text-gray-400 text-xs transition-colors duration-300"
