@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { createResilientListener } from '@/lib/firestoreHelpers';
 
 interface CustomTour
  {
@@ -1121,37 +1122,45 @@ export default function RandevuPage() {
         where('selectedTime', '==', selectedTime)
       );
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const occupied: string[] = [];
-        
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          // Sadece onaylı ve bekleyen rezervasyonları dikkate al
-          if (data.status === 'confirmed' || data.status === 'pending') {
-            if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
-              occupied.push(...data.selectedSeats);
+      const unsubscribe = createResilientListener(
+        q,
+        (snapshot) => {
+          const occupied: string[] = [];
+          
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            // Sadece onaylı ve bekleyen rezervasyonları dikkate al
+            if (data.status === 'confirmed' || data.status === 'pending') {
+              if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
+                occupied.push(...data.selectedSeats);
+              }
+              
+              if (data.isPrivateTour && data.selectedBoat) {
+                // Özel tur için ilgili teknenin tüm koltukları dolu sayılır
+                const boatId = data.selectedBoat;
+                const boatOrder = getBoatOrder(boatId);
+                const prefix = `${boatOrder}_`;
+                const allSeats = [
+                  `${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`,
+                  `${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`
+                ];
+                allSeats.forEach(seat => {
+                  if (!occupied.includes(seat)) {
+                    occupied.push(seat);
+                  }
+                });
+              }
             }
-            
-            if (data.isPrivateTour && data.selectedBoat) {
-              // Özel tur için ilgili teknenin tüm koltukları dolu sayılır
-              const boatId = data.selectedBoat;
-              const boatOrder = getBoatOrder(boatId);
-              const prefix = `${boatOrder}_`;
-              const allSeats = [
-                `${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`,
-                `${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`
-              ];
-              allSeats.forEach(seat => {
-                if (!occupied.includes(seat)) {
-                  occupied.push(seat);
-                }
-              });
-            }
-          }
-        });
-        
-        setOccupiedSeats(occupied);
-      });
+          });
+          
+          setOccupiedSeats(occupied);
+        },
+        (error) => {
+          console.error('Rezervasyon dinleme hatası:', error);
+          // Hata durumunda boş array set et
+          setOccupiedSeats([]);
+        }
+      );
 
       return () => unsubscribe();
     } else {

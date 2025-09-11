@@ -4,6 +4,13 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import MaintenanceCheck from "@/components/MaintenanceCheck";
 
+// Development ortamında diagnostic log'ları etkinleştir
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  import('@/lib/diagnostics').then(({ logSystemStatus }) => {
+    logSystemStatus();
+  });
+}
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -263,7 +270,7 @@ export default function RootLayout({
               
               <div className="flex items-center justify-center">
                 <a
-                  href="mailto:h.48demir@hotmail.com"
+                  href="mailto:info@msvsoft.dev"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-500 hover:text-gray-400 text-xs transition-colors duration-300"

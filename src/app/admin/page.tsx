@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { signOut, onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { createResilientListener } from '@/lib/firestoreHelpers';
 
 interface Boat {
   id: string;
@@ -90,7 +91,7 @@ export default function AdminPanel() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const unsubscribe = onSnapshot(
+    const unsubscribe = createResilientListener(
       collection(db, 'boats'),
       (snapshot) => {
         const boatList: Boat[] = [];
@@ -105,6 +106,10 @@ export default function AdminPanel() {
         });
         
         setBoats(boatList.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+      },
+      (error) => {
+        console.error('Tekne verilerini dinleme hatası:', error);
+        setBoats([]);
       }
     );
 
@@ -115,7 +120,7 @@ export default function AdminPanel() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const unsubscribe = onSnapshot(
+    const unsubscribe = createResilientListener(
       collection(db, 'reservations'),
       (snapshot) => {
         const reservationList: Reservation[] = [];
@@ -129,6 +134,11 @@ export default function AdminPanel() {
         });
         
         setReservations(reservationList);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Rezervasyon verilerini dinleme hatası:', error);
+        setReservations([]);
         setLoading(false);
       }
     );
