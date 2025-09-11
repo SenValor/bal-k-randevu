@@ -6,6 +6,8 @@ import Image from 'next/image';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { createResilientListener } from '@/lib/firestoreHelpers';
+import { detectBrowser, logBrowserComparison, forceFirestoreConnectionInChrome } from '@/lib/browserDetection';
+import { optimizeFirestoreForChrome, chromeSpecificRetry, detectChromePrivacySettings } from '@/lib/chromeFixes';
 
 interface CustomTour
  {
@@ -119,32 +121,100 @@ export default function RandevuPage() {
   useEffect(() => {
     setLoading(true); // Yükleme başladı
     setBoatsLoading(true);
-    const unsubscribe = onSnapshot(
-      collection(db, 'boats'),
-      (snapshot) => {
-        const boatList: Boat[] = [];
-        const initialImageStates: {[key: string]: boolean} = {};
-        
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          const boat = {
-            id: doc.id,
-            ...data,
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-            updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
-          } as Boat;
+    
+    // Browser diagnostics
+    const browser = detectBrowser();
+    logBrowserComparison();
+    
+    console.log(`🚢 Tekneler yükleniyor... (${browser.name})`);
+    
+    // Chrome için özel bağlantı zorlaması
+    const initializeBoats = async () => {
+      try {
+        if (browser.isChrome) {
+          // Chrome privacy settings kontrolü
+          const privacySettings = detectChromePrivacySettings();
+          console.log('🔒 Chrome Privacy Settings:', privacySettings);
           
-          boatList.push(boat);
-          initialImageStates[boat.id] = true; // Başlangıçta loading state true
+          if (privacySettings.thirdPartyCookiesBlocked) {
+            console.warn('🍪 Chrome third-party cookies blocked - bu Firestore bağlantısını etkileyebilir');
+          }
+          
+          if (privacySettings.adBlockerDetected) {
+            console.warn('🛡️ Ad blocker detected - Firebase subdomain\'leri engellenebilir');
+          }
+          
+          // Chrome cache temizliği
+          console.log('🗑️ Chrome cache temizleniyor...');
+          const { clearChromeFirestoreCache } = await import('@/lib/chromeFixes');
+          clearChromeFirestoreCache();
+          
+          await optimizeFirestoreForChrome();
+          await forceFirestoreConnectionInChrome();
+          console.log('🔧 Chrome için Firestore optimizasyonu tamamlandı');
+        }
+        
+        // Chrome için özel retry wrapper
+        const fetchBoatsOperation = () => new Promise<any>((resolve, reject) => {
+          const unsubscribe = createResilientListener(
+            collection(db, 'boats'),
+            (snapshot) => {
+              console.log(`📡 Tekne verisi alındı: ${snapshot.size} tekne`);
+              
+              if (snapshot.size === 0) {
+                console.warn('⚠️ Tekne verisi boş - yeniden deneniyor...');
+                reject(new Error('Empty snapshot'));
+                return;
+              }
+              
+              const boatList: Boat[] = [];
+              const initialImageStates: {[key: string]: boolean} = {};
+              
+              snapshot.forEach((doc) => {
+                const data = doc.data();
+                console.log(`⛵ Tekne işleniyor: ${doc.id}`, data);
+                
+                const boat = {
+                  id: doc.id,
+                  ...data,
+                  createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+                  updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
+                } as Boat;
+                
+                boatList.push(boat);
+                initialImageStates[boat.id] = true; // Başlangıçta loading state true
+              });
+              
+              console.log(`✅ İşlenen tekneler (${browser.name}):`, boatList);
+              
+              setBoats(boatList.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime()));
+              setImageLoadingStates(initialImageStates);
+              setBoatsLoading(false);
+              setLoading(false); // Yükleme bitti
+              
+              resolve(unsubscribe);
+            },
+            (error) => {
+              console.error(`❌ Snapshot error (${browser.name}):`, error);
+              reject(error);
+            }
+          );
         });
         
-        setBoats(boatList.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime()));
-        setImageLoadingStates(initialImageStates);
-        setBoatsLoading(false);
-        setLoading(false); // Yükleme bitti
-      },
-      (error) => {
-        console.error('Tekne verileri alınamadı:', error);
+        // Chrome için retry logic kullan
+        const unsubscribeOrRetry = browser.isChrome 
+          ? await chromeSpecificRetry(fetchBoatsOperation, 3, 1000)
+          : await fetchBoatsOperation();
+        
+        return unsubscribeOrRetry;
+      } catch (error) {
+        console.error(`💥 İnitialization hatası (${browser.name}):`, error);
+        
+        // Browser specific error handling
+        if (browser.isChrome) {
+          console.warn('🔧 Chrome\'da Firestore bağlantı sorunu tespit edildi');
+        }
+        
         // Hata durumunda varsayılan tekneleri kullan
         setBoats([
           {
@@ -168,11 +238,20 @@ export default function RandevuPage() {
             status: 'active'
           }
         ]);
-        setLoading(false); // Yükleme bitti (hata durumunda da)
+        
+        setBoatsLoading(false);
+        setLoading(false);
+        return () => {};
       }
-    );
+    };
 
-    return () => unsubscribe();
+    const unsubscribePromise = initializeBoats();
+    
+    return () => {
+      unsubscribePromise.then(unsubscribe => {
+        if (unsubscribe) unsubscribe();
+      });
+    };
   }, []);
 
   // Sayfa yüklendiğinde üstte başla
@@ -1566,11 +1645,20 @@ export default function RandevuPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-4xl mx-auto">
                   {boats
-                    .filter(boat => !selectedDate || isDateInBoatRange(selectedDate, boat))
+                    .filter(boat => 
+                      (boat.isActive || boat.status === 'coming-soon') && // ✅ Aktif tekneler + "Çok yakında" tekneler
+                      (!selectedDate || isDateInBoatRange(selectedDate, boat))
+                    )
                     .map((boat) => (
                     <button
                       key={boat.id}
                       onClick={() => {
+                        // "Çok yakında" teknesi kontrolü
+                        if (boat.status === 'coming-soon') {
+                          alert(`🚢 ${boat.name}\n\n${boat.statusMessage || 'Bu tekne çok yakında hizmetinizde olacak!'}\n\nŞu anda rezervasyon alınmamaktadır.`);
+                          return;
+                        }
+                        
                         if (selectedDate && !isDateInBoatRange(selectedDate, boat)) {
                           alert(`📅 Bu tekne seçili tarih için uygun değil.\n\nTekne: ${boat.name}\nSeçili Tarih: ${new Date(selectedDate).toLocaleDateString('tr-TR')}\n\nLütfen farklı bir tarih seçin veya başka bir tekne tercih edin.`);
                           return;
@@ -1578,7 +1666,9 @@ export default function RandevuPage() {
                         handleSelectBoat(boat.id);
                       }}
                       className={`relative flex flex-col items-start rounded-xl overflow-hidden border-2 transition-all duration-300 transform hover:scale-103 ${
-                        selectedDate && !isDateInBoatRange(selectedDate, boat)
+                        boat.status === 'coming-soon'
+                          ? 'border-yellow-400 bg-gradient-to-br from-yellow-50 to-orange-50 shadow-md'
+                          : selectedDate && !isDateInBoatRange(selectedDate, boat)
                           ? 'border-red-300 bg-red-50 opacity-60 cursor-not-allowed'
                           : selectedBoat?.id === boat.id
                           ? 'border-blue-500 bg-blue-50 shadow-lg'
@@ -3708,6 +3798,7 @@ export default function RandevuPage() {
           </svg>
         </a>
       </div>
+
     </div>
   );
 } 

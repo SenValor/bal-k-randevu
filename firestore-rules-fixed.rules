@@ -56,12 +56,30 @@ service cloud.firestore {
       allow update, delete: if request.auth != null;  // 🔒 Sadece admin güncelleyebilir/silebilir
     }
     
+    // 🚢 TEKNELER - Herkes okuyabilir (rezervasyon için gerekli)
+    match /boats/{boatId} {
+      allow read: if true;  // ✅ Herkes tekne bilgilerini okuyabilir
+      allow write: if request.auth != null;  // 🔒 Sadece admin değiştirebilir
+    }
+    
+    // 📊 STATISTICS - Herkes okuyabilir (sayfa için gerekli) 
+    match /statistics/{statId} {
+      allow read: if true;  // ✅ Herkes istatistikleri okuyabilir
+      allow write: if request.auth != null;  // 🔒 Sadece admin değiştirebilir
+    }
+    
+    // 🚫 BLACKLIST - Herkes okuyabilir (kontrol için gerekli)
+    match /blacklist/{blacklistId} {
+      allow read: if true;  // ✅ Herkes blacklist kontrolü yapabilir
+      allow write: if request.auth != null;  // 🔒 Sadece admin değiştirebilir
+    }
+    
     // Admin profilleri - sadece authenticated
     match /admin_profiles/{profileId} {
       allow read, write: if request.auth != null;
     }
     
-    // Diğer ayarlar - sadece authenticated
+    // Diğer ayarlar - sadece authenticated (son satır olarak kalır)
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
