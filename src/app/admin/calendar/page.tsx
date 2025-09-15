@@ -104,7 +104,7 @@ export default function AdminCalendarPage() {
             where('selectedBoat', '==', selectedBoatFilter)
           );
         } else {
-          // Tüm tekneler
+          // Tüm tekneler - tüm rezervasyonları getir
           q = query(
             collection(db, 'reservations'),
             where('selectedDate', '>=', firstDay),

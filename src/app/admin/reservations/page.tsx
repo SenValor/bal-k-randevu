@@ -474,7 +474,13 @@ function ReservationsContent() {
     
     // Tekne filtresi
     if (selectedBoatFilter) {
-      filtered = filtered.filter(r => r.selectedBoat === selectedBoatFilter);
+      if (selectedBoatFilter === 'unassigned') {
+        // Tekne atanmamış rezervasyonları göster
+        filtered = filtered.filter(r => !r.selectedBoat);
+      } else {
+        // Belirli tekneye ait rezervasyonları göster
+        filtered = filtered.filter(r => r.selectedBoat === selectedBoatFilter);
+      }
     }
     
     // Arama filtresi
@@ -993,6 +999,7 @@ Anlayışınız için teşekkürler. 🙏`
                       {boat.name} ({getBoatOrder(boat.id)})
                     </option>
                   ))}
+                  <option value="unassigned">Tekne Atanmamış</option>
                 </select>
               </div>
             </div>
@@ -1344,9 +1351,13 @@ Anlayışınız için teşekkürler. 🙏`
                       <p><strong>Randevu Tarihi:</strong> {new Date(reservation.selectedDate).toLocaleDateString('tr-TR')}</p>
                       <p><strong>Saat:</strong> {reservation.selectedTime}</p>
                       <p><strong>Tur Tipi:</strong> {getReservationTourType(reservation)}</p>
-                      {reservation.boatName && (
-                        <p><strong>Tekne:</strong> {reservation.boatName}</p>
-                      )}
+                      <p><strong>Tekne:</strong> {
+                        reservation.boatName ? 
+                          `${reservation.boatName} (${getBoatOrder(reservation.selectedBoat || '')})` : 
+                          reservation.selectedBoat ? 
+                            `${boats.find(b => b.id === reservation.selectedBoat)?.name || 'Bilinmeyen'} (${getBoatOrder(reservation.selectedBoat)})` :
+                            '❌ Tekne atanmamış'
+                      }</p>
                       <p><strong>Koltuklar:</strong> {reservation.selectedSeats.join(', ')}</p>
                     </div>
                   </div>

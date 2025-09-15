@@ -401,6 +401,11 @@ export default function AddReservationPage() {
       return;
     }
     
+    if (!newReservation.selectedBoat) {
+      alert('Lütfen tekne seçin');
+      return;
+    }
+    
     // Özel turlar için koltuk kontrolü farklı
     if (isSpecialTour(newReservation.tourType)) {
       // Özel turlarda tüm koltuklar otomatik seçili olmalı
@@ -433,6 +438,7 @@ export default function AddReservationPage() {
       const isSpecial = isSpecialTour(newReservation.tourType);
       const customTour = getSelectedCustomTour(newReservation.tourType);
       const capacity = customTour ? customTour.capacity : 12;
+      const selectedBoat = boats.find(b => b.id === newReservation.selectedBoat);
       
       const reservationData = {
         reservationNumber: generateReservationNumber(),
@@ -440,6 +446,8 @@ export default function AddReservationPage() {
         selectedDate: newReservation.selectedDate,
         selectedTime: newReservation.selectedTime,
         selectedSeats: newReservation.selectedSeats,
+        selectedBoat: newReservation.selectedBoat,
+        boatName: selectedBoat?.name || '',
         isPrivateTour: isSpecial,
         tourType: newReservation.tourType,
         priceOption: newReservation.priceOption,
@@ -793,8 +801,38 @@ export default function AddReservationPage() {
               </select>
             </div>
 
+            {/* Tekne Seçimi */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tekne Seçimi
+              </label>
+              
+              <select
+                value={newReservation.selectedBoat}
+                onChange={(e) => setNewReservation(prev => ({
+                  ...prev,
+                  selectedBoat: e.target.value,
+                  selectedSeats: [] // Tekne değiştiğinde seçilen koltukları temizle
+                }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              >
+                <option value="">Tekne seçin</option>
+                {boats.map(boat => (
+                  <option key={boat.id} value={boat.id}>
+                    {boat.name} ({getBoatOrder(boat.id)})
+                  </option>
+                ))}
+              </select>
+              
+              {newReservation.selectedBoat && (
+                <div className="mt-2 text-sm text-blue-600">
+                  ✅ Seçilen tekne: {boats.find(b => b.id === newReservation.selectedBoat)?.name} ({getBoatOrder(newReservation.selectedBoat)})
+                </div>
+              )}
+            </div>
+
             {/* Koltuk Seçimi */}
-            {newReservation.selectedDate && newReservation.selectedTime && (
+            {newReservation.selectedDate && newReservation.selectedTime && newReservation.selectedBoat && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Koltuk Seçimi ({newReservation.selectedSeats.length}/{newReservation.guestCount})
