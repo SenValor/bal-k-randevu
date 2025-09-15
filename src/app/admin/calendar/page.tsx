@@ -54,6 +54,11 @@ export default function AdminCalendarPage() {
   const [boats, setBoats] = useState<Boat[]>([]);
   const [selectedBoatFilter, setSelectedBoatFilter] = useState<string>(''); // '' = Tüm Tekneler
 
+  // Tekne filtresi değiştiğinde seçili günü temizle
+  useEffect(() => {
+    setSelectedDay(null);
+  }, [selectedBoatFilter]);
+
   // Tekneleri çek
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -85,90 +90,95 @@ export default function AdminCalendarPage() {
 
   // Ayın rezervasyonlarını çek
   useEffect(() => {
-    const fetchMonthReservations = async () => {
-      setLoading(true);
-      try {
-        const year = currentMonth.getFullYear();
-        const month = currentMonth.getMonth();
-        const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-        const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
+    setLoading(true);
+    
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
+    
+    // Tekne filtresi ile query oluştur
+    let q;
+    if (selectedBoatFilter) {
+      // Belirli tekne seçildi
+      console.log('🚢 Tekne filtresi aktif:', selectedBoatFilter);
+      q = query(
+        collection(db, 'reservations'),
+        where('selectedDate', '>=', firstDay),
+        where('selectedDate', '<=', lastDay),
+        where('selectedBoat', '==', selectedBoatFilter)
+      );
+    } else {
+      // Tüm tekneler - tüm rezervasyonları getir
+      console.log('🚢 Tüm tekneler görüntüleniyor');
+      q = query(
+        collection(db, 'reservations'),
+        where('selectedDate', '>=', firstDay),
+        where('selectedDate', '<=', lastDay)
+      );
+    }
+    
+    // onSnapshot ile real-time dinleme
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const allReservations: Reservation[] = [];
+      const dayStats: {[key: string]: DayStats} = {};
+      
+      console.log('📊 Rezervasyon sorgu sonucu:', {
+        tekneFiltresi: selectedBoatFilter || 'Tümü',
+        bulunanRezervasyon: snapshot.size,
+        tarihAraligi: `${firstDay} - ${lastDay}`
+      });
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const reservation: Reservation = {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+        } as Reservation;
         
-        // Tekne filtresi ile query oluştur
-        let q;
-        if (selectedBoatFilter) {
-          // Belirli tekne seçildi
-          q = query(
-            collection(db, 'reservations'),
-            where('selectedDate', '>=', firstDay),
-            where('selectedDate', '<=', lastDay),
-            where('selectedBoat', '==', selectedBoatFilter)
-          );
-        } else {
-          // Tüm tekneler - tüm rezervasyonları getir
-          q = query(
-            collection(db, 'reservations'),
-            where('selectedDate', '>=', firstDay),
-            where('selectedDate', '<=', lastDay)
-          );
+        allReservations.push(reservation);
+        
+        const dateKey = reservation.selectedDate;
+        if (!dayStats[dateKey]) {
+          dayStats[dateKey] = {
+            total: 0,
+            pending: 0,
+            confirmed: 0,
+            completed: 0,
+            cancelled: 0,
+            revenue: 0,
+            seats: 0,
+            reservations: []
+          };
         }
         
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          const allReservations: Reservation[] = [];
-          const dayStats: {[key: string]: DayStats} = {};
-          
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            const reservation: Reservation = {
-              id: doc.id,
-              ...data,
-              createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
-            } as Reservation;
-            
-            allReservations.push(reservation);
-            
-            const dateKey = reservation.selectedDate;
-            if (!dayStats[dateKey]) {
-              dayStats[dateKey] = {
-                total: 0,
-                pending: 0,
-                confirmed: 0,
-                completed: 0,
-                cancelled: 0,
-                revenue: 0,
-                seats: 0,
-                reservations: []
-              };
-            }
-            
-            dayStats[dateKey].total++;
-            dayStats[dateKey][reservation.status]++;
-            dayStats[dateKey].reservations.push(reservation);
-            
-            if (reservation.status === 'completed') {
-              dayStats[dateKey].revenue += reservation.totalAmount || 0;
-            }
-            
-            if (reservation.isPrivateTour) {
-              dayStats[dateKey].seats += 12;
-            } else {
-              dayStats[dateKey].seats += reservation.selectedSeats?.length || 0;
-            }
-          });
-          
-          setReservations(allReservations);
-          setMonthStats(dayStats);
-          setLoading(false);
-        });
+        dayStats[dateKey].total++;
+        dayStats[dateKey][reservation.status]++;
+        dayStats[dateKey].reservations.push(reservation);
+        
+        if (reservation.status === 'completed') {
+          dayStats[dateKey].revenue += reservation.totalAmount || 0;
+        }
+        
+        if (reservation.isPrivateTour) {
+          dayStats[dateKey].seats += 12;
+        } else {
+          dayStats[dateKey].seats += reservation.selectedSeats?.length || 0;
+        }
+      });
+      
+      setReservations(allReservations);
+      setMonthStats(dayStats);
+      setLoading(false);
+    }, (error) => {
+      console.error('Rezervasyonlar yüklenirken hata:', error);
+      setLoading(false);
+    });
 
-        return () => unsubscribe();
-      } catch (error) {
-        console.error('Rezervasyonlar yüklenirken hata:', error);
-        setLoading(false);
-      }
-    };
-
-    fetchMonthReservations();
-  }, [currentMonth, selectedBoatFilter]); // selectedBoatFilter dependency eklendi
+    // Cleanup: önceki listener'ı kapat
+    return () => unsubscribe();
+  }, [currentMonth, selectedBoatFilter]);
 
   // Takvim günlerini oluştur
   const getCalendarDays = (month: Date) => {
@@ -240,8 +250,17 @@ export default function AdminCalendarPage() {
     if (isToday) return 'bg-blue-100 border-2 border-blue-500 text-blue-800 font-bold';
     if (!stats || stats.total === 0) return 'text-gray-700 hover:bg-gray-100';
     
-    // Tekne filtresi varsa tek tekne (24), yoksa tüm tekneler (boats.length * 24)
-    const maxSeats = selectedBoatFilter ? 24 : (boats.length * 24 || 24);
+    // Tekne bazlı maksimum koltuk hesaplama
+    let maxSeats = 24; // Varsayılan tek tekne kapasitesi
+    
+    if (selectedBoatFilter) {
+      // Belirli tekne seçildi - o teknenin kapasitesi
+      maxSeats = 24;
+    } else {
+      // Tüm tekneler - aktif tekne sayısı * 24
+      maxSeats = boats.filter(boat => boat.isActive).length * 24 || 24;
+    }
+    
     const occupancyRate = stats.seats / maxSeats;
     
     if (occupancyRate >= 1) return 'bg-red-100 text-red-800 border border-red-300';
@@ -385,7 +404,7 @@ export default function AdminCalendarPage() {
                             </div>
                             <div className="flex items-center justify-between">
                               <span>💺</span>
-                              <span className="font-medium">{stats.seats}/{selectedBoatFilter ? 24 : (boats.length * 24 || 24)}</span>
+                              <span className="font-medium">{stats.seats}/{selectedBoatFilter ? 24 : (boats.filter(boat => boat.isActive).length * 24 || 24)}</span>
                             </div>
                             {stats.revenue > 0 && (
                               <div className="text-green-700 font-bold text-xs">

@@ -1141,43 +1141,49 @@ export default function RandevuPage() {
     }
   };
 
-  // Dolu koltukları çek
+  // Dolu koltukları çek - SADECE SEÇİLİ TEKNE İÇİN
   const fetchOccupiedSeats = async (date: string, time: string) => {
-    if (!date || !time) return;
+    if (!date || !time || !selectedBoat?.id) return;
     
     try {
+      // Sadece seçili tekne için rezervasyonları çek
       const q = query(
         collection(db, 'reservations'),
         where('selectedDate', '==', date),
-        where('selectedTime', '==', time)
+        where('selectedTime', '==', time),
+        where('selectedBoat', '==', selectedBoat.id)
       );
       
       const querySnapshot = await getDocs(q);
       const occupied: string[] = [];
+      const currentBoatOrder = getBoatOrder(selectedBoat.id);
+      const currentPrefix = `${currentBoatOrder}_`;
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         // Sadece onaylı ve bekleyen rezervasyonları dikkate al
         if (data.status === 'confirmed' || data.status === 'pending') {
           if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
-            occupied.push(...data.selectedSeats);
+            // Sadece bu tekneye ait koltukları ekle
+            data.selectedSeats.forEach((seat: string) => {
+              if (seat.startsWith(currentPrefix) || (!seat.includes('_') && currentBoatOrder === 'T1')) {
+                occupied.push(seat);
+              }
+            });
           }
           
-                      if (data.isPrivateTour && data.selectedBoat) {
-              // Özel tur için ilgili teknenin tüm koltukları dolu sayılır
-              const boatId = data.selectedBoat;
-              const boatOrder = getBoatOrder(boatId);
-              const prefix = `${boatOrder}_`;
-              const allSeats = [
-                `${prefix}IS1`, `${prefix}IS2`, `${prefix}IS3`, `${prefix}IS4`, `${prefix}IS5`, `${prefix}IS6`,
-                `${prefix}SA1`, `${prefix}SA2`, `${prefix}SA3`, `${prefix}SA4`, `${prefix}SA5`, `${prefix}SA6`
-              ];
-              allSeats.forEach(seat => {
-                if (!occupied.includes(seat)) {
-                  occupied.push(seat);
-                }
-              });
-            }
+          if (data.isPrivateTour && data.selectedBoat === selectedBoat.id) {
+            // Özel tur için sadece bu teknenin tüm koltukları dolu sayılır
+            const allSeats = [
+              `${currentPrefix}IS1`, `${currentPrefix}IS2`, `${currentPrefix}IS3`, `${currentPrefix}IS4`, `${currentPrefix}IS5`, `${currentPrefix}IS6`,
+              `${currentPrefix}SA1`, `${currentPrefix}SA2`, `${currentPrefix}SA3`, `${currentPrefix}SA4`, `${currentPrefix}SA5`, `${currentPrefix}SA6`
+            ];
+            allSeats.forEach(seat => {
+              if (!occupied.includes(seat)) {
+                occupied.push(seat);
+              }
+            });
+          }
         }
       });
       

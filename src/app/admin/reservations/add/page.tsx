@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
@@ -22,7 +22,6 @@ interface CustomTour {
   description: string;
   isActive: boolean;
   createdAt: Date;
-  // Çalışma saatleri
   customSchedule?: {
     enabled: boolean;
     timeSlots: TimeSlot[];
@@ -30,13 +29,40 @@ interface CustomTour {
   };
 }
 
-interface NewReservation {
-  tourType: string; // 'normal' | 'private' | 'fishing-swimming' | custom tour ID
+interface Boat {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  seatingLayout?: 'single' | 'double';
+}
+
+interface Reservation {
+  id: string;
+  tourType: string;
   priceOption: 'own-equipment' | 'with-equipment';
   guestCount: number;
   selectedDate: string;
   selectedTime: string;
-  selectedBoat: string; // Tekne ID'si
+  selectedBoat: string;
+  selectedSeats: string[];
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  totalPrice: number;
+  createdAt: Date;
+  boatName?: string;
+}
+
+interface NewReservation {
+  tourType: string;
+  priceOption: 'own-equipment' | 'with-equipment';
+  guestCount: number;
+  selectedDate: string;
+  selectedTime: string;
+  selectedBoat: string;
   selectedSeats: string[];
   guestInfo: {
     name: string;
@@ -48,23 +74,23 @@ interface NewReservation {
   paymentStatus: 'waiting' | 'received' | 'confirmed';
 }
 
-export default function AddReservationPage() {
+function AddReservationPage() {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
 
-  // Yerel tarih formatı için yardımcı fonksiyon
   const formatLocalDate = (date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
+
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [dateOccupancy, setDateOccupancy] = useState<{[key: string]: number}>({});
   const [occupiedDates, setOccupiedDates] = useState<{[key: string]: number}>({});
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
-  const [boats, setBoats] = useState<any[]>([]); // Tekne bilgileri için
+  const [boats, setBoats] = useState<any[]>([]);
   
   const [newReservation, setNewReservation] = useState<NewReservation>({
     tourType: 'normal',
@@ -86,14 +112,12 @@ export default function AddReservationPage() {
 
   const availableTimes = ['07:00-13:00', '14:00-20:00'];
   
-  // Tekne sırasını bul (randevu sayfasındaki getBoatOrder mantığı)
   const getBoatOrder = (boatId: string): string => {
     const sortedBoats = boats.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
     const index = sortedBoats.findIndex(boat => boat.id === boatId);
     return index >= 0 ? `T${index + 1}` : 'T1';
   };
 
-  // Tekne bazlı koltuk düzeni oluştur
   const getSeatingLayout = () => {
     if (!newReservation.selectedBoat) {
       return {
@@ -113,7 +137,6 @@ export default function AddReservationPage() {
   const iskeleSeat = seatingLayout.iskele;
   const sancakSeat = seatingLayout.sancak;
 
-  // Randevu numarası oluşturma
   const generateReservationNumber = () => {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
@@ -122,7 +145,6 @@ export default function AddReservationPage() {
     return `RV-${year}${month}${day}-${timestamp}`;
   };
 
-  // Firebase'den özel turları çek
   const fetchCustomTours = async () => {
     try {
       const customToursDoc = await getDoc(doc(db, 'settings', 'customTours'));
@@ -138,11 +160,20 @@ export default function AddReservationPage() {
     }
   };
 
-  // Tarih doluluk hesaplama
   const calculateDateOccupancy = async () => {
+    if (!newReservation.selectedBoat) {
+      setDateOccupancy({});
+      setOccupiedDates({});
+      return;
+    }
+
     try {
       const reservationsRef = collection(db, 'reservations');
-      const snapshot = await getDocs(reservationsRef);
+      const q = query(
+        reservationsRef,
+        where('selectedBoat', '==', newReservation.selectedBoat)
+      );
+      const snapshot = await getDocs(q);
       const occupancyData: {[key: string]: number} = {};
       const dateOccupancyData: {[key: string]: number} = {};
       
@@ -152,8 +183,13 @@ export default function AddReservationPage() {
           const dateKey = `${data.selectedDate}-${data.selectedTime}`;
           const dateOnlyKey = data.selectedDate;
           
-          occupancyData[dateKey] = (occupancyData[dateKey] || 0) + data.guestCount;
-          dateOccupancyData[dateOnlyKey] = (dateOccupancyData[dateOnlyKey] || 0) + data.guestCount;
+          if (data.isPrivateTour) {
+            occupancyData[dateKey] = 12;
+            dateOccupancyData[dateOnlyKey] = (dateOccupancyData[dateOnlyKey] || 0) + 12;
+          } else {
+            occupancyData[dateKey] = (occupancyData[dateKey] || 0) + (data.selectedSeats?.length || data.guestCount);
+            dateOccupancyData[dateOnlyKey] = (dateOccupancyData[dateOnlyKey] || 0) + (data.selectedSeats?.length || data.guestCount);
+          }
         }
       });
       
@@ -164,25 +200,41 @@ export default function AddReservationPage() {
     }
   };
 
-  // Dolu koltukları getir
   const fetchOccupiedSeats = async (date: string, time: string) => {
-    if (!date || !time) return;
+    if (!date || !time || !newReservation.selectedBoat) return;
     
     try {
       const reservationsRef = collection(db, 'reservations');
       const q = query(
         reservationsRef,
         where('selectedDate', '==', date),
-        where('selectedTime', '==', time)
+        where('selectedTime', '==', time),
+        where('selectedBoat', '==', newReservation.selectedBoat)
       );
       
       const snapshot = await getDocs(q);
       const occupied: string[] = [];
+      const currentBoatOrder = getBoatOrder(newReservation.selectedBoat);
+      const currentPrefix = `${currentBoatOrder}_`;
       
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         if (data.status === 'confirmed' || data.status === 'pending') {
-          occupied.push(...data.selectedSeats);
+          if (data.isPrivateTour) {
+            const allSeats = [
+              `${currentPrefix}IS1`, `${currentPrefix}IS2`, `${currentPrefix}IS3`, 
+              `${currentPrefix}IS4`, `${currentPrefix}IS5`, `${currentPrefix}IS6`,
+              `${currentPrefix}SA1`, `${currentPrefix}SA2`, `${currentPrefix}SA3`, 
+              `${currentPrefix}SA4`, `${currentPrefix}SA5`, `${currentPrefix}SA6`
+            ];
+            occupied.push(...allSeats);
+          } else if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
+            data.selectedSeats.forEach((seat: string) => {
+              if (seat.startsWith(currentPrefix) || (!seat.includes('_') && currentBoatOrder === 'T1')) {
+                occupied.push(seat);
+              }
+            });
+          }
         }
       });
       
@@ -192,7 +244,6 @@ export default function AddReservationPage() {
     }
   };
 
-  // Yardımcı fonksiyonlar
   const isSpecialTour = (type: string) => {
     return type === 'private' || type === 'fishing-swimming' || customTours.some(tour => tour.id === type);
   };
@@ -201,104 +252,22 @@ export default function AddReservationPage() {
     return customTours.find(tour => tour.id === type);
   };
 
-  // Takvim fonksiyonları
-  const getCalendarDays = (month: Date) => {
-    const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
-    const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-    const startOfCalendar = new Date(startOfMonth);
-    startOfCalendar.setDate(startOfCalendar.getDate() - ((startOfMonth.getDay() + 6) % 7));
-    
-    const days = [];
-    const currentDate = new Date(startOfCalendar);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    for (let i = 0; i < 42; i++) {
-      const isCurrentMonth = currentDate.getMonth() === month.getMonth();
-      const isDisabled = currentDate < today;
-      const dateString = formatLocalDate(currentDate);
-      
-      days.push({
-        day: currentDate.getDate(),
-        date: dateString,
-        isCurrentMonth,
-        isDisabled
-      });
-      
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    return days;
-  };
-
-  const nextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
-  };
-
-  const prevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
-  };
-
-  // Tarih veya saat değiştiğinde dolu koltukları güncelle
-  useEffect(() => {
-    if (newReservation.selectedDate && newReservation.selectedTime) {
-      fetchOccupiedSeats(newReservation.selectedDate, newReservation.selectedTime);
-    }
-  }, [newReservation.selectedDate, newReservation.selectedTime]);
-
-  // Özel tur seçildiğinde otomatik ayarlamalar
-  useEffect(() => {
-    const isSpecial = isSpecialTour(newReservation.tourType);
-    
-    if (isSpecial) {
-      // Tekne seçiliyse tekne ID'si ile birlikte koltukları oluştur
-      const layout = getSeatingLayout();
-      const allSeats = [...layout.iskele, ...layout.sancak];
-      const customTour = getSelectedCustomTour(newReservation.tourType);
-      const capacity = customTour ? customTour.capacity : 12;
-      
-      setNewReservation(prev => ({
-        ...prev,
-        guestCount: capacity,
-        selectedSeats: allSeats
-      }));
-    } else if (newReservation.tourType === 'normal') {
-      // Normal tur seçildiğinde temizle
-      setNewReservation(prev => ({
-        ...prev,
-        guestCount: 1,
-        selectedSeats: []
-      }));
-    }
-  }, [newReservation.tourType, customTours]); // Sadece tur tipi değişiminde çalışsın
-
-  // Tekne değiştiğinde koltuk seçimini güncelle
-  useEffect(() => {
-    if (newReservation.selectedBoat) {
-      // Normal tur için mevcut seçilen koltukları güncelle
-      if (!isSpecialTour(newReservation.tourType) && newReservation.selectedSeats.length > 0) {
-        // Mevcut koltukları temizle ve yeniden seçilmesini bekle
-        setNewReservation(prev => ({
-          ...prev,
-          selectedSeats: []
-        }));
-      }
-      // Özel tur için otomatik seçim zaten yukarıdaki useEffect'te yapılıyor
-    }
-  }, [newReservation.selectedBoat]);
-
-  // Tekneleri çek
   const fetchBoats = async () => {
     try {
       const boatsRef = collection(db, 'boats');
       const q = query(boatsRef, where('isActive', '==', true));
       const snapshot = await getDocs(q);
       
-      const boatList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
-      }));
+      const boatList = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          isActive: data.isActive || false,
+          seatingLayout: data.seatingLayout || 'single',
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+        };
+      });
       
       setBoats(boatList);
     } catch (error) {
@@ -306,120 +275,521 @@ export default function AddReservationPage() {
     }
   };
 
-  // Sayfa yüklendiğinde doluluk hesapla ve özel turları çek
   useEffect(() => {
-    calculateDateOccupancy();
     fetchCustomTours();
     fetchBoats();
   }, []);
 
-  // Koltuk durumu
-  const getSeatStatus = (seat: string): 'available' | 'occupied' | 'selected' => {
-    if (occupiedSeats.includes(seat)) return 'occupied';
-    if (newReservation.selectedSeats.includes(seat)) return 'selected';
-    return 'available';
+  useEffect(() => {
+    if (newReservation.selectedBoat) {
+      calculateDateOccupancy();
+    }
+  }, [newReservation.selectedBoat]);
+
+  useEffect(() => {
+    if (newReservation.selectedDate && newReservation.selectedTime && newReservation.selectedBoat) {
+      fetchOccupiedSeats(newReservation.selectedDate, newReservation.selectedTime);
+    }
+  }, [newReservation.selectedDate, newReservation.selectedTime, newReservation.selectedBoat]);
+
+  // Ay değiştirme fonksiyonları
+  const nextMonth = () => {
+    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
   };
 
-  // Koltuk rengi (ana sayfadaki gibi)
-  const getSeatColor = (status: string): string => {
-    switch (status) {
-      case 'available': return 'bg-gradient-to-br from-blue-400 to-blue-600 hover:from-blue-500 hover:to-blue-700 border-blue-500';
-      case 'occupied': return 'bg-red-500 border-red-600 cursor-not-allowed';
-      case 'selected': return 'bg-gradient-to-br from-green-400 to-green-600 hover:from-green-500 hover:to-green-700 border-green-500';
-      default: return 'bg-gray-400 border-gray-500';
-    }
+  const prevMonth = () => {
+    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   };
 
-  // Koltuk seçimi
-  const handleSeatSelection = (seatId: string) => {
-    const status = getSeatStatus(seatId);
-    if (status === 'occupied') return;
-
-    // Özel turlar için koltuk seçimini engelle
-    if (isSpecialTour(newReservation.tourType)) {
-      return; // Sessizce geç, popup çıkarma
-    }
-
-    if (status === 'selected') {
-      // Koltuk seçiliyse kaldır
-      setNewReservation(prev => ({
-        ...prev,
-        selectedSeats: prev.selectedSeats.filter(s => s !== seatId)
-      }));
-    } else {
-      // Koltuk seçili değilse ekle (kişi sayısı kadar)
-      if (newReservation.selectedSeats.length < newReservation.guestCount) {
-        setNewReservation(prev => ({
-          ...prev,
-          selectedSeats: [...prev.selectedSeats, seatId]
-        }));
-      } else {
-        alert('Kişi sayısından fazla koltuk seçemezsiniz!');
-      }
-    }
-  };
-
-  // Koltuk render (ana sayfadaki gibi)
-  const renderSeat = (seatId: string) => {
-    const isOccupied = occupiedSeats.includes(seatId);
-    const isSelected = newReservation.selectedSeats.includes(seatId);
-    const canSelect = !isOccupied && (!isSelected && newReservation.selectedSeats.length < newReservation.guestCount || isSelected);
+  // Takvim günlerini hesapla
+  const getCalendarDays = (month: Date) => {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
     
+    const firstDay = new Date(year, monthIndex, 1);
+    const lastDay = new Date(year, monthIndex + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = (firstDay.getDay() + 6) % 7; // Pazartesi = 0
+    
+    const days = [];
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    
+    // Önceki ayın günleri
+    const prevMonth = new Date(year, monthIndex - 1, 0);
+    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+      const day = prevMonth.getDate() - i;
+      const prevYear = monthIndex === 0 ? year - 1 : year;
+      const prevMonthIndex = monthIndex === 0 ? 11 : monthIndex - 1;
+      const dateStr = `${prevYear}-${String(prevMonthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      days.push({
+        day,
+        date: dateStr,
+        isCurrentMonth: false,
+        isDisabled: true
+      });
+    }
+    
+    // Bu ayın günleri
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      days.push({
+        day,
+        date: dateStr,
+        isCurrentMonth: true,
+        isDisabled: dateStr < todayStr
+      });
+    }
+    
+    // Sonraki ayın günleri (grid'i doldur)
+    const remainingDays = 42 - days.length; // 6 hafta x 7 gün
+    for (let day = 1; day <= remainingDays; day++) {
+      const nextYear = monthIndex === 11 ? year + 1 : year;
+      const nextMonthIndex = monthIndex === 11 ? 0 : monthIndex + 1;
+      const dateStr = `${nextYear}-${String(nextMonthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      days.push({
+        day,
+        date: dateStr,
+        isCurrentMonth: false,
+        isDisabled: true
+      });
+    }
+    
+    return days;
+  };
+
+  // Takvim render fonksiyonu
+  const renderCalendar = () => {
+    if (!newReservation.selectedBoat) return null;
+
+    const calendarDays = getCalendarDays(currentMonth);
+
     return (
-      <button
-        key={seatId}
-        onClick={() => handleSeatSelection(seatId)}
-        disabled={isOccupied || isSpecialTour(newReservation.tourType)}
-        className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center text-white text-xs sm:text-sm font-bold transition-all duration-300 shadow-lg border-2 ${getSeatColor(getSeatStatus(seatId))} ${
-          (!canSelect && !isOccupied && !isSelected) || isSpecialTour(newReservation.tourType) ? 'opacity-50 cursor-not-allowed' : ''
-        }`}
-        title={
-          isSpecialTour(newReservation.tourType)
-            ? 'Özel tur - tüm koltuklar otomatik seçilmiştir'
-            : isOccupied 
-            ? 'Bu koltuk dolu' 
-            : isSelected 
-            ? 'Seçimi kaldırmak için tıklayın'
-            : newReservation.selectedSeats.length >= newReservation.guestCount
-            ? `Maksimum ${newReservation.guestCount} koltuk seçebilirsiniz`
-            : 'Koltuğu seçmek için tıklayın'
-        }
-      >
-        <div className="relative">
-          <span className="relative z-10">{seatId.slice(-1)}</span>
-          <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-6 h-0.5 bg-black/30 rounded-full"></div>
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+        <h3 className="text-xl font-bold text-slate-800 mb-4 text-center">📅 Tarih Seçin</h3>
+        
+        {/* Takvim Başlığı */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={prevMonth}
+            className="w-8 h-8 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-all duration-300"
+          >
+            <span className="text-blue-600 font-bold">‹</span>
+          </button>
+          
+          <h4 className="text-lg font-bold text-slate-800">
+            {currentMonth.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
+          </h4>
+          
+          <button
+            onClick={nextMonth}
+            className="w-8 h-8 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-all duration-300"
+          >
+            <span className="text-blue-600 font-bold">›</span>
+          </button>
         </div>
-      </button>
+
+        {/* Hafta Günleri */}
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((day) => (
+            <div key={day} className="text-center py-2">
+              <span className="text-xs font-bold text-slate-600">{day}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Takvim Günleri */}
+        <div className="grid grid-cols-7 gap-1">
+          {calendarDays.map((dayInfo, index) => {
+            const occupancy = occupiedDates[dayInfo.date] || 0;
+            const isSelected = newReservation.selectedDate === dayInfo.date;
+            const isFullyOccupied = occupancy >= 24;
+            const isPartiallyOccupied = occupancy > 0 && occupancy < 24;
+            
+            let buttonClass = "h-10 w-10 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300 border ";
+            
+            if (dayInfo.isDisabled || !dayInfo.isCurrentMonth) {
+              buttonClass += "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200";
+            } else if (isSelected) {
+              buttonClass += "bg-gradient-to-br from-green-400 to-green-600 text-white border-green-500 scale-110 shadow-lg";
+            } else if (isFullyOccupied) {
+              buttonClass += "bg-gradient-to-br from-red-500 to-red-600 text-white border-red-500 cursor-not-allowed";
+            } else if (isPartiallyOccupied) {
+              buttonClass += "bg-gradient-to-br from-orange-400 to-orange-500 text-white border-orange-500 hover:scale-105 cursor-pointer";
+            } else {
+              buttonClass += "bg-blue-50 text-slate-800 border-blue-200 hover:bg-blue-100 hover:scale-105 cursor-pointer";
+            }
+            
+            return (
+              <button
+                key={index}
+                onClick={() => {
+                  if (!dayInfo.isDisabled && dayInfo.isCurrentMonth && !isFullyOccupied) {
+                    setNewReservation(prev => ({
+                      ...prev,
+                      selectedDate: dayInfo.date,
+                      selectedSeats: []
+                    }));
+                  }
+                }}
+                disabled={dayInfo.isDisabled || !dayInfo.isCurrentMonth || isFullyOccupied}
+                className={buttonClass}
+                title={
+                  !dayInfo.isCurrentMonth ? 'Diğer ay' :
+                  dayInfo.isDisabled ? 'Geçmiş tarih' :
+                  isFullyOccupied ? `${dayInfo.day} - Tamamen dolu` :
+                  isPartiallyOccupied ? `${dayInfo.day} - Kısmi dolu (${occupancy}/24)` :
+                  `${dayInfo.day} - Boş`
+                }
+              >
+                {dayInfo.day}
+              </button>
+            );
+          })}
+        </div>
+        
+        {/* Takvim Renk Açıklaması */}
+        <div className="flex justify-center gap-2 text-xs mt-4">
+          <div className="flex items-center space-x-1 bg-white/95 px-3 py-2 rounded-full shadow-lg border border-green-200">
+            <div className="w-4 h-4 bg-gradient-to-br from-green-400 to-green-600 rounded shadow-sm"></div>
+            <span className="font-bold text-slate-800">Seçili</span>
+          </div>
+          <div className="flex items-center space-x-1 bg-white/95 px-3 py-2 rounded-full shadow-lg border border-red-200">
+            <div className="w-4 h-4 bg-gradient-to-br from-red-500 to-red-600 rounded shadow-sm"></div>
+            <span className="font-bold text-slate-800">Dolu</span>
+          </div>
+          <div className="flex items-center space-x-1 bg-white/95 px-3 py-2 rounded-full shadow-lg border border-orange-200">
+            <div className="w-4 h-4 bg-gradient-to-br from-orange-400 to-orange-500 rounded shadow-sm"></div>
+            <span className="font-bold text-slate-800">Kısmi</span>
+          </div>
+          <div className="flex items-center space-x-1 bg-white/95 px-3 py-2 rounded-full shadow-lg border border-blue-200">
+            <div className="w-4 h-4 bg-blue-100 rounded shadow-sm"></div>
+            <span className="font-bold text-slate-800">Boş</span>
+          </div>
+        </div>
+      </div>
     );
   };
 
-  // Randevu ekleme
-  const addNewReservation = async () => {
-    // Validasyon
-    if (!newReservation.selectedDate || !newReservation.selectedTime) {
-      alert('Lütfen tarih ve saat seçin');
-      return;
+  // Koltuk renk fonksiyonu
+  const getSeatColor = (status: 'available' | 'selected' | 'occupied') => {
+    switch (status) {
+      case 'available':
+        return 'bg-gradient-to-br from-blue-400 to-blue-600 hover:from-blue-500 hover:to-blue-700';
+      case 'selected':
+        return 'bg-gradient-to-br from-green-400 to-green-600';
+      case 'occupied':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-400';
     }
+  };
+
+  // Çiftli koltuk pair'ini bul (2. tekne için)
+  const getSeatPair = (seat: string): string | undefined => {
+    const prefix = seat.split('_')[0] + '_';
+    const seatCode = seat.split('_')[1];
     
+    if (!seatCode) return undefined;
+    
+    const seatMap: {[key: string]: string} = {
+      'IS1': 'IS2', 'IS2': 'IS1',
+      'IS3': 'IS4', 'IS4': 'IS3', 
+      'IS5': 'IS6', 'IS6': 'IS5',
+      'SA1': 'SA2', 'SA2': 'SA1',
+      'SA3': 'SA4', 'SA4': 'SA3',
+      'SA5': 'SA6', 'SA6': 'SA5'
+    };
+    
+    const pairSeat = seatMap[seatCode];
+    return pairSeat ? `${prefix}${pairSeat}` : undefined;
+  };
+
+  // Koltuk seçimi render fonksiyonu
+  const renderSeatSelection = () => {
+    if (!newReservation.selectedBoat || !newReservation.selectedDate || !newReservation.selectedTime) {
+      return null;
+    }
+
+    const handleSeatClick = (seatId: string) => {
+      if (occupiedSeats.includes(seatId)) return;
+      
+      const currentSeats = [...newReservation.selectedSeats];
+      const seatIndex = currentSeats.indexOf(seatId);
+      
+      if (seatIndex > -1) {
+        currentSeats.splice(seatIndex, 1);
+      } else {
+        if (currentSeats.length < newReservation.guestCount) {
+          currentSeats.push(seatId);
+        } else {
+          alert(`En fazla ${newReservation.guestCount} koltuk seçebilirsiniz.`);
+          return;
+        }
+      }
+      
+      setNewReservation(prev => ({
+        ...prev,
+        selectedSeats: currentSeats
+      }));
+    };
+
+    const renderSeat = (seatId: string) => {
+      const selectedBoat = boats.find(b => b.id === newReservation.selectedBoat);
+      const isDoubleSeat = selectedBoat?.seatingLayout === 'double';
+      const isOccupied = occupiedSeats.includes(seatId);
+      const isSelected = newReservation.selectedSeats.includes(seatId);
+      
+      if (isDoubleSeat) {
+        // 2. Tekne: Çiftli görünüm ama bağımsız seçim
+        const pairSeat = getSeatPair(seatId);
+        const isPairSelected = pairSeat ? newReservation.selectedSeats.includes(pairSeat) : false;
+        const isPairOccupied = pairSeat ? occupiedSeats.includes(pairSeat) : false;
+        
+        // Çiftli görünümde sadece çift numaralı koltukları render et
+        const seatNumber = seatId.split('_')[1];
+        const isEvenSeat = parseInt(seatNumber?.slice(-1) || '0') % 2 === 0;
+        if (!isEvenSeat) return null; // Tek numaralı koltuklarda render yapma
+        
+        const oddSeat = getSeatPair(seatId);
+        const oddIsSelected = newReservation.selectedSeats.includes(oddSeat || '');
+        const oddIsOccupied = occupiedSeats.includes(oddSeat || '');
+        
+        return (
+          <div key={seatId} className="w-8 h-16 rounded-lg overflow-hidden shadow-lg border-2 border-gray-300 bg-white">
+            {/* Üst koltuk (tek numaralı) */}
+            <button
+              onClick={() => {
+                if (!oddSeat || oddIsOccupied) return;
+                handleSeatClick(oddSeat);
+              }}
+              disabled={oddIsOccupied}
+              className={`w-full h-1/2 flex items-center justify-center text-white text-xs font-bold transition-all duration-300 ${getSeatColor(
+                oddIsSelected ? 'selected' : oddIsOccupied ? 'occupied' : 'available'
+              )} ${
+                oddIsOccupied ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+              }`}
+              title={
+                oddIsOccupied 
+                  ? `${oddSeat} koltuğu dolu` 
+                  : oddIsSelected 
+                  ? `${oddSeat} seçimini kaldır`
+                  : `${oddSeat} koltuğunu seç`
+              }
+            >
+              <div className="relative flex items-center justify-center">
+                <span className="relative z-10">{oddSeat?.split('_')[1]?.slice(-1)}</span>
+                <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-4 h-0.5 bg-black/30 rounded-full"></div>
+              </div>
+            </button>
+            
+            {/* Alt koltuk (çift numaralı) */}
+            <button
+              onClick={() => handleSeatClick(seatId)}
+              disabled={isOccupied}
+              className={`w-full h-1/2 flex items-center justify-center text-white text-xs font-bold transition-all duration-300 ${getSeatColor(
+                isSelected ? 'selected' : isOccupied ? 'occupied' : 'available'
+              )} ${
+                isOccupied ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+              }`}
+              title={
+                isOccupied 
+                  ? `${seatId} koltuğu dolu` 
+                  : isSelected 
+                  ? `${seatId} seçimini kaldır`
+                  : `${seatId} koltuğunu seç`
+              }
+            >
+              <div className="relative flex items-center justify-center">
+                <span className="relative z-10">{seatId.split('_')[1]?.slice(-1)}</span>
+                <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-4 h-0.5 bg-black/30 rounded-full"></div>
+              </div>
+            </button>
+          </div>
+        );
+      } else {
+        // 1. Tekne: Normal tekli koltuk
+        return (
+          <button
+            key={seatId}
+            type="button"
+            onClick={() => handleSeatClick(seatId)}
+            disabled={isOccupied}
+            className={`w-8 h-8 rounded cursor-pointer text-white text-xs font-bold flex items-center justify-center transition-all duration-300 ${getSeatColor(
+              isSelected ? 'selected' : isOccupied ? 'occupied' : 'available'
+            )} ${
+              isOccupied ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+            }`}
+            title={
+              isOccupied 
+                ? `${seatId} koltuğu dolu` 
+                : isSelected 
+                ? `${seatId} seçimini kaldır`
+                : `${seatId} koltuğunu seç`
+            }
+          >
+            <div className="relative flex items-center justify-center">
+              <span className="relative z-10">{seatId.split('_')[1]?.slice(-1) || seatId.slice(-1)}</span>
+              <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-4 h-0.5 bg-black/30 rounded-full"></div>
+            </div>
+          </button>
+        );
+      }
+    };
+
+    return (
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+        {/* Koltuk Seçimi Durum Bilgisi */}
+        {newReservation.selectedSeats.length < newReservation.guestCount && (
+          <div className="mb-4 text-center">
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 inline-block">
+              <p className="text-orange-800 text-sm font-medium mb-1">
+                🪑 <strong>Koltuk Seçimi:</strong> {newReservation.selectedSeats.length}/{newReservation.guestCount}
+              </p>
+              <p className="text-orange-700 text-xs">
+                Henüz {newReservation.guestCount - newReservation.selectedSeats.length} koltuk daha seçmelisiniz
+              </p>
+            </div>
+          </div>
+        )}
+
+        {newReservation.selectedSeats.length === newReservation.guestCount && (
+          <div className="mb-4 text-center">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 inline-block">
+              <p className="text-green-800 text-sm font-medium mb-1">
+                ✅ <strong>Koltuk Seçimi Tamamlandı!</strong>
+              </p>
+              <p className="text-green-700 text-xs">
+                {newReservation.guestCount} koltuk başarıyla seçildi
+              </p>
+              {boats.find(b => b.id === newReservation.selectedBoat)?.seatingLayout === 'double' && (
+                <p className="text-blue-600 text-xs mt-1">
+                  👥 Koltuklar çiftli görünür ama her kişi için ayrı koltuk seçildi
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Doluluk Bilgisi */}
+        <div className="mb-4 text-center">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 inline-block">
+            <p className="text-blue-800 text-sm font-medium mb-1">
+              🔄 <strong>Seçili Saat:</strong> {newReservation.selectedTime}
+            </p>
+            <div className="flex items-center space-x-2 justify-center">
+              <div className={`w-3 h-3 rounded-full ${occupiedSeats.length === 0 ? 'bg-green-500' : occupiedSeats.length >= 20 ? 'bg-red-500' : 'bg-orange-500'}`}></div>
+              <p className="text-blue-800 text-sm font-medium">
+                <strong>Doluluk:</strong> {occupiedSeats.length}/24
+              </p>
+            </div>
+            {occupiedSeats.length === 0 && (
+              <p className="text-green-700 text-xs mt-1">
+                ✅ Tüm koltuklar müsait!
+              </p>
+            )}
+          </div>
+        </div>
+        
+        {/* Tekne Krokisi */}
+        <div className="relative max-w-xs mx-auto">
+          {/* BAŞ - Üçgen Kısım */}
+          <div className="relative">
+            <div className="text-center mb-3">
+              <span className="text-sm font-bold text-slate-800 bg-white/95 px-4 py-2 rounded-full shadow-xl border border-slate-300">⚓ BAŞ</span>
+            </div>
+            
+            <div 
+              className="relative mx-auto w-32 h-20 bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 shadow-2xl border-2 border-slate-400"
+              style={{
+                clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
+              }}
+            >
+              <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                <div className="bg-white/90 p-1.5 rounded-full shadow-lg border border-slate-300">
+                  <span className="text-lg">⚓</span>
+                </div>
+                <div className="bg-white/90 p-1.5 rounded-full shadow-lg border border-slate-300">
+                  <span className="text-sm">🚽</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ANA GÖVDE - Dikdörtgen Kısım */}
+          <div className="relative bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 w-32 mx-auto shadow-2xl rounded-b-2xl border-2 border-slate-400 border-t-0">
+            {/* İskele (Sol) Label */}
+            <div className="absolute -left-16 top-1/2 transform -translate-y-1/2 -rotate-90">
+              <span className="text-xs font-bold text-black bg-white/95 px-3 py-1 rounded-full shadow-xl border border-blue-600">🌊 İSKELE</span>
+            </div>
+            
+            {/* Sancak (Sağ) Label */}
+            <div className="absolute -right-16 top-1/2 transform -translate-y-1/2 rotate-90">
+              <span className="text-xs font-bold text-slate-800 bg-white/95 px-3 py-1 rounded-full shadow-xl border border-slate-300">🌊 SANCAK</span>
+            </div>
+
+            {/* Koltuk Düzeni */}
+            <div className="flex justify-between p-3">
+              {/* İskele Koltukları (Sol) */}
+              <div className="flex flex-col space-y-2">
+                {iskeleSeat.map(seatId => renderSeat(seatId))}
+              </div>
+
+              {/* Orta Koridor */}
+              <div className="w-6 bg-gradient-to-b from-slate-400 via-slate-450 to-slate-500 rounded-lg shadow-inner border border-slate-500">
+                <div className="space-y-1 pt-3">
+                  <div className="w-3 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
+                  <div className="w-2 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
+                  <div className="w-3 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
+                </div>
+              </div>
+
+              {/* Sancak Koltukları (Sağ) */}
+              <div className="flex flex-col space-y-2">
+                {sancakSeat.map(seatId => renderSeat(seatId))}
+              </div>
+            </div>
+          </div>
+
+          {/* KIÇ */}
+          <div className="text-center mt-3">
+            <span className="text-sm font-bold text-slate-800 bg-white/95 px-4 py-2 rounded-full shadow-xl border border-slate-300">🚤 KIÇ</span>
+          </div>
+        </div>
+
+        {/* Koltuk Durumu Açıklamaları */}
+        <div className="flex justify-center space-x-2 text-xs mt-4">
+          <div className="flex items-center space-x-1 bg-white/95 px-3 py-2 rounded-full shadow-lg border border-blue-200">
+            <div className="w-4 h-4 bg-gradient-to-br from-blue-400 to-blue-600 rounded shadow-sm"></div>
+            <span className="font-bold text-slate-800">Boş</span>
+          </div>
+          <div className="flex items-center space-x-1 bg-white/95 px-3 py-2 rounded-full shadow-lg border border-green-200">
+            <div className="w-4 h-4 bg-gradient-to-br from-green-400 to-green-600 rounded shadow-sm"></div>
+            <span className="font-bold text-slate-800">Seçili</span>
+          </div>
+          <div className="flex items-center space-x-1 bg-white/95 px-3 py-2 rounded-full shadow-lg border border-red-200">
+            <div className="w-4 h-4 bg-red-500 rounded shadow-sm"></div>
+            <span className="font-bold text-slate-800">Dolu</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const addNewReservation = async () => {
     if (!newReservation.selectedBoat) {
       alert('Lütfen tekne seçin');
       return;
     }
     
-    // Özel turlar için koltuk kontrolü farklı
-    if (isSpecialTour(newReservation.tourType)) {
-      // Özel turlarda tüm koltuklar otomatik seçili olmalı
-      const expectedSeats = iskeleSeat.concat(sancakSeat);
-      if (newReservation.selectedSeats.length !== expectedSeats.length) {
-        alert('Özel tur için tüm koltuklar seçilmelidir');
-        return;
-      }
-    } else {
-      // Normal turda kişi sayısı kadar koltuk seçili olmalı
-      if (newReservation.selectedSeats.length !== newReservation.guestCount) {
-        alert('Lütfen kişi sayısı kadar koltuk seçin');
-        return;
-      }
+    if (!newReservation.selectedDate || !newReservation.selectedTime) {
+      alert('Lütfen tarih ve saat seçin');
+      return;
+    }
+    
+    if (newReservation.selectedSeats.length !== newReservation.guestCount) {
+      alert(`Lütfen ${newReservation.guestCount} adet koltuk seçin`);
+      return;
     }
     
     if (!newReservation.guestInfo.name || !newReservation.guestInfo.surname) {
@@ -435,20 +805,17 @@ export default function AddReservationPage() {
     setAdding(true);
     
     try {
-      const isSpecial = isSpecialTour(newReservation.tourType);
-      const customTour = getSelectedCustomTour(newReservation.tourType);
-      const capacity = customTour ? customTour.capacity : 12;
       const selectedBoat = boats.find(b => b.id === newReservation.selectedBoat);
       
       const reservationData = {
         reservationNumber: generateReservationNumber(),
-        guestCount: isSpecial ? capacity : newReservation.guestCount,
+        guestCount: newReservation.guestCount,
         selectedDate: newReservation.selectedDate,
         selectedTime: newReservation.selectedTime,
         selectedSeats: newReservation.selectedSeats,
         selectedBoat: newReservation.selectedBoat,
         boatName: selectedBoat?.name || '',
-        isPrivateTour: isSpecial,
+        isPrivateTour: false,
         tourType: newReservation.tourType,
         priceOption: newReservation.priceOption,
         guestInfos: [
@@ -457,8 +824,8 @@ export default function AddReservationPage() {
             surname: newReservation.guestInfo.surname,
             phone: newReservation.guestInfo.phone,
             email: newReservation.guestInfo.email || '',
-            gender: 'Erkek', // Varsayılan
-            age: '30' // Varsayılan
+            gender: 'Erkek',
+            age: '30'
           }
         ],
         status: newReservation.status,
@@ -481,7 +848,6 @@ export default function AddReservationPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header */}
       <header className="bg-white shadow-lg border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -495,328 +861,31 @@ export default function AddReservationPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <div className="space-y-6">
-            {/* Tur Tipi */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tur Tipi
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Standart Turlar */}
-                <button
-                  onClick={() => setNewReservation(prev => ({...prev, tourType: 'normal'}))}
-                  className={`p-3 rounded-lg border-2 transition-colors ${
-                    newReservation.tourType === 'normal'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  Normal Tur
-                </button>
-                <button
-                  onClick={() => setNewReservation(prev => ({...prev, tourType: 'private'}))}
-                  className={`p-3 rounded-lg border-2 transition-colors ${
-                    newReservation.tourType === 'private'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  ⭐ Özel Tur
-                </button>
-                <button
-                  onClick={() => setNewReservation(prev => ({...prev, tourType: 'fishing-swimming'}))}
-                  className={`p-3 rounded-lg border-2 transition-colors ${
-                    newReservation.tourType === 'fishing-swimming'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  🏊‍♂️ Balık + Yüzme
-                </button>
-                
-                {/* Özel (Custom) Turlar */}
-                {customTours.map((customTour, index) => {
-                  const colorSchemes = [
-                    { border: 'border-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-700', icon: '🌟' },
-                    { border: 'border-rose-500', bg: 'bg-rose-50', text: 'text-rose-700', icon: '🎯' },
-                    { border: 'border-amber-500', bg: 'bg-amber-50', text: 'text-amber-700', icon: '⚡' },
-                    { border: 'border-indigo-500', bg: 'bg-indigo-50', text: 'text-indigo-700', icon: '🚀' },
-                    { border: 'border-pink-500', bg: 'bg-pink-50', text: 'text-pink-700', icon: '💎' }
-                  ];
-                  
-                  const scheme = colorSchemes[index % colorSchemes.length];
-                  const isSelected = newReservation.tourType === customTour.id;
-                  
-                  return (
-                    <button
-                      key={customTour.id}
-                      onClick={() => setNewReservation(prev => ({...prev, tourType: customTour.id}))}
-                      className={`p-3 rounded-lg border-2 transition-colors ${
-                        isSelected
-                          ? `${scheme.border} ${scheme.bg} ${scheme.text}`
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                      title={`${customTour.name} - ${customTour.capacity} kişi - ${customTour.duration}`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <span>{scheme.icon}</span>
-                        <span className="font-medium">{customTour.name}</span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {customTour.capacity} kişi • {customTour.duration}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              
-              {/* Custom Tur Yoksa Bilgilendirme */}
-              {customTours.length === 0 && (
-                <div className="mt-2 text-sm text-gray-500 italic">
-                  💡 Özel turlar Admin → Ayarlar bölümünden eklenebilir
-                </div>
-              )}
-            </div>
-
-            {/* Malzeme Seçeneği */}
-            {newReservation.tourType === 'normal' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Malzeme Seçeneği
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setNewReservation(prev => ({...prev, priceOption: 'own-equipment'}))}
-                    className={`p-3 rounded-lg border-2 transition-colors ${
-                      newReservation.priceOption === 'own-equipment'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    Kendi Malzemesi
-                  </button>
-                  <button
-                    onClick={() => setNewReservation(prev => ({...prev, priceOption: 'with-equipment'}))}
-                    className={`p-3 rounded-lg border-2 transition-colors ${
-                      newReservation.priceOption === 'with-equipment'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    Malzeme Dahil
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Kişi Sayısı */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Kişi Sayısı
-                {isSpecialTour(newReservation.tourType) && (
-                  <span className="text-sm text-gray-500 ml-2">
-                    (Özel turlar için otomatik {getSelectedCustomTour(newReservation.tourType)?.capacity || 12})
-                  </span>
-                )}
-              </label>
-              <input
-                type="number"
-                min="1"
-                max={getSelectedCustomTour(newReservation.tourType)?.capacity || 12}
-                value={newReservation.guestCount}
-                onChange={(e) => setNewReservation(prev => ({
-                  ...prev,
-                  guestCount: parseInt(e.target.value) || 1,
-                  selectedSeats: [] // Kişi sayısı değiştiğinde seçilen koltukları temizle
-                }))}
-                disabled={isSpecialTour(newReservation.tourType)}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                  isSpecialTour(newReservation.tourType)
-                    ? 'bg-gray-100 cursor-not-allowed' 
-                    : ''
-                }`}
-              />
-            </div>
-
-            {/* Tarih Seçimi - Özel Takvim */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tarih Seçimi (Doluluk Oranları ile)
-              </label>
-              <div className="bg-white rounded-lg border border-gray-300 p-3 sm:p-4">
-                {/* Takvim Başlığı */}
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <button
-                    type="button"
-                    onClick={prevMonth}
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-all duration-300 touch-manipulation"
-                  >
-                    <span className="text-blue-600 font-bold text-sm sm:text-base">‹</span>
-                  </button>
-                  
-                  <h4 className="text-sm sm:text-lg font-bold text-gray-800">
-                    {currentMonth.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
-                  </h4>
-                  
-                  <button
-                    type="button"
-                    onClick={nextMonth}
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center transition-all duration-300 touch-manipulation"
-                  >
-                    <span className="text-blue-600 font-bold text-sm sm:text-base">›</span>
-                  </button>
-                </div>
-
-                {/* Hafta Günleri */}
-                <div className="grid grid-cols-7 gap-1 mb-2">
-                  {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((day) => (
-                    <div key={day} className="text-center py-1 sm:py-2">
-                      <span className="text-xs font-bold text-gray-600">{day}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Takvim Günleri */}
-                <div className="grid grid-cols-7 gap-1">
-                  {getCalendarDays(currentMonth).map((dayInfo, index) => {
-                    const occupiedCount = occupiedDates[dayInfo.date] || 0;
-                    const isSelected = newReservation.selectedDate === dayInfo.date;
-                    const isFullyOccupied = occupiedCount >= 24;
-                    const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < 24;
-                    
-                    return (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => {
-                          if (!dayInfo.isDisabled && !isFullyOccupied) {
-                            // Özel tur seçiliyse ve o günde herhangi bir rezervasyon varsa engelle
-                            if (isSpecialTour(newReservation.tourType) && occupiedCount > 0) {
-                              const customTour = getSelectedCustomTour(newReservation.tourType);
-                              const tourName = customTour ? customTour.name : 
-                                             newReservation.tourType === 'fishing-swimming' ? 'Balık + Yüzme Turu' : 
-                                             'Özel Tur';
-                              
-                              alert(`❌ ${dayInfo.day} ${currentMonth.toLocaleDateString('tr-TR', { month: 'long' })} tarihinde ${tourName} seçilemez!\n\n` +
-                                    `Bu tarihte ${occupiedCount} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n` +
-                                    `Özel turlar için tamamen boş günler gereklidir.\n\n` +
-                                    `Lütfen başka bir tarih seçin veya Normal Tur seçeneğini tercih edin.`);
-                              return;
-                            }
-                            
-                            setNewReservation(prev => ({
-                              ...prev,
-                              selectedDate: dayInfo.date,
-                              selectedSeats: []
-                            }));
-                          }
-                        }}
-                        disabled={dayInfo.isDisabled || isFullyOccupied || (isSpecialTour(newReservation.tourType) && occupiedCount > 0)}
-                        className={`aspect-square rounded-md sm:rounded-lg text-xs sm:text-sm font-bold transition-all duration-300 relative touch-manipulation ${
-                          dayInfo.isDisabled 
-                            ? 'text-gray-300 cursor-not-allowed' 
-                            : isSelected
-                            ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-110 shadow-lg'
-                            : isFullyOccupied && dayInfo.isCurrentMonth
-                            ? 'bg-gradient-to-br from-red-500 to-red-600 text-white cursor-not-allowed opacity-75'
-                            : (isSpecialTour(newReservation.tourType) && occupiedCount > 0 && dayInfo.isCurrentMonth)
-                            ? 'bg-gradient-to-br from-red-500 to-red-600 text-white cursor-not-allowed opacity-75'
-                            : isPartiallyOccupied && dayInfo.isCurrentMonth
-                            ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white hover:from-orange-500 hover:to-orange-600 hover:scale-105 shadow-md'
-                            : dayInfo.isCurrentMonth
-                            ? 'text-gray-700 hover:bg-blue-100 hover:scale-105'
-                            : 'text-gray-400'
-                        }`}
-                        title={
-                          dayInfo.isDisabled
-                            ? 'Geçmiş tarih'
-                            : isFullyOccupied && dayInfo.isCurrentMonth
-                            ? `Tamamen dolu (${occupiedCount} koltuk) - Seçilemez`
-                            : (isSpecialTour(newReservation.tourType) && occupiedCount > 0 && dayInfo.isCurrentMonth)
-                            ? `Özel tur için seçilemez (${occupiedCount} koltuk dolu) - Özel turlar tamamen boş gün gerektirir`
-                            : isPartiallyOccupied && dayInfo.isCurrentMonth
-                            ? `Kısmen dolu (${occupiedCount} koltuk) - Normal tur için müsait`
-                            : dayInfo.isCurrentMonth
-                            ? 'Tamamen boş - Tarih seçmek için tıklayın'
-                            : ''
-                        }
-                      >
-                        {dayInfo.day}
-                        {/* Dolu günler için küçük nokta ve sayı */}
-                        {occupiedCount > 0 && dayInfo.isCurrentMonth && !isSelected && (
-                          <div className="absolute top-0.5 right-0.5 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-full flex items-center justify-center">
-                            <span className="text-xs font-bold text-red-600" style={{fontSize: '6px'}}>
-                              {occupiedCount}
-                            </span>
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                {/* Takvim Renk Açıklaması */}
-                <div className="grid grid-cols-2 sm:flex sm:justify-center gap-1.5 sm:gap-2 text-xs mt-3 sm:mt-4">
-                  <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-green-200">
-                    <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-green-400 to-green-600 rounded shadow-sm"></div>
-                    <span className="font-bold text-gray-800 text-xs">Seçili</span>
-                  </div>
-                  <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-red-200">
-                    <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-red-500 to-red-600 rounded shadow-sm"></div>
-                    <span className="font-bold text-gray-800 text-xs">Dolu</span>
-                  </div>
-                  <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-orange-200">
-                    <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-orange-400 to-orange-500 rounded shadow-sm"></div>
-                    <span className="font-bold text-gray-800 text-xs">Kısmi</span>
-                  </div>
-                  <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-blue-200">
-                    <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-100 rounded shadow-sm"></div>
-                    <span className="font-bold text-gray-800 text-xs">Boş</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Saat Seçimi */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Saat
-              </label>
-              
-              <select
-                value={newReservation.selectedTime}
-                onChange={(e) => setNewReservation(prev => ({
-                  ...prev,
-                  selectedTime: e.target.value,
-                  selectedSeats: [] // Saat değiştiğinde seçilen koltukları temizle
-                }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              >
-                <option value="">Saat seçin</option>
-                {availableTimes.map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tekne Seçimi */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tekne Seçimi
-              </label>
-              
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="space-y-8">
+          
+          {/* Tekne Seçimi */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-6 border border-blue-200">
+            <h2 className="text-2xl font-bold text-slate-800 mb-4 text-center">
+              🚢 Tekne Seçimi
+            </h2>
+            <p className="text-slate-600 mb-6 text-center">
+              Lütfen önce bir tekne seçin
+            </p>
+            
+            <div className="max-w-md mx-auto">
               <select
                 value={newReservation.selectedBoat}
                 onChange={(e) => setNewReservation(prev => ({
                   ...prev,
                   selectedBoat: e.target.value,
-                  selectedSeats: [] // Tekne değiştiğinde seçilen koltukları temizle
+                  selectedSeats: [],
+                  selectedDate: '',
+                  selectedTime: ''
                 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 bg-white shadow-lg transition-all duration-300"
               >
-                <option value="">Tekne seçin</option>
+                <option value="">Tekne seçin...</option>
                 {boats.map(boat => (
                   <option key={boat.id} value={boat.id}>
                     {boat.name} ({getBoatOrder(boat.id)})
@@ -825,288 +894,180 @@ export default function AddReservationPage() {
               </select>
               
               {newReservation.selectedBoat && (
-                <div className="mt-2 text-sm text-blue-600">
-                  ✅ Seçilen tekne: {boats.find(b => b.id === newReservation.selectedBoat)?.name} ({getBoatOrder(newReservation.selectedBoat)})
+                <div className="mt-4 p-4 bg-white rounded-xl border-2 border-green-200 shadow-lg">
+                  <div className="flex items-center justify-center space-x-2">
+                    <span className="text-2xl">✅</span>
+                    <span className="text-green-800 font-bold text-lg">
+                      {boats.find(b => b.id === newReservation.selectedBoat)?.name} ({getBoatOrder(newReservation.selectedBoat)})
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Koltuk Seçimi */}
-            {newReservation.selectedDate && newReservation.selectedTime && newReservation.selectedBoat && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Koltuk Seçimi ({newReservation.selectedSeats.length}/{newReservation.guestCount})
-                </label>
-                
-                {isSpecialTour(newReservation.tourType) && (
-                  (() => {
-                    const customTour = getSelectedCustomTour(newReservation.tourType);
-                    
-                    let bgColor = 'bg-purple-50 border border-purple-200';
-                    let textColor = 'text-purple-600';
-                    let headerColor = 'text-purple-800';
-                    let detailColor = 'text-purple-700';
-                    let icon = '⭐';
-                    let title = 'Özel Tur';
-                    let capacity = 12;
-                    
-                    if (newReservation.tourType === 'fishing-swimming') {
-                      bgColor = 'bg-cyan-50 border border-cyan-200';
-                      textColor = 'text-cyan-600';
-                      headerColor = 'text-cyan-800';
-                      detailColor = 'text-cyan-700';
-                      icon = '🏊‍♂️';
-                      title = 'Balık + Yüzme Turu';
-                    } else if (customTour) {
-                      const colorSchemes = [
-                        { bg: 'bg-emerald-50 border border-emerald-200', text: 'text-emerald-600', header: 'text-emerald-800', detail: 'text-emerald-700', icon: '🌟' },
-                        { bg: 'bg-rose-50 border border-rose-200', text: 'text-rose-600', header: 'text-rose-800', detail: 'text-rose-700', icon: '🎯' },
-                        { bg: 'bg-amber-50 border border-amber-200', text: 'text-amber-600', header: 'text-amber-800', detail: 'text-amber-700', icon: '⚡' },
-                        { bg: 'bg-indigo-50 border border-indigo-200', text: 'text-indigo-600', header: 'text-indigo-800', detail: 'text-indigo-700', icon: '🚀' },
-                        { bg: 'bg-pink-50 border border-pink-200', text: 'text-pink-600', header: 'text-pink-800', detail: 'text-pink-700', icon: '💎' }
-                      ];
-                      
-                      const scheme = colorSchemes[customTours.findIndex(tour => tour.id === newReservation.tourType) % colorSchemes.length];
-                      bgColor = scheme.bg;
-                      textColor = scheme.text;
-                      headerColor = scheme.header;
-                      detailColor = scheme.detail;
-                      icon = scheme.icon;
-                      title = customTour.name;
-                      capacity = customTour.capacity;
-                    }
-                    
-                    return (
-                      <div className={`mb-4 p-4 rounded-lg ${bgColor}`}>
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className={`text-2xl ${textColor}`}>
-                            {icon}
-                          </span>
-                          <h4 className={`font-bold ${headerColor}`}>
-                            {title} - Tüm Koltuklar Otomatik Seçildi
-                          </h4>
-                        </div>
-                        <p className={`text-sm ${detailColor}`}>
-                          ✅ {capacity} koltuk otomatik olarak seçilmiştir (IS1-IS6, SA1-SA6)
-                        </p>
-                      </div>
-                    );
-                  })()
-                )}
-                
-                {/* Tekne Krokisi */}
-                <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 rounded-lg p-6">
-                  <div className="relative max-w-xs mx-auto">
-                    {/* BAŞ - Üçgen Kısım */}
-                    <div className="relative">
-                      <div className="text-center mb-2 sm:mb-3">
-                        <span className="text-xs sm:text-sm font-bold text-slate-800 bg-white/95 px-2 sm:px-4 py-1 sm:py-2 rounded-full shadow-xl border border-slate-300">⚓ BAŞ</span>
-                      </div>
-                      
-                      <div 
-                        className="relative mx-auto w-28 h-16 sm:w-32 sm:h-20 bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 shadow-2xl border-2 border-slate-400"
-                        style={{
-                          clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
-                        }}
-                      >
-                        <div className="absolute bottom-1 sm:bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1 sm:space-x-2">
-                          <div className="bg-white/90 p-1 sm:p-1.5 rounded-full shadow-lg border border-slate-300">
-                            <span className="text-sm sm:text-lg">⚓</span>
-                          </div>
-                          <div className="bg-white/90 p-1 sm:p-1.5 rounded-full shadow-lg border border-slate-300">
-                            <span className="text-xs sm:text-sm">🚽</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ANA GÖVDE - Dikdörtgen Kısım */}
-                    <div className="relative bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 w-28 sm:w-32 mx-auto shadow-2xl rounded-b-2xl border-2 border-slate-400 border-t-0">
-                      {/* İskele (Sol) Label */}
-                      <div className="absolute -left-12 sm:-left-16 top-1/2 transform -translate-y-1/2 -rotate-90">
-                        <span className="text-xs font-bold text-black bg-white/95 px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full shadow-xl border border-blue-600">🌊 İSKELE</span>
-                      </div>
-                      
-                      {/* Sancak (Sağ) Label */}
-                      <div className="absolute -right-12 sm:-right-16 top-1/2 transform -translate-y-1/2 rotate-90">
-                        <span className="text-xs font-bold text-slate-800 bg-white/95 px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full shadow-xl border border-slate-300">🌊 SANCAK</span>
-                      </div>
-
-                      {/* Koltuk Düzeni */}
-                      <div className="flex justify-between p-2 sm:p-3">
-                        {/* İskele Koltukları (Sol) */}
-                        <div className="flex flex-col space-y-1.5 sm:space-y-2">
-                          {iskeleSeat.map(seatId => renderSeat(seatId))}
-                        </div>
-
-                        {/* Orta Koridor */}
-                        <div className="w-4 sm:w-6 bg-gradient-to-b from-slate-400 via-slate-450 to-slate-500 rounded-lg shadow-inner border border-slate-500">
-                          <div className="space-y-1 pt-2 sm:pt-3">
-                            <div className="w-2 sm:w-3 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
-                            <div className="w-1.5 sm:w-2 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
-                            <div className="w-2 sm:w-3 h-0.5 bg-slate-600 rounded-full mx-auto"></div>
-                          </div>
-                        </div>
-
-                        {/* Sancak Koltukları (Sağ) */}
-                        <div className="flex flex-col space-y-1.5 sm:space-y-2">
-                          {sancakSeat.map(seatId => renderSeat(seatId))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* KIÇ */}
-                    <div className="text-center mt-2 sm:mt-3">
-                      <span className="text-xs sm:text-sm font-bold text-slate-800 bg-white/95 px-2 sm:px-4 py-1 sm:py-2 rounded-full shadow-xl border border-slate-300">🚤 KIÇ</span>
-                    </div>
-                  </div>
-
-                  {/* Koltuk Durumu Açıklamaları */}
-                  <div className="grid grid-cols-3 gap-1.5 sm:flex sm:justify-center sm:space-x-2 text-xs mt-4">
-                    <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-blue-200">
-                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-blue-400 to-blue-600 rounded shadow-sm"></div>
-                      <span className="font-bold text-slate-800 text-xs">Boş</span>
-                    </div>
-                    <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-green-200">
-                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-green-400 to-green-600 rounded shadow-sm"></div>
-                      <span className="font-bold text-slate-800 text-xs">Seçili</span>
-                    </div>
-                    <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-red-200">
-                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-red-500 rounded shadow-sm"></div>
-                      <span className="font-bold text-slate-800 text-xs">Dolu</span>
-                    </div>
-                  </div>
-
-                  {/* Seçili Koltuklar */}
-                  {newReservation.selectedSeats.length > 0 && (
-                    <div className="mt-4 p-3 bg-gradient-to-r from-green-100 to-emerald-100 rounded-xl border border-green-200 shadow-lg">
-                      <p className="text-green-800 font-bold text-center text-xs sm:text-sm mb-2">
-                        ✅ Seçili Koltuklar ({newReservation.selectedSeats.length}/{isSpecialTour(newReservation.tourType) ? 12 : newReservation.guestCount})
-                      </p>
-                      <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
-                        {newReservation.selectedSeats.map((seat) => (
-                          <span key={seat} className="bg-green-600 text-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-bold">
-                            {seat}
-                          </span>
-                        ))}
-                      </div>
-                      {newReservation.tourType === 'normal' && newReservation.selectedSeats.length < newReservation.guestCount && (
-                        <p className="text-green-700 text-xs text-center mt-2">
-                          {newReservation.guestCount - newReservation.selectedSeats.length} koltuk daha seçin
-                        </p>
-                      )}
-                    </div>
-                  )}
+          {newReservation.selectedBoat && (
+            <>
+              {/* Kişi Sayısı */}
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-4 text-center">
+                  👥 Kişi Sayısı
+                </h3>
+                <div className="max-w-sm mx-auto">
+                  <input
+                    type="number"
+                    min="1"
+                    max="12"
+                    value={newReservation.guestCount}
+                    onChange={(e) => setNewReservation(prev => ({
+                      ...prev,
+                      guestCount: parseInt(e.target.value) || 1,
+                      selectedSeats: []
+                    }))}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 text-center text-xl font-bold shadow-lg"
+                  />
                 </div>
               </div>
-            )}
 
-            {/* Müşteri Bilgileri */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Müşteri Bilgileri
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  placeholder="Ad"
-                  value={newReservation.guestInfo.name}
-                  onChange={(e) => setNewReservation(prev => ({
-                    ...prev,
-                    guestInfo: {...prev.guestInfo, name: e.target.value}
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
-                <input
-                  type="text"
-                  placeholder="Soyad"
-                  value={newReservation.guestInfo.surname}
-                  onChange={(e) => setNewReservation(prev => ({
-                    ...prev,
-                    guestInfo: {...prev.guestInfo, surname: e.target.value}
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
-                <input
-                  type="tel"
-                  placeholder="Telefon"
-                  value={newReservation.guestInfo.phone}
-                  onChange={(e) => setNewReservation(prev => ({
-                    ...prev,
-                    guestInfo: {...prev.guestInfo, phone: e.target.value}
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
-                <input
-                  type="email"
-                  placeholder="E-posta (opsiyonel)"
-                  value={newReservation.guestInfo.email}
-                  onChange={(e) => setNewReservation(prev => ({
-                    ...prev,
-                    guestInfo: {...prev.guestInfo, email: e.target.value}
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
+              {/* Responsive Layout: Takvim + Saat Seçimi */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                {/* Sol Taraf: Takvim */}
+                <div className="space-y-6">
+                  {renderCalendar()}
+                </div>
+
+                {/* Sağ Taraf: Saat Seçimi */}
+                <div className="space-y-6">
+                  <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                    <h3 className="text-xl font-bold text-slate-800 mb-4 text-center">⏰ Saat Seçin</h3>
+                    
+                    {newReservation.selectedDate ? (
+                      <div className="space-y-3">
+                        {availableTimes.map(time => (
+                          <button
+                            key={time}
+                            onClick={() => setNewReservation(prev => ({
+                              ...prev,
+                              selectedTime: time,
+                              selectedSeats: []
+                            }))}
+                            className={`w-full p-4 rounded-xl border-2 font-bold transition-all duration-300 ${
+                              newReservation.selectedTime === time
+                                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-blue-500 scale-105 shadow-lg'
+                                : 'bg-white text-slate-800 border-gray-300 hover:border-blue-300 hover:bg-blue-50'
+                            }`}
+                          >
+                            {time}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center p-8 text-slate-500">
+                        <span className="text-4xl mb-4 block">📅</span>
+                        <p>Önce bir tarih seçin</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Durum Seçimi */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rezervasyon Durumu
-                </label>
-                <select
-                  value={newReservation.status}
-                  onChange={(e) => setNewReservation(prev => ({
-                    ...prev,
-                    status: e.target.value as 'pending' | 'confirmed'
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              {/* Koltuk Seçimi */}
+              {newReservation.selectedDate && newReservation.selectedTime && (
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-800 mb-6 text-center">
+                    🪑 Koltuk Seçimi ({newReservation.selectedSeats.length}/{newReservation.guestCount})
+                  </h3>
+                  {renderSeatSelection()}
+                </div>
+              )}
+
+              {/* Müşteri Bilgileri */}
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-6 text-center">
+                  👤 Müşteri Bilgileri
+                </h3>
+                
+                <div className="max-w-2xl mx-auto">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Ad</label>
+                      <input
+                        type="text"
+                        placeholder="Müşteri adı"
+                        value={newReservation.guestInfo.name}
+                        onChange={(e) => setNewReservation(prev => ({
+                          ...prev,
+                          guestInfo: {...prev.guestInfo, name: e.target.value}
+                        }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 shadow-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Soyad</label>
+                      <input
+                        type="text"
+                        placeholder="Müşteri soyadı"
+                        value={newReservation.guestInfo.surname}
+                        onChange={(e) => setNewReservation(prev => ({
+                          ...prev,
+                          guestInfo: {...prev.guestInfo, surname: e.target.value}
+                        }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 shadow-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Telefon</label>
+                      <input
+                        type="tel"
+                        placeholder="05XX XXX XX XX"
+                        value={newReservation.guestInfo.phone}
+                        onChange={(e) => setNewReservation(prev => ({
+                          ...prev,
+                          guestInfo: {...prev.guestInfo, phone: e.target.value}
+                        }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 shadow-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">E-posta (opsiyonel)</label>
+                      <input
+                        type="email"
+                        placeholder="ornek@email.com"
+                        value={newReservation.guestInfo.email}
+                        onChange={(e) => setNewReservation(prev => ({
+                          ...prev,
+                          guestInfo: {...prev.guestInfo, email: e.target.value}
+                        }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 shadow-lg"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Butonlar */}
+              <div className="flex flex-col sm:flex-row justify-center gap-4">
+                <Link
+                  href="/admin/reservations"
+                  className="px-8 py-4 text-slate-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all duration-300 font-bold text-center border-2 border-gray-300 hover:border-gray-400"
                 >
-                  <option value="pending">Bekliyor</option>
-                  <option value="confirmed">Onaylı</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ödeme Durumu
-                </label>
-                <select
-                  value={newReservation.paymentStatus}
-                  onChange={(e) => setNewReservation(prev => ({
-                    ...prev,
-                    paymentStatus: e.target.value as 'waiting' | 'received' | 'confirmed'
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  ← Geri Dön
+                </Link>
+                <button
+                  onClick={addNewReservation}
+                  disabled={adding || newReservation.selectedSeats.length !== newReservation.guestCount}
+                  className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-xl transition-all duration-300 font-bold border-2 border-green-500 hover:border-green-600 disabled:border-gray-400 disabled:cursor-not-allowed"
                 >
-                  <option value="waiting">Bekliyor</option>
-                  <option value="received">Alındı</option>
-                  <option value="confirmed">Onaylandı</option>
-                </select>
+                  {adding ? '🔄 Ekleniyor...' : '✅ Randevu Ekle'}
+                </button>
               </div>
-            </div>
-
-            {/* Kaydet Butonu */}
-            <div className="flex justify-end space-x-4">
-              <Link
-                href="/admin/reservations"
-                className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                İptal
-              </Link>
-              <button
-                onClick={addNewReservation}
-                disabled={adding}
-                className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-lg transition-colors"
-              >
-                {adding ? 'Ekleniyor...' : 'Randevu Ekle'}
-              </button>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </main>
     </div>
   );
-} 
+}
+
+export default AddReservationPage;

@@ -687,9 +687,12 @@ function ReservationsContent() {
     if (!editingReservation || !editForm) return;
     
     try {
+      const selectedBoat = boats.find(b => b.id === editForm.selectedBoat);
+      
       const updateData = {
         ...editForm,
         selectedDate: editForm.selectedDate, // Tarih formatını YYYY-MM-DD olarak koru
+        boatName: selectedBoat?.name || '', // Tekne adını da güncelle
         updatedAt: new Date().toISOString()
       };
       
@@ -1808,6 +1811,32 @@ Anlayışınız için teşekkürler. 🙏`
                   {editForm.selectedSeats && editForm.selectedSeats.length > 0 && (
                     <div className="mt-2 text-sm text-gray-600">
                       <span className="font-medium">Seçili Koltuklar:</span> {editForm.selectedSeats.join(', ')}
+                    </div>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tekne Seçimi</label>
+                  <select
+                    value={editForm.selectedBoat || ''}
+                    onChange={(e) => setEditForm({ 
+                      ...editForm, 
+                      selectedBoat: e.target.value,
+                      selectedSeats: [] // Tekne değiştiğinde koltukları temizle
+                    })}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-gray-900"
+                  >
+                    <option value="">Tekne seçin</option>
+                    {boats.map(boat => (
+                      <option key={boat.id} value={boat.id}>
+                        {boat.name} ({getBoatOrder(boat.id)})
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {editForm.selectedBoat && (
+                    <div className="mt-1 text-sm text-blue-600">
+                      ✅ Seçilen: {boats.find(b => b.id === editForm.selectedBoat)?.name} ({getBoatOrder(editForm.selectedBoat)})
                     </div>
                   )}
                 </div>
