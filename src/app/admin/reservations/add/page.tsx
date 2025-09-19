@@ -35,6 +35,16 @@ interface Boat {
   isActive: boolean;
   createdAt: string;
   seatingLayout?: 'single' | 'double';
+  location?: {
+    name?: string;
+    address?: string;
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+    googleMapsUrl?: string;
+    directions?: string;
+  };
 }
 
 interface Reservation {

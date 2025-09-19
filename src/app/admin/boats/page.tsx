@@ -405,6 +405,17 @@ interface Boat {
   statusMessage?: string; // Özel durum mesajı (örn: "Çok yakında hizmetinizde")
   createdAt: string;
   updatedAt: string;
+  // Konum bilgileri
+  location?: {
+    name?: string; // Konum adı (örn: "Eyüp Odabaşı Sporcular Parkı")
+    address?: string; // Adres
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+    googleMapsUrl?: string; // Google Maps linki
+    directions?: string; // Ulaşım bilgileri
+  };
   // Tarih aralığı bilgileri
   dateRange?: {
     enabled: boolean;
@@ -452,7 +463,14 @@ export default function BoatManagement() {
     isActive: true,
     status: 'active' as 'active' | 'inactive' | 'coming-soon' | 'maintenance',
     statusMessage: '',
-    imageFile: null as File | null
+    imageFile: null as File | null,
+    // Konum bilgileri
+    locationName: '',
+    locationAddress: '',
+    latitude: '',
+    longitude: '',
+    googleMapsUrl: '',
+    directions: ''
   });
 
   // Auth kontrolü
@@ -531,8 +549,48 @@ export default function BoatManagement() {
       // Fotoğraf yükle
       const imageUrl = await uploadImage(formData.imageFile);
 
+      // Konum bilgilerini hazırla - sadece dolu alanları ekle
+      let location = undefined;
+      
+      const hasLocationData = (
+        (formData.locationName && formData.locationName.trim()) ||
+        (formData.locationAddress && formData.locationAddress.trim()) ||
+        (formData.googleMapsUrl && formData.googleMapsUrl.trim()) ||
+        (formData.directions && formData.directions.trim()) ||
+        (formData.latitude && formData.longitude && formData.latitude.trim() && formData.longitude.trim())
+      );
+      
+      if (hasLocationData) {
+        location = {};
+        
+        if (formData.locationName && formData.locationName.trim()) {
+          location.name = formData.locationName.trim();
+        }
+        if (formData.locationAddress && formData.locationAddress.trim()) {
+          location.address = formData.locationAddress.trim();
+        }
+        if (formData.googleMapsUrl && formData.googleMapsUrl.trim()) {
+          location.googleMapsUrl = formData.googleMapsUrl.trim();
+        }
+        if (formData.directions && formData.directions.trim()) {
+          location.directions = formData.directions.trim();
+        }
+        
+        if (formData.latitude && formData.longitude && formData.latitude.trim() && formData.longitude.trim()) {
+          const lat = parseFloat(formData.latitude.trim());
+          const lng = parseFloat(formData.longitude.trim());
+          
+          if (!isNaN(lat) && !isNaN(lng)) {
+            location.coordinates = {
+              latitude: lat,
+              longitude: lng
+            };
+          }
+        }
+      }
+
       // Tekne verisini kaydet
-      await addDoc(collection(db, 'boats'), {
+      const boatData: any = {
         name: formData.name,
         description: formData.description,
         imageUrl,
@@ -543,7 +601,14 @@ export default function BoatManagement() {
         statusMessage: formData.statusMessage,
         createdAt: new Date(),
         updatedAt: new Date()
-      });
+      };
+      
+      // Sadece location varsa ekle
+      if (location) {
+        boatData.location = location;
+      }
+      
+      await addDoc(collection(db, 'boats'), boatData);
 
       // Formu temizle
       setFormData({
@@ -554,7 +619,13 @@ export default function BoatManagement() {
         isActive: true,
         status: 'active',
         statusMessage: '',
-        imageFile: null
+        imageFile: null,
+        locationName: '',
+        locationAddress: '',
+        latitude: '',
+        longitude: '',
+        googleMapsUrl: '',
+        directions: ''
       });
       setShowAddModal(false);
       
@@ -586,8 +657,48 @@ export default function BoatManagement() {
         imageUrl = await uploadImage(formData.imageFile);
       }
 
+      // Konum bilgilerini hazırla - sadece dolu alanları ekle
+      let location = undefined;
+      
+      const hasLocationData = (
+        (formData.locationName && formData.locationName.trim()) ||
+        (formData.locationAddress && formData.locationAddress.trim()) ||
+        (formData.googleMapsUrl && formData.googleMapsUrl.trim()) ||
+        (formData.directions && formData.directions.trim()) ||
+        (formData.latitude && formData.longitude && formData.latitude.trim() && formData.longitude.trim())
+      );
+      
+      if (hasLocationData) {
+        location = {};
+        
+        if (formData.locationName && formData.locationName.trim()) {
+          location.name = formData.locationName.trim();
+        }
+        if (formData.locationAddress && formData.locationAddress.trim()) {
+          location.address = formData.locationAddress.trim();
+        }
+        if (formData.googleMapsUrl && formData.googleMapsUrl.trim()) {
+          location.googleMapsUrl = formData.googleMapsUrl.trim();
+        }
+        if (formData.directions && formData.directions.trim()) {
+          location.directions = formData.directions.trim();
+        }
+        
+        if (formData.latitude && formData.longitude && formData.latitude.trim() && formData.longitude.trim()) {
+          const lat = parseFloat(formData.latitude.trim());
+          const lng = parseFloat(formData.longitude.trim());
+          
+          if (!isNaN(lat) && !isNaN(lng)) {
+            location.coordinates = {
+              latitude: lat,
+              longitude: lng
+            };
+          }
+        }
+      }
+
       // Tekne verisini güncelle
-      await updateDoc(doc(db, 'boats', editingBoat.id), {
+      const updateData: any = {
         name: formData.name,
         description: formData.description,
         imageUrl,
@@ -597,7 +708,14 @@ export default function BoatManagement() {
         status: formData.status,
         statusMessage: formData.statusMessage,
         updatedAt: new Date()
-      });
+      };
+      
+      // Sadece location varsa ekle
+      if (location) {
+        updateData.location = location;
+      }
+      
+      await updateDoc(doc(db, 'boats', editingBoat.id), updateData);
 
       // Formu temizle
       setFormData({
@@ -608,7 +726,13 @@ export default function BoatManagement() {
         isActive: true,
         status: 'active',
         statusMessage: '',
-        imageFile: null
+        imageFile: null,
+        locationName: '',
+        locationAddress: '',
+        latitude: '',
+        longitude: '',
+        googleMapsUrl: '',
+        directions: ''
       });
       setEditingBoat(null);
       
@@ -652,7 +776,13 @@ export default function BoatManagement() {
       isActive: boat.isActive,
       status: boat.status || 'active',
       statusMessage: boat.statusMessage || '',
-      imageFile: null
+      imageFile: null,
+      locationName: boat.location?.name || '',
+      locationAddress: boat.location?.address || '',
+      latitude: boat.location?.coordinates?.latitude?.toString() || '',
+      longitude: boat.location?.coordinates?.longitude?.toString() || '',
+      googleMapsUrl: boat.location?.googleMapsUrl || '',
+      directions: boat.location?.directions || ''
     });
   };
 
@@ -700,7 +830,13 @@ export default function BoatManagement() {
       isActive: true,
       status: 'active',
       statusMessage: '',
-      imageFile: null
+      imageFile: null,
+      locationName: '',
+      locationAddress: '',
+      latitude: '',
+      longitude: '',
+      googleMapsUrl: '',
+      directions: ''
     });
   };
 
@@ -1016,6 +1152,103 @@ export default function BoatManagement() {
                       Yeni fotoğraf seçmezseniz mevcut fotoğraf korunur
                     </p>
                   )}
+                </div>
+
+                {/* Konum Bilgileri */}
+                <div className="border-t pt-4">
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">📍 Kalkış Noktası Bilgileri</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Bu teknede rezervasyon yapan müşterilere gönderilecek WhatsApp mesajlarında kullanılacak konum bilgileri.
+                    En az Google Maps linki girmeniz önerilir.
+                  </p>
+                  
+                  <div className="space-y-4">
+                    {/* Konum Adı */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Konum Adı <span className="text-xs text-gray-500">(Opsiyonel)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.locationName}
+                        onChange={(e) => setFormData({ ...formData, locationName: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        placeholder="Örn: Eyüp Odabaşı Sporcular Parkı"
+                      />
+                    </div>
+
+                    {/* Adres */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Adres <span className="text-xs text-gray-500">(Opsiyonel)</span>
+                      </label>
+                      <textarea
+                        value={formData.locationAddress}
+                        onChange={(e) => setFormData({ ...formData, locationAddress: e.target.value })}
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        placeholder="Tam adres bilgisi..."
+                      />
+                    </div>
+
+                    {/* Koordinatlar - Opsiyonel */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Enlem (Latitude) <span className="text-xs text-gray-500">(Opsiyonel)</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.latitude}
+                          onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                          placeholder="41.161793"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Boylam (Longitude) <span className="text-xs text-gray-500">(Opsiyonel)</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.longitude}
+                          onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                          placeholder="29.047543"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Google Maps URL */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Google Maps Linki (Opsiyonel)
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.googleMapsUrl}
+                        onChange={(e) => setFormData({ ...formData, googleMapsUrl: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        placeholder="https://maps.app.goo.gl/..."
+                      />
+                    </div>
+
+                    {/* Ulaşım Bilgileri */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ulaşım Bilgileri (Opsiyonel)
+                      </label>
+                      <textarea
+                        value={formData.directions}
+                        onChange={(e) => setFormData({ ...formData, directions: e.target.value })}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        placeholder="Detaylı ulaşım talimatları..."
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Tekne Durumu */}

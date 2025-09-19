@@ -12,6 +12,16 @@ interface Boat {
   name: string;
   isActive: boolean;
   createdAt: string;
+  location?: {
+    name?: string;
+    address?: string;
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+    googleMapsUrl?: string;
+    directions?: string;
+  };
 }
 
 // Koltuk seçimi için yardımcı komponent
@@ -770,6 +780,34 @@ function ReservationsContent() {
     const date = new Date(reservation.selectedDate).toLocaleDateString('tr-TR');
     const time = reservation.selectedTime;
     
+    // Tekne bilgisini bul
+    const boat = boats.find(b => b.id === reservation.selectedBoat);
+    
+    // DENİZ ANASI teknesini direkt kontrol et
+    const boatName = boat?.name || '';
+    
+    let locationInfo;
+    
+    // DENİZ ANASI teknesiyse 2. tekne konumu kullan
+    if (boatName === 'DENİZ ANASI') {
+      locationInfo = {
+        name: '2. Tekne Kalkış Noktası',
+        address: '41°09\'42.5"N 29°02\'51.2"E',
+        coordinates: '41.161793, 29.047543',
+        googleMapsUrl: 'https://maps.app.goo.gl/w9ns57QT6rCAeHF19',
+        directions: '2. tekne için özel kalkış noktası. Detaylı ulaşım bilgisi için bizimle iletişime geçebilirsiniz.'
+      };
+    } else {
+      // Diğer tekneler için 1. tekne konumu
+      locationInfo = {
+        name: 'Eyüp Odabaşı Sporcular Parkı - İskele',
+        address: 'Sarıyer/İstanbul',
+        coordinates: '41.1675, 29.0488',
+        googleMapsUrl: 'https://maps.app.goo.gl/fVPxCBB9JphkEMBH7',
+        directions: 'Yakında özel otopark bulunmakta ve civar sokaklarda park yerleri mevcut'
+      };
+    }
+    
     // Tur tipini doğru şekilde belirle
     const getTourTypeName = (reservation: Reservation) => {
       if (reservation.tourType === 'fishing-swimming') {
@@ -810,14 +848,13 @@ Tekne randevunuz onaylandı! ✅
 Randevu No: ${reservation.reservationNumber}
 
 📍 BULUŞMA YERİ:
-Eyüp Odabaşı Sporcular Parkı - İskele
-Sarıyer/İstanbul
+${locationInfo.name}
+${locationInfo.address}
 
-🗺️ Konum: https://maps.app.goo.gl/fVPxCBB9JphkEMBH7
+🗺️ Konum: ${locationInfo.googleMapsUrl || (locationInfo.coordinates ? 'Koordinatlar: ' + locationInfo.coordinates : 'Konum bilgisi için bize ulaşın')}
 
 🚗 Ulaşım: 
-- Yakında özel otopark bulunmakta ve civar sokaklarda park yerleri mevcut
-- Toplu taşıma ile ulaşım için detaylı bilgi almak üzere arayabilirsiniz
+${locationInfo.directions || '- Detaylı ulaşım bilgisi için bize ulaşabilirsiniz'}
 
 Randevu saatinden 15 dakika önce hazır olmanızı rica ederiz. 
 Herhangi bir sorunuz varsa bize ulaşabilirsiniz.
@@ -840,8 +877,9 @@ Yarın tekne randevunuz var:
 Randevu No: ${reservation.reservationNumber}
 
 📍 BULUŞMA YERİ:
-Eyüp Odabaşı Sporcular Parkı - İskele
-🗺️ Konum: https://maps.app.goo.gl/fVPxCBB9JphkEMBH7
+${locationInfo.name}
+${locationInfo.address}
+🗺️ Konum: ${locationInfo.googleMapsUrl || (locationInfo.coordinates ? 'Koordinatlar: ' + locationInfo.coordinates : 'Konum bilgisi için bize ulaşın')}
 
 Lütfen randevu saatinden 15 dakika önce hazır olun.
 Güzel bir deneyim için sabırsızlanıyoruz! 🌊⚓`,
