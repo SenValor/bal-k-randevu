@@ -19,6 +19,20 @@ interface DaySchedule {
   isCustom: boolean;
 }
 
+// Yeni: Tekne ve Özel Tur tipleri
+interface Boat {
+  id: string;
+  name: string;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
+interface CustomTour {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 const defaultTimeSlots: TimeSlot[] = [
   { id: 'morning', start: '07:00', end: '13:00' },
   { id: 'afternoon', start: '14:00', end: '20:00' }
@@ -36,6 +50,14 @@ export default function ScheduleManagementPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [customDates, setCustomDates] = useState<string[]>([]);
 
+  // Yeni: Tekne ve Tur Tipi seçimleri
+  const [boats, setBoats] = useState<Boat[]>([]);
+  const [customTours, setCustomTours] = useState<CustomTour[]>([]);
+  const [selectedBoatId, setSelectedBoatId] = useState<string>('');
+  const [selectedTourType, setSelectedTourType] = useState<string>('normal'); // normal, private, fishing-swimming, veya custom id
+  const [enabled, setEnabled] = useState<boolean>(true);
+  const [note, setNote] = useState<string>('');
+
   // Auth kontrolü
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -45,17 +67,65 @@ export default function ScheduleManagementPage() {
     return () => unsubscribe();
   }, []);
 
+  // Tekneleri yükle
+  useEffect(() => {
+    const fetchBoats = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'boats'));
+        const list: Boat[] = [];
+        snap.forEach((d) => {
+          const data = d.data() as any;
+          list.push({
+            id: d.id,
+            name: data.name || d.id,
+            isActive: data.isActive,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+          });
+        });
+        list.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
+        setBoats(list);
+        // Varsayılan olarak ilk tekneyi seç
+        if (list.length > 0 && !selectedBoatId) {
+          setSelectedBoatId(list[0].id);
+        }
+      } catch (e) {
+        console.error('Tekneler çekilemedi:', e);
+      }
+    };
+    fetchBoats();
+  }, [db]);
+
+  // Özel turları yükle
+  useEffect(() => {
+    const fetchCustomTours = async () => {
+      try {
+        const ctDoc = await getDoc(doc(db, 'settings', 'customTours'));
+        if (ctDoc.exists()) {
+          const data = ctDoc.data() as any;
+          const tours = Array.isArray(data.tours) ? data.tours : [];
+          // Admin sayfasında tüm turlar görünsün
+          setCustomTours(tours.map((t: any) => ({ id: t.id, name: t.name, isActive: !!t.isActive })));
+        } else {
+          setCustomTours([]);
+        }
+      } catch (e) {
+        console.error('Özel turlar çekilemedi:', e);
+      }
+    };
+    fetchCustomTours();
+  }, [db]);
+
   // Özel günleri çek
   useEffect(() => {
     fetchCustomDates();
-  }, [currentMonth]);
+  }, [currentMonth, selectedBoatId, selectedTourType]);
 
-  // Seçilen gün değiştiğinde saatleri çek
+  // Seçilen gün/tekne/tur tipi değiştiğinde saatleri çek
   useEffect(() => {
     if (selectedDate) {
       fetchDaySchedule(selectedDate);
     }
-  }, [selectedDate]);
+  }, [selectedDate, selectedBoatId, selectedTourType]);
 
   const fetchCustomDates = async () => {
     try {
@@ -66,19 +136,32 @@ export default function ScheduleManagementPage() {
       const startDateStr = formatLocalDate(year, month, 1);
       const endDateStr = formatLocalDate(year, month, lastDay);
       
-      const schedulesRef = collection(db, 'schedules');
-      // Index kullanarak direkt Firebase'de filtrele (daha performanslı)
-      const q = query(
-        schedulesRef,
-        where('date', '>=', startDateStr),
-        where('date', '<=', endDateStr),
-        where('isCustom', '==', true)
-      );
-      
-      const snapshot = await getDocs(q);
-      // Artık sadece isCustom: true olanlar geliyor
-      const dates = snapshot.docs.map(doc => doc.data().date);
-      setCustomDates(dates);
+      // Eğer tekne seçildiyse boatSchedules üzerinden işaretle
+      if (selectedBoatId) {
+        const bsRef = collection(db, 'boatSchedules');
+        const filters = [
+          where('boatId', '==', selectedBoatId),
+          where('date', '>=', startDateStr),
+          where('date', '<=', endDateStr),
+          where('enabled', '==', true)
+        ];
+        const q1 = query(bsRef, ...filters);
+        const snap1 = await getDocs(q1);
+        const dates1 = snap1.docs.map(d => (d.data() as any).date as string);
+        setCustomDates(Array.from(new Set(dates1)));
+      } else {
+        // Geriye dönük uyumluluk: eski schedules koleksiyonunu kullan
+        const schedulesRef = collection(db, 'schedules');
+        const q = query(
+          schedulesRef,
+          where('date', '>=', startDateStr),
+          where('date', '<=', endDateStr),
+          where('isCustom', '==', true)
+        );
+        const snapshot = await getDocs(q);
+        const dates = snapshot.docs.map(doc => doc.data().date);
+        setCustomDates(dates);
+      }
     } catch (error) {
       console.error('Özel günler çekilemedi:', error);
     }
@@ -86,15 +169,33 @@ export default function ScheduleManagementPage() {
 
   const fetchDaySchedule = async (date: string) => {
     try {
+      // Öncelik: tekne seçili ise boatSchedules (tekne + tur tipine göre)
+      if (selectedBoatId) {
+        const bsId = `${selectedBoatId}_${date}_${selectedTourType || 'normal'}`;
+        const bsDoc = await getDoc(doc(db, 'boatSchedules', bsId));
+        if (bsDoc.exists()) {
+          const data = bsDoc.data() as any;
+          setCurrentSchedule((data.timeSlots as TimeSlot[]) || defaultTimeSlots);
+          setIsCustomDay(!!data.enabled);
+          setEnabled(!!data.enabled);
+          setNote(data.note || '');
+          return;
+        }
+      }
+
+      // Geriye dönük: genel gün bazlı ayar
       const scheduleDoc = await getDoc(doc(db, 'schedules', date));
-      
       if (scheduleDoc.exists()) {
         const data = scheduleDoc.data();
-        setCurrentSchedule(data.timeSlots || defaultTimeSlots);
+        setCurrentSchedule((data.timeSlots as TimeSlot[]) || defaultTimeSlots);
         setIsCustomDay(true);
+        setEnabled(true);
+        setNote('');
       } else {
         setCurrentSchedule(defaultTimeSlots);
         setIsCustomDay(false);
+        setEnabled(true);
+        setNote('');
       }
     } catch (error) {
       console.error('Günlük program çekilemedi:', error);
@@ -108,18 +209,34 @@ export default function ScheduleManagementPage() {
       alert('Lütfen bir tarih seçin');
       return;
     }
+    // Tekne bazlı yönetim: tekne ve tur tipi zorunlu
+    if (!selectedBoatId) {
+      alert('Lütfen bir tekne seçin');
+      return;
+    }
+    if (!selectedTourType) {
+      alert('Lütfen bir tur tipi seçin');
+      return;
+    }
 
     setSaving(true);
     try {
-      await setDoc(doc(db, 'schedules', selectedDate), {
+      // boatSchedules: tekne + tarih + tur tipi
+      const bsId = `${selectedBoatId}_${selectedDate}_${selectedTourType || 'normal'}`;
+      await setDoc(doc(db, 'boatSchedules', bsId), {
+        id: bsId,
+        boatId: selectedBoatId,
         date: selectedDate,
+        tourType: selectedTourType || 'normal',
         timeSlots: currentSchedule,
-        isCustom: true,
+        enabled: enabled,
+        note: note || '',
+        isSpecial: selectedTourType !== 'normal',
         updatedAt: new Date()
       });
-      
-      setIsCustomDay(true);
-      fetchCustomDates(); // Özel günleri yenile
+
+      setIsCustomDay(enabled);
+      await fetchCustomDates(); // Özel günleri yenile
       alert('Günlük program başarıyla kaydedildi!');
     } catch (error) {
       console.error('Kaydetme hatası:', error);
@@ -140,17 +257,33 @@ export default function ScheduleManagementPage() {
     }
 
     try {
-      // Firestore'dan sil
-      await setDoc(doc(db, 'schedules', selectedDate), {
-        date: selectedDate,
-        timeSlots: defaultTimeSlots,
-        isCustom: false,
-        deletedAt: new Date()
-      });
-      
+      if (!selectedBoatId) {
+        // Eski davranışa geri dön (geriye dönük uyumluluk)
+        await setDoc(doc(db, 'schedules', selectedDate), {
+          date: selectedDate,
+          timeSlots: defaultTimeSlots,
+          isCustom: false,
+          deletedAt: new Date()
+        });
+      } else {
+        // Tekne + tur tipli kaydı pasifleştir
+        const bsId = `${selectedBoatId}_${selectedDate}_${selectedTourType || 'normal'}`;
+        await setDoc(doc(db, 'boatSchedules', bsId), {
+          id: bsId,
+          boatId: selectedBoatId,
+          date: selectedDate,
+          tourType: selectedTourType || 'normal',
+          timeSlots: defaultTimeSlots,
+          enabled: false,
+          note: note || '',
+          updatedAt: new Date(),
+          isSpecial: selectedTourType !== 'normal'
+        });
+      }
+
       setCurrentSchedule(defaultTimeSlots);
       setIsCustomDay(false);
-      fetchCustomDates();
+      await fetchCustomDates();
       alert('Gün varsayılan saatlere döndürüldü!');
     } catch (error) {
       console.error('Sıfırlama hatası:', error);
@@ -307,10 +440,10 @@ export default function ScheduleManagementPage() {
                 Belirli günler için özel saat dilimleri ayarlayabilirsiniz. 
                 Özel ayar yapılmayan günlerde varsayılan saatler kullanılır.
               </p>
-              <div className="flex items-center space-x-2 text-blue-600 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-blue-600 text-xs">
                 <span>🕐 Varsayılan: 07:00-13:00, 14:00-20:00</span>
                 <span>•</span>
-                <span>⚙️ Gün bazlı özelleştirme</span>
+                <span>⚙️ Gün bazlı veya Tekne + Tur Bazlı özelleştirme</span>
               </div>
             </div>
           </div>
@@ -319,6 +452,38 @@ export default function ScheduleManagementPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Sol: Takvim */}
           <div className="bg-white rounded-xl shadow-lg p-6">
+            {/* Tekne Seçici */}
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">⛵ Tekne</label>
+                <select
+                  value={selectedBoatId}
+                  onChange={(e) => setSelectedBoatId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900"
+                >
+                  {boats.length === 0 && <option value="">Tekne bulunamadı</option>}
+                  {boats.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">🎯 Tur Tipi</label>
+                <select
+                  value={selectedTourType}
+                  onChange={(e) => setSelectedTourType(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900"
+                >
+                  <option value="normal">Normal</option>
+                  <option value="private">Kapalı Tur (Özel)</option>
+                  <option value="fishing-swimming">Balık + Yüzme</option>
+                  {customTours.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">📅 Takvim</h2>
               <div className="flex items-center space-x-4">
@@ -422,14 +587,32 @@ export default function ScheduleManagementPage() {
                     ? 'bg-orange-50 border-orange-200' 
                     : 'bg-gray-50 border-gray-200'
                 }`}>
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      isCustomDay ? 'bg-orange-500' : 'bg-gray-400'
-                    }`}></div>
-                    <span className="text-sm font-medium">
-                      {isCustomDay ? 'Özel Saat Düzenlemesi' : 'Varsayılan Saatler'}
-                    </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-3 h-3 rounded-full ${
+                        isCustomDay ? 'bg-orange-500' : 'bg-gray-400'
+                      }`}></div>
+                      <span className="text-sm font-medium">
+                        {isCustomDay ? 'Özel Saat Düzenlemesi' : 'Varsayılan Saatler'}
+                      </span>
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-sm">
+                      <span className="text-gray-600">Aktif</span>
+                      <input type="checkbox" className="h-4 w-4" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+                    </label>
                   </div>
+                </div>
+
+                {/* Not */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">📝 Not</label>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows={2}
+                    placeholder="Bu güne özel açıklama..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 placeholder-gray-500"
+                  />
                 </div>
 
                 {/* Saat Slotları */}
@@ -452,7 +635,7 @@ export default function ScheduleManagementPage() {
                         type="time"
                         value={slot.start}
                         onChange={(e) => updateTimeSlot(slot.id, 'start', e.target.value)}
-                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                        className="px-2 py-1 border border-gray-300 rounded text-sm bg-white text-gray-900"
                       />
                       
                       <span className="text-gray-500">-</span>
@@ -461,7 +644,7 @@ export default function ScheduleManagementPage() {
                         type="time"
                         value={slot.end}
                         onChange={(e) => updateTimeSlot(slot.id, 'end', e.target.value)}
-                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                        className="px-2 py-1 border border-gray-300 rounded text-sm bg-white text-gray-900"
                       />
                       
                       <button
@@ -504,6 +687,14 @@ export default function ScheduleManagementPage() {
                         Seans {index + 1}: {slot.start} - {slot.end}
                       </div>
                     ))}
+                    {selectedBoatId && (
+                      <div className="text-xs text-gray-600 mt-2">
+                        Tekne: <span className="font-medium">{boats.find(b => b.id === selectedBoatId)?.name || selectedBoatId}</span> • Tur: <span className="font-medium">{selectedTourType}</span> • {enabled ? 'Aktif' : 'Pasif'}
+                      </div>
+                    )}
+                    {!!note && (
+                      <div className="text-xs text-gray-600">Not: {note}</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -513,4 +704,4 @@ export default function ScheduleManagementPage() {
       </main>
     </div>
   );
-} 
+}

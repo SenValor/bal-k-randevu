@@ -480,6 +480,8 @@ export default function RandevuPage() {
   
   // Sistem verileri
   const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']);
+  // Tekne + Tur bazlı özel program bilgisi (not/badge için kullanılacak)
+  const [activeBoatSchedule, setActiveBoatSchedule] = useState<{ note?: string; tourType?: string } | null>(null);
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [occupiedDates, setOccupiedDates] = useState<{[boatId: string]: {[key: string]: number}}>({});
@@ -550,14 +552,42 @@ export default function RandevuPage() {
   // Seçilen tekne/tur ve tarihe göre saatleri çek
   const fetchAvailableTimesForDate = async (dateString: string) => {
     try {
-      // Öncelik 1: Özel tur seçildi ve o turun özel saatleri varsa
+      // 0) Öncelik: Tekne + Tur Tipi + Tarih için boatSchedules kontrolü
+      if (selectedBoat?.id && tourType) {
+        const bsId = `${selectedBoat.id}_${dateString}_${tourType}`;
+        const bsDoc = await getDoc(doc(db, 'boatSchedules', bsId));
+        
+        if (bsDoc.exists()) {
+          const bsData = bsDoc.data();
+          // Tur tipi eşleşmesi ve aktif olma kontrolü
+          if (bsData.enabled && bsData.tourType === tourType && Array.isArray(bsData.timeSlots)) {
+            console.log(`boatSchedules bulundu (${bsId}):`, bsData);
+            setAvailableTimes(bsData.timeSlots.map((slot: any) => `${slot.start}-${slot.end}`));
+            setActiveBoatSchedule({
+              note: bsData.note || '',
+              tourType: bsData.tourType || tourType
+            });
+            return;
+          } 
+        }
+        
+        // Custom tur için boatSchedules kaydı yoksa hiç saat gösterme
+        if (tourType !== 'normal' && tourType !== 'private' && tourType !== 'fishing-swimming') {
+          console.log(`Custom tur (${tourType}) için boatSchedules kaydı bulunamadı: ${bsId}`);
+          setAvailableTimes([]);
+          setActiveBoatSchedule(null);
+          return;
+        }
+      }
+
+      // Öncelik 1: Özel tur seçildi ve o turun customSchedule'ı varsa
       if (tourType !== 'normal' && tourType !== 'private') {
         const selectedCustomTour = customTours.find(tour => tour.id === tourType);
         if (selectedCustomTour?.customSchedule?.enabled) {
           const activeSlots = selectedCustomTour.customSchedule.timeSlots
             .filter(slot => slot.isActive && slot.start && slot.end)
             .map(slot => `${slot.start}-${slot.end}`);
-          
+        
           if (activeSlots.length > 0) {
             setAvailableTimes(activeSlots);
             return;
@@ -799,7 +829,9 @@ export default function RandevuPage() {
 
   // Yardımcı fonksiyonlar
   const isSpecialTour = (type: string) => {
-    return type === 'private' || type === 'fishing-swimming' || customTours.some(tour => tour.id === type);
+    // Sadece 'private' ve 'fishing-swimming' tüm tekneyi kapatır
+    // Custom turlar koltuk seçilebilir olmalı
+    return type === 'private' || type === 'fishing-swimming';
   };
 
   const getSelectedCustomTour = (type: string) => {
@@ -1113,6 +1145,14 @@ export default function RandevuPage() {
         const data = doc.data();
         // Sadece onaylı ve bekleyen rezervasyonları dikkate al
         if ((data.status === 'confirmed' || data.status === 'pending') && data.selectedTime) {
+          // TUR TİPİ KONTROLÜ: Sadece aynı tur tipindeki rezervasyonları say
+          const reservationTourType = data.tourType || 'normal';
+          
+          // Eğer farklı tur tipiyse bu rezervasyonu sayma
+          if (reservationTourType !== tourType) {
+            return; // Bu rezervasyonu atla
+          }
+          
           if (data.isPrivateTour) {
             // Özel tur: tüm tekneyi kaplar (12 koltuk)
             sessionOccupancyMap[data.selectedTime] = 12;
@@ -1163,6 +1203,14 @@ export default function RandevuPage() {
         const data = doc.data();
         // Sadece onaylı ve bekleyen rezervasyonları dikkate al
         if (data.status === 'confirmed' || data.status === 'pending') {
+          // TUR TİPİ KONTROLÜ: Sadece aynı tur tipindeki rezervasyonları say
+          const reservationTourType = data.tourType || 'normal';
+          
+          // Eğer farklı tur tipiyse bu rezervasyonu sayma
+          if (reservationTourType !== tourType) {
+            return; // Bu rezervasyonu atla
+          }
+          
           if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
             // Sadece bu tekneye ait koltukları ekle
             data.selectedSeats.forEach((seat: string) => {
@@ -1333,6 +1381,32 @@ export default function RandevuPage() {
     
     setLoading(true);
     try {
+      // ⛔ Güvenlik: Tekne + Tarih + Tur tipi için özel program tanımlıysa, seçilen saat bu programda olmalı
+      if (selectedBoat?.id && selectedDate && selectedTime && tourType) {
+        try {
+          const scheduleId = `${selectedBoat.id}_${selectedDate}_${tourType || 'normal'}`;
+          const bsDoc = await getDoc(doc(db, 'boatSchedules', scheduleId));
+          if (bsDoc.exists()) {
+            const data = bsDoc.data() as any;
+            if (!data.enabled) {
+              alert('Bu tarih ve tur tipi için özel program pasif. Lütfen başka bir tarih/saat seçin.');
+              setLoading(false);
+              return;
+            }
+            const allowedTimes: string[] = (data.timeSlots || [])
+              .filter((slot: any) => slot.start && slot.end)
+              .map((slot: any) => `${slot.start}-${slot.end}`);
+            if (allowedTimes.length > 0 && !allowedTimes.includes(selectedTime)) {
+              alert(`Seçtiğiniz saat bu tur tipi ve tekne için uygun değil. Uygun saatler: ${allowedTimes.join(', ')}`);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (guardErr) {
+          console.warn('boatSchedules guard kontrolünde hata:', guardErr);
+        }
+      }
+
       // ✅ ÇAKIŞMA KONTROLÜ - Aynı tarih/saat/koltuk var mı?
       if (tourType === 'normal' && selectedSeats.length > 0) {
         const conflictQuery = query(
@@ -1842,6 +1916,104 @@ export default function RandevuPage() {
               </p>
               
               <div className="grid grid-cols-1 gap-4 sm:gap-6 max-w-6xl mx-auto">
+
+                {/* Dinamik Özel Turlar (en üstte, yeni eklenenler önce) */}
+                {customTours
+                  .slice()
+                  .sort((a, b) => {
+                    // createdAt'e göre sırala (yeni -> eski)
+                    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return bTime - aTime;
+                  })
+                  .map((customTour: CustomTour, index: number) => {
+                  // 5 farklı renk şeması
+                  const colorSchemes = [
+                    { 
+                      border: 'border-emerald-500', 
+                      bg: 'bg-emerald-50', 
+                      text: 'text-emerald-600',
+                      hover: 'hover:border-emerald-300 hover:bg-emerald-50',
+                      emoji: '🌟'
+                    },
+                    { 
+                      border: 'border-rose-500', 
+                      bg: 'bg-rose-50', 
+                      text: 'text-rose-600',
+                      hover: 'hover:border-rose-300 hover:bg-rose-50',
+                      emoji: '🎯'
+                    },
+                    { 
+                      border: 'border-amber-500', 
+                      bg: 'bg-amber-50', 
+                      text: 'text-amber-600',
+                      hover: 'hover:border-amber-300 hover:bg-amber-50',
+                      emoji: '⚡'
+                    },
+                    { 
+                      border: 'border-indigo-500', 
+                      bg: 'bg-indigo-50', 
+                      text: 'text-indigo-600',
+                      hover: 'hover:border-indigo-300 hover:bg-indigo-50',
+                      emoji: '🚀'
+                    },
+                    { 
+                      border: 'border-pink-500', 
+                      bg: 'bg-pink-50', 
+                      text: 'text-pink-600',
+                      hover: 'hover:border-pink-300 hover:bg-pink-50',
+                      emoji: '💎'
+                    }
+                  ];
+                  
+                  const scheme = colorSchemes[index % colorSchemes.length];
+                  
+                  return (
+                    <div 
+                      key={customTour.id}
+                      onClick={() => {
+                        // Custom turlar koltuk seçilebilir, doluluk kontrolü yapmıyoruz
+                        setTourType(customTour.id);
+                        // Tur seçiminde hafif scroll yap
+                        setTimeout(() => scrollToContinueButton(), 500);
+                      }}
+                      className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
+                        tourType === customTour.id
+                          ? `${scheme.border} ${scheme.bg} scale-105 shadow-xl`
+                          : `border-gray-200 ${scheme.hover}`
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="text-3xl sm:text-4xl">{scheme.emoji}</div>
+                          <div className="text-left">
+                            <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">{customTour.name}</h3>
+                            <p className="text-sm sm:text-base text-slate-600 mb-2">
+                              {customTour.description || `${customTour.duration} özel tur deneyimi`}
+                            </p>
+                            <div className="text-xs sm:text-sm text-slate-500">
+                              • {customTour.capacity} kişiye kadar • Koltuk seçilebilir • {customTour.duration}
+                            </div>
+                            {/* Yeni eklenen tur badge'i */}
+                            {index === 0 && (
+                              <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white text-[10px] sm:text-xs shadow">
+                                <span>✨</span>
+                                <span>Yeni Eklendi</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-2xl sm:text-3xl font-bold ${scheme.text}`}>
+                            {customTour.price.toLocaleString('tr-TR')} TL
+                          </div>
+                          <div className="text-xs sm:text-sm text-slate-500">grup fiyatı</div>
+                          <div className={`text-xs ${scheme.text} font-medium`}>koltuk seçilebilir</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
                 
                 {/* Normal Tur - Kendi Ekipmanı */}
                 <div 
@@ -1988,93 +2160,6 @@ export default function RandevuPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Dinamik Özel Turlar */}
-                {customTours.map((customTour: CustomTour, index: number) => {
-                  // 5 farklı renk şeması
-                  const colorSchemes = [
-                    { 
-                      border: 'border-emerald-500', 
-                      bg: 'bg-emerald-50', 
-                      text: 'text-emerald-600',
-                      hover: 'hover:border-emerald-300 hover:bg-emerald-50',
-                      emoji: '🌟'
-                    },
-                    { 
-                      border: 'border-rose-500', 
-                      bg: 'bg-rose-50', 
-                      text: 'text-rose-600',
-                      hover: 'hover:border-rose-300 hover:bg-rose-50',
-                      emoji: '🎯'
-                    },
-                    { 
-                      border: 'border-amber-500', 
-                      bg: 'bg-amber-50', 
-                      text: 'text-amber-600',
-                      hover: 'hover:border-amber-300 hover:bg-amber-50',
-                      emoji: '⚡'
-                    },
-                    { 
-                      border: 'border-indigo-500', 
-                      bg: 'bg-indigo-50', 
-                      text: 'text-indigo-600',
-                      hover: 'hover:border-indigo-300 hover:bg-indigo-50',
-                      emoji: '🚀'
-                    },
-                    { 
-                      border: 'border-pink-500', 
-                      bg: 'bg-pink-50', 
-                      text: 'text-pink-600',
-                      hover: 'hover:border-pink-300 hover:bg-pink-50',
-                      emoji: '💎'
-                    }
-                  ];
-                  
-                  const scheme = colorSchemes[index % colorSchemes.length];
-                  
-                  return (
-                    <div 
-                      key={customTour.id}
-                      onClick={() => {
-                        // Seçili tarih kısmi dolu ise uyarı ver
-                        if (selectedDate && selectedBoat?.id && occupiedDates[selectedBoat.id]?.[selectedDate] > 0) {
-                          alert(`❌ ${customTour.name} alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedBoat.id]?.[selectedDate]} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
-                          return;
-                        }
-                        setTourType(customTour.id);
-                        // Tur seçiminde hafif scroll yap
-                        setTimeout(() => scrollToContinueButton(), 500);
-                      }}
-                      className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
-                        tourType === customTour.id
-                          ? `${scheme.border} ${scheme.bg} scale-105 shadow-xl`
-                          : `border-gray-200 ${scheme.hover}`
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="text-3xl sm:text-4xl">{scheme.emoji}</div>
-                          <div className="text-left">
-                            <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">{customTour.name}</h3>
-                            <p className="text-sm sm:text-base text-slate-600 mb-2">
-                              {customTour.description || `${customTour.duration} özel tur deneyimi`}
-                            </p>
-                            <div className="text-xs sm:text-sm text-slate-500">
-                              • {customTour.capacity} kişiye kadar • Tüm ekipman dahil • {customTour.duration}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`text-2xl sm:text-3xl font-bold ${scheme.text}`}>
-                            {customTour.price.toLocaleString('tr-TR')} TL
-                          </div>
-                          <div className="text-xs sm:text-sm text-slate-500">grup fiyatı</div>
-                          <div className={`text-xs ${scheme.text} font-medium`}>özel tur</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
 
               {/* Yaş Ücretlendirmesi Bilgisi */}
@@ -2359,10 +2444,10 @@ export default function RandevuPage() {
                           {customTour.name}
                         </h3>
                         <div className={`${scheme.text} space-y-1 sm:space-y-2 text-sm sm:text-base`}>
-                          <p>✅ {customTour.capacity} kişiye kadar katılım</p>
-                          <p>✅ {customTour.duration} özel tur</p>
-                          <p>✅ Tüm ekipmanlar dahil</p>
-                          <p>✅ {customTour.description || 'Özel hizmet'}</p>
+                          <p>✅ Koltuk seçilebilir tur</p>
+                          <p>✅ {customTour.duration} deneyimi</p>
+                          <p>✅ Özel tur fiyatlandırması</p>
+                          <p>✅ {customTour.description || 'Benzersiz balık avı deneyimi'}</p>
                         </div>
                       </div>
                     </>
@@ -3006,7 +3091,19 @@ export default function RandevuPage() {
                         </div>
                       </div>
                       <div className="flex flex-col gap-2 sm:gap-3">
-                        {availableTimes.map((time) => {
+                        {availableTimes.length === 0 ? (
+                          <div className="text-center py-8 bg-gray-50 rounded-lg">
+                            <div className="text-4xl mb-2">⏰</div>
+                            <p className="text-gray-600 font-medium">Bu tarih için saat bulunamadı</p>
+                            <p className="text-sm text-gray-500 mt-2">
+                              {tourType !== 'normal' && tourType !== 'private' && tourType !== 'fishing-swimming' 
+                                ? 'Bu özel tur için admin tarafından saat tanımlanmamış'
+                                : 'Lütfen başka bir tarih seçin'
+                              }
+                            </p>
+                          </div>
+                        ) : (
+                          availableTimes.map((time) => {
                           const timeOccupancy = selectedBoat?.id ? (sessionOccupancy[selectedBoat.id]?.[time] || 0) : 0;
                           const isFullyOccupied = timeOccupancy >= 12;
                           const isPartiallyOccupied = timeOccupancy > 0 && timeOccupancy < 12;
@@ -3014,6 +3111,10 @@ export default function RandevuPage() {
                           
                           // Özel tur seçildi ama seans dolu
                           const isPrivateBlocked = isSpecialTour(tourType) && !canSelectPrivate;
+                          
+                          // 🌙 Gece seansı (örn. 20:00-02:00 => start > end)
+                          const [startStr, endStr] = (time || '').split('-');
+                          const isNightSession = !!(startStr && endStr && startStr > endStr);
                           
                           return (
                           <button
@@ -3047,8 +3148,8 @@ export default function RandevuPage() {
                                   : isFullyOccupied
                                   ? `Tamamen dolu (${timeOccupancy}/12)`
                                   : isPartiallyOccupied
-                                  ? `Kısmi dolu (${timeOccupancy}/12) - Normal tur için müsait`
-                                  : `Tamamen boş (${timeOccupancy}/12) - Tüm tur tipleri için müsait`
+                                  ? `Kısmi dolu (${timeOccupancy}/12) - Normal tur için müsait${isNightSession ? ' • 🌙 Gece Seansı' : ''}`
+                                  : `Tamamen boş (${timeOccupancy}/12) - Tüm tur tipleri için müsait${isNightSession ? ' • 🌙 Gece Seansı' : ''}`
                               }
                             >
                               <div className="flex items-center justify-between">
@@ -3068,17 +3169,46 @@ export default function RandevuPage() {
                                 </div>
                               </div>
                               
-                            {(tourType === 'private' || tourType === 'fishing-swimming') && (
-                              <div className="text-xs mt-1 opacity-80">
-                                {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel Tur'} - 6 Saat
-                                  {isPrivateBlocked && (
-                                    <div className="text-xs mt-1 font-bold">
-                                      ⚠️ Bu seans için özel tur alınamaz
+                              {/* Özel Tur Rozeti (boatSchedules üzerinden gelen özel seanslar için) */}
+                              {activeBoatSchedule && (
+                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                  <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white text-[10px] sm:text-xs shadow">
+                                    <span>🎣</span>
+                                    <span>{getTourDisplayName(activeBoatSchedule.tourType || tourType)}</span>
+                                  </div>
+                                  {isNightSession && (
+                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] sm:text-xs">
+                                      <span>🌙</span>
+                                      <span>Gece Seansı</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {!activeBoatSchedule && isNightSession && (
+                                <div className="text-[10px] sm:text-xs mt-1 opacity-85 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                  <span>🌙</span>
+                                  <span>Gece Seansı</span>
+                                </div>
+                              )}
+
+                              {(tourType === 'private' || tourType === 'fishing-swimming') && (
+                                <div className="text-xs mt-1 opacity-80">
+                                  {tourType === 'fishing-swimming' ? 'Balık+Yüzme' : 'Özel Tur'} - 6 Saat
+                                    {isPrivateBlocked && (
+                                      <div className="text-xs mt-1 font-bold">
+                                        ⚠️ Bu seans için özel tur alınamaz
                               </div>
-                            )}
+                              )}
                                 </div>
                               )}
                               
+                              {/* Admin Notu (özel tur için) */}
+                              {activeBoatSchedule?.note && (
+                                <div className="text-[10px] sm:text-xs mt-1 text-purple-900/90 bg-purple-50 border border-purple-200 rounded px-2 py-1">
+                                  💬 {activeBoatSchedule.note}
+                                </div>
+                              )}
+
                               {/* Durum açıklaması */}
                               <div className="text-xs mt-1 opacity-75">
                                 {isFullyOccupied 
@@ -3087,9 +3217,9 @@ export default function RandevuPage() {
                                   ? '🟡 Kısmi Dolu' 
                                   : '🟢 Tamamen Boş'}
                               </div>
-                          </button>
+                            </button>
                           );
-                        })}
+                        }))}
                       </div>
                       
                       {(tourType === 'private' || tourType === 'fishing-swimming') && (
