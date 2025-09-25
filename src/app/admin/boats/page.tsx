@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 // Tarih aralığı modal komponenti
@@ -161,18 +161,69 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
   const [schedule, setSchedule] = useState<Boat['customSchedule']>({
     enabled: boat.customSchedule?.enabled || false,
     timeSlots: boat.customSchedule?.timeSlots || [
-      { id: 'morning', start: '07:00', end: '13:00', isActive: true },
-      { id: 'afternoon', start: '14:00', end: '20:00', isActive: true }
+      { 
+        id: 'morning', 
+        start: '07:00', 
+        end: '13:00', 
+        isActive: true,
+        availableTourTypes: {
+          normal: true,
+          private: true,
+          fishingSwimming: true,
+          customTours: []
+        }
+      },
+      { 
+        id: 'afternoon', 
+        start: '14:00', 
+        end: '20:00', 
+        isActive: true,
+        availableTourTypes: {
+          normal: true,
+          private: true,
+          fishingSwimming: true,
+          customTours: []
+        }
+      }
     ],
     note: boat.customSchedule?.note || ''
   });
+  
+  // Özel turları çek
+  const [customTours, setCustomTours] = useState<{id: string, name: string}[]>([]);
+  
+  useEffect(() => {
+    const fetchCustomTours = async () => {
+      try {
+        const toursDoc = await getDoc(doc(db, 'settings', 'customTours'));
+        if (toursDoc.exists()) {
+          const data = toursDoc.data();
+          if (data.tours && Array.isArray(data.tours)) {
+            const activeTours = data.tours
+              .filter((tour: any) => tour.isActive)
+              .map((tour: any) => ({ id: tour.id, name: tour.name }));
+            setCustomTours(activeTours);
+          }
+        }
+      } catch (error) {
+        console.error('Özel turlar çekilemedi:', error);
+      }
+    };
+    fetchCustomTours();
+  }, []);
   
   const addTimeSlot = () => {
     const newSlot: TimeSlot = {
       id: `slot_${Date.now()}`,
       start: '09:00',
       end: '15:00',
-      isActive: true
+      isActive: true,
+      availableTourTypes: {
+        normal: true,
+        private: true,
+        fishingSwimming: true,
+        customTours: []
+      }
     };
     setSchedule({
       ...schedule,
@@ -180,12 +231,53 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
     });
   };
   
-  const updateTimeSlot = (id: string, field: keyof TimeSlot, value: string | boolean) => {
+  const updateTimeSlot = (id: string, field: keyof TimeSlot, value: any) => {
     setSchedule({
       ...schedule,
       timeSlots: schedule.timeSlots.map(slot => 
         slot.id === id ? { ...slot, [field]: value } : slot
       )
+    });
+  };
+  
+  // Tur tipi seçimini güncelle
+  const updateTourTypeSelection = (slotId: string, tourType: string, isSelected: boolean) => {
+    setSchedule({
+      ...schedule,
+      timeSlots: schedule.timeSlots.map(slot => {
+        if (slot.id === slotId) {
+          const updatedSlot = { ...slot };
+          if (!updatedSlot.availableTourTypes) {
+            updatedSlot.availableTourTypes = {
+              normal: true,
+              private: true,
+              fishingSwimming: true,
+              customTours: []
+            };
+          }
+          
+          if (tourType === 'normal') {
+            updatedSlot.availableTourTypes.normal = isSelected;
+          } else if (tourType === 'private') {
+            updatedSlot.availableTourTypes.private = isSelected;
+          } else if (tourType === 'fishingSwimming') {
+            updatedSlot.availableTourTypes.fishingSwimming = isSelected;
+          } else {
+            // Özel tur
+            if (isSelected) {
+              if (!updatedSlot.availableTourTypes.customTours.includes(tourType)) {
+                updatedSlot.availableTourTypes.customTours.push(tourType);
+              }
+            } else {
+              updatedSlot.availableTourTypes.customTours = 
+                updatedSlot.availableTourTypes.customTours.filter(id => id !== tourType);
+            }
+          }
+          
+          return updatedSlot;
+        }
+        return slot;
+      })
     });
   };
   
@@ -214,8 +306,10 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
           alert('Tüm aktif saat dilimlerinin başlangıç ve bitiş saatleri belirtilmelidir.');
           return;
         }
-        if (slot.start >= slot.end) {
-          alert('Bitiş saati başlangıç saatinden sonra olmalıdır.');
+        // Gece seansları için özel kontrol (örn. 19:00-01:00)
+        const isNightSession = slot.start > slot.end;
+        if (!isNightSession && slot.start >= slot.end) {
+          alert('Bitiş saati başlangıç saatinden sonra olmalıdır. Gece seansları için (örn. 19:00-01:00) bu kural geçerli değildir.');
           return;
         }
       }
@@ -294,7 +388,7 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
                         )}
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-3 mb-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Başlangıç Saati
@@ -317,6 +411,85 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
                             onChange={(e) => updateTimeSlot(slot.id, 'end', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                           />
+                        </div>
+                      </div>
+                      
+                      {/* Tur Tipi Seçimleri */}
+                      <div className="bg-white border border-gray-200 rounded-lg p-3">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">🎯 Bu saatte hangi turlar aktif olsun?</h4>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Temel Tur Tipleri */}
+                          <div className="space-y-2">
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={slot.availableTourTypes?.normal ?? true}
+                                onChange={(e) => updateTourTypeSelection(slot.id, 'normal', e.target.checked)}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">🎣 Normal Tur</span>
+                            </label>
+                            
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={slot.availableTourTypes?.private ?? true}
+                                onChange={(e) => updateTourTypeSelection(slot.id, 'private', e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                              />
+                              <span className="text-sm text-gray-700">🔒 Kapalı Tur</span>
+                            </label>
+                            
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={slot.availableTourTypes?.fishingSwimming ?? true}
+                                onChange={(e) => updateTourTypeSelection(slot.id, 'fishingSwimming', e.target.checked)}
+                                className="w-4 h-4 text-cyan-600 rounded focus:ring-cyan-500"
+                              />
+                              <span className="text-sm text-gray-700">🏊‍♂️ Balık + Yüzme</span>
+                            </label>
+                          </div>
+                          
+                          {/* Özel Turlar */}
+                          <div className="space-y-2">
+                            {customTours.length > 0 && (
+                              <>
+                                <p className="text-xs font-medium text-gray-600 mb-2">Özel Turlar:</p>
+                                {customTours.map((tour) => (
+                                  <label key={tour.id} className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={slot.availableTourTypes?.customTours?.includes(tour.id) ?? false}
+                                      onChange={(e) => updateTourTypeSelection(slot.id, tour.id, e.target.checked)}
+                                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                                    />
+                                    <span className="text-sm text-gray-700">🌟 {tour.name}</span>
+                                  </label>
+                                ))}
+                              </>
+                            )}
+                            {customTours.length === 0 && (
+                              <p className="text-xs text-gray-500 italic">Henüz özel tur eklenmemiş</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Seçim Özeti */}
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-xs text-gray-600">
+                            <strong>Aktif turlar:</strong> {
+                              [
+                                slot.availableTourTypes?.normal && 'Normal',
+                                slot.availableTourTypes?.private && 'Kapalı',
+                                slot.availableTourTypes?.fishingSwimming && 'Balık+Yüzme',
+                                ...(slot.availableTourTypes?.customTours?.map(id => 
+                                  customTours.find(t => t.id === id)?.name || id
+                                ) || [])
+                              ].filter(Boolean).join(', ') || 'Hiçbiri'
+                            }
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -391,6 +564,13 @@ interface TimeSlot {
   start: string;
   end: string;
   isActive: boolean;
+  // Hangi tur tiplerinin bu saat diliminde aktif olacağı
+  availableTourTypes?: {
+    normal: boolean;
+    private: boolean;
+    fishingSwimming: boolean;
+    customTours: string[]; // Özel tur ID'leri
+  };
 }
 
 interface Boat {

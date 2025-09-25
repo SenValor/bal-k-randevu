@@ -32,6 +32,13 @@ interface TimeSlot {
   start: string;
   end: string;
   isActive: boolean;
+  // Hangi tur tiplerinin bu saat diliminde aktif olacağı
+  availableTourTypes?: {
+    normal: boolean;
+    private: boolean;
+    fishingSwimming: boolean;
+    customTours: string[]; // Özel tur ID'leri
+  };
 }
 
 interface Boat {
@@ -598,7 +605,22 @@ export default function RandevuPage() {
       // Öncelik 2: Tekne seçildi ve o teknenin özel saatleri varsa
       if (selectedBoat?.customSchedule?.enabled) {
         const activeSlots = selectedBoat.customSchedule.timeSlots
-          .filter(slot => slot.isActive && slot.start && slot.end)
+          .filter(slot => {
+            // Saat dilimi aktif mi?
+            if (!slot.isActive || !slot.start || !slot.end) return false;
+            
+            // Bu saat diliminde seçili tur tipi aktif mi?
+            if (slot.availableTourTypes) {
+              if (tourType === 'normal') return slot.availableTourTypes.normal;
+              if (tourType === 'private') return slot.availableTourTypes.private;
+              if (tourType === 'fishing-swimming') return slot.availableTourTypes.fishingSwimming;
+              // Özel tur kontrolü
+              return slot.availableTourTypes.customTours?.includes(tourType) || false;
+            }
+            
+            // Eski format uyumluluğu - availableTourTypes yoksa tüm turlar aktif
+            return true;
+          })
           .map(slot => `${slot.start}-${slot.end}`);
         
         if (activeSlots.length > 0) {

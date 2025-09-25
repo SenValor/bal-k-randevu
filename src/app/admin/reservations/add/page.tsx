@@ -116,7 +116,7 @@ function AddReservationPage() {
       phone: '',
       email: ''
     },
-    status: 'confirmed',
+    status: 'pending',
     paymentStatus: 'waiting'
   });
 

@@ -169,9 +169,9 @@ export default function ScheduleManagementPage() {
 
   const fetchDaySchedule = async (date: string) => {
     try {
-      // Öncelik: tekne seçili ise boatSchedules (tekne + tur tipine göre)
+      // Öncelik: tekne seçili ise boatSchedules (normal tur tipini referans al)
       if (selectedBoatId) {
-        const bsId = `${selectedBoatId}_${date}_${selectedTourType || 'normal'}`;
+        const bsId = `${selectedBoatId}_${date}_normal`;
         const bsDoc = await getDoc(doc(db, 'boatSchedules', bsId));
         if (bsDoc.exists()) {
           const data = bsDoc.data() as any;
@@ -209,35 +209,36 @@ export default function ScheduleManagementPage() {
       alert('Lütfen bir tarih seçin');
       return;
     }
-    // Tekne bazlı yönetim: tekne ve tur tipi zorunlu
     if (!selectedBoatId) {
       alert('Lütfen bir tekne seçin');
-      return;
-    }
-    if (!selectedTourType) {
-      alert('Lütfen bir tur tipi seçin');
       return;
     }
 
     setSaving(true);
     try {
-      // boatSchedules: tekne + tarih + tur tipi
-      const bsId = `${selectedBoatId}_${selectedDate}_${selectedTourType || 'normal'}`;
-      await setDoc(doc(db, 'boatSchedules', bsId), {
-        id: bsId,
-        boatId: selectedBoatId,
-        date: selectedDate,
-        tourType: selectedTourType || 'normal',
-        timeSlots: currentSchedule,
-        enabled: enabled,
-        note: note || '',
-        isSpecial: selectedTourType !== 'normal',
-        updatedAt: new Date()
+      // Tüm tur tipleri için aynı saatleri kaydet
+      const tourTypes = ['normal', 'private', 'fishing-swimming', ...customTours.map(t => t.id)];
+      
+      const savePromises = tourTypes.map(async (tourType) => {
+        const bsId = `${selectedBoatId}_${selectedDate}_${tourType}`;
+        return setDoc(doc(db, 'boatSchedules', bsId), {
+          id: bsId,
+          boatId: selectedBoatId,
+          date: selectedDate,
+          tourType: tourType,
+          timeSlots: currentSchedule,
+          enabled: enabled,
+          note: note || '',
+          isSpecial: tourType !== 'normal',
+          updatedAt: new Date()
+        });
       });
+      
+      await Promise.all(savePromises);
 
       setIsCustomDay(enabled);
-      await fetchCustomDates(); // Özel günleri yenile
-      alert('Günlük program başarıyla kaydedildi!');
+      await fetchCustomDates();
+      alert(`Günlük program tüm tur tipleri için başarıyla kaydedildi! (${tourTypes.length} tur tipi güncellendi)`);
     } catch (error) {
       console.error('Kaydetme hatası:', error);
       alert('Kaydetme hatası! Lütfen tekrar deneyin.');
@@ -252,7 +253,7 @@ export default function ScheduleManagementPage() {
       return;
     }
 
-    if (!confirm('Bu günü varsayılan saatlere döndürmek istediğinizden emin misiniz?')) {
+    if (!confirm('Bu günü tüm tur tipleri için varsayılan saatlere döndürmek istediğinizden emin misiniz?')) {
       return;
     }
 
@@ -266,25 +267,31 @@ export default function ScheduleManagementPage() {
           deletedAt: new Date()
         });
       } else {
-        // Tekne + tur tipli kaydı pasifleştir
-        const bsId = `${selectedBoatId}_${selectedDate}_${selectedTourType || 'normal'}`;
-        await setDoc(doc(db, 'boatSchedules', bsId), {
-          id: bsId,
-          boatId: selectedBoatId,
-          date: selectedDate,
-          tourType: selectedTourType || 'normal',
-          timeSlots: defaultTimeSlots,
-          enabled: false,
-          note: note || '',
-          updatedAt: new Date(),
-          isSpecial: selectedTourType !== 'normal'
+        // Tüm tur tipleri için varsayılan saatlere dön
+        const tourTypes = ['normal', 'private', 'fishing-swimming', ...customTours.map(t => t.id)];
+        
+        const resetPromises = tourTypes.map(async (tourType) => {
+          const bsId = `${selectedBoatId}_${selectedDate}_${tourType}`;
+          return setDoc(doc(db, 'boatSchedules', bsId), {
+            id: bsId,
+            boatId: selectedBoatId,
+            date: selectedDate,
+            tourType: tourType,
+            timeSlots: defaultTimeSlots,
+            enabled: false,
+            note: '',
+            updatedAt: new Date(),
+            isSpecial: tourType !== 'normal'
+          });
         });
+        
+        await Promise.all(resetPromises);
       }
 
       setCurrentSchedule(defaultTimeSlots);
       setIsCustomDay(false);
       await fetchCustomDates();
-      alert('Gün varsayılan saatlere döndürüldü!');
+      alert(`Gün tüm tur tipleri için varsayılan saatlere döndürüldü! (${customTours.length + 3} tur tipi sıfırlandı)`);
     } catch (error) {
       console.error('Sıfırlama hatası:', error);
       alert('Sıfırlama hatası! Lütfen tekrar deneyin.');
@@ -453,7 +460,7 @@ export default function ScheduleManagementPage() {
           {/* Sol: Takvim */}
           <div className="bg-white rounded-xl shadow-lg p-6">
             {/* Tekne Seçici */}
-            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">⛵ Tekne</label>
                 <select
@@ -466,21 +473,9 @@ export default function ScheduleManagementPage() {
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">🎯 Tur Tipi</label>
-                <select
-                  value={selectedTourType}
-                  onChange={(e) => setSelectedTourType(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900"
-                >
-                  <option value="normal">Normal</option>
-                  <option value="private">Kapalı Tur (Özel)</option>
-                  <option value="fishing-swimming">Balık + Yüzme</option>
-                  {customTours.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                <p className="text-xs text-blue-600 mt-1">
+                  💡 Bu sayfada yapılan değişiklikler seçili tekne için tüm tur tiplerine aynı anda uygulanır
+                </p>
               </div>
             </div>
 
@@ -689,7 +684,10 @@ export default function ScheduleManagementPage() {
                     ))}
                     {selectedBoatId && (
                       <div className="text-xs text-gray-600 mt-2">
-                        Tekne: <span className="font-medium">{boats.find(b => b.id === selectedBoatId)?.name || selectedBoatId}</span> • Tur: <span className="font-medium">{selectedTourType}</span> • {enabled ? 'Aktif' : 'Pasif'}
+                        Tekne: <span className="font-medium">{boats.find(b => b.id === selectedBoatId)?.name || selectedBoatId}</span> • <span className="font-medium">Tüm Tur Tipleri</span> • {enabled ? 'Aktif' : 'Pasif'}
+                        <div className="text-xs text-blue-600 mt-1">
+                          Bu saatler Normal, Kapalı Tur, Balık+Yüzme ve tüm özel turlara uygulanacak
+                        </div>
                       </div>
                     )}
                     {!!note && (
