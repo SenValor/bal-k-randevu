@@ -8,6 +8,138 @@ import { auth, db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
+// Günlük saat düzenleyici bileşeni
+function DailyScheduleEditor({ date, initialSlots, onSave, customTours }: {
+  date: string;
+  initialSlots: TimeSlot[];
+  onSave: (timeSlots: TimeSlot[]) => void;
+  customTours: {id: string, name: string}[];
+}) {
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>(initialSlots);
+  
+  const addTimeSlot = () => {
+    const newSlot: TimeSlot = {
+      id: `daily_${Date.now()}`,
+      start: '09:00',
+      end: '15:00',
+      isActive: true,
+      availableTourTypes: {
+        normal: true,
+        private: true,
+        fishingSwimming: true,
+        customTours: []
+      }
+    };
+    setTimeSlots([...timeSlots, newSlot]);
+  };
+  
+  const updateTimeSlot = (id: string, field: keyof TimeSlot, value: any) => {
+    setTimeSlots(prev => prev.map(slot => 
+      slot.id === id ? { ...slot, [field]: value } : slot
+    ));
+  };
+  
+  const deleteTimeSlot = (id: string) => {
+    if (timeSlots.length <= 1) {
+      alert('En az 1 saat dilimi bulunmalıdır!');
+      return;
+    }
+    setTimeSlots(prev => prev.filter(slot => slot.id !== id));
+  };
+  
+  const handleSave = () => {
+    onSave(timeSlots);
+  };
+  
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium text-gray-900">Saat Dilimleri</h4>
+        <button
+          onClick={addTimeSlot}
+          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
+        >
+          + Saat Ekle
+        </button>
+      </div>
+      
+      {timeSlots.map((slot, index) => (
+        <div key={slot.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="flex items-center space-x-3 mb-3">
+            <input
+              type="checkbox"
+              checked={slot.isActive}
+              onChange={(e) => updateTimeSlot(slot.id, 'isActive', e.target.checked)}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <span className="font-medium text-gray-700">#{index + 1} Aktif</span>
+            {timeSlots.length > 1 && (
+              <button
+                onClick={() => deleteTimeSlot(slot.id)}
+                className="ml-auto text-red-500 hover:text-red-700 font-medium text-sm"
+              >
+                🗑️ Sil
+              </button>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Başlangıç Saati
+              </label>
+              <input
+                type="time"
+                value={slot.start}
+                onChange={(e) => updateTimeSlot(slot.id, 'start', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Bitiş Saati
+              </label>
+              <input
+                type="time"
+                value={slot.end}
+                onChange={(e) => updateTimeSlot(slot.id, 'end', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              />
+            </div>
+          </div>
+          
+          {/* Özel İsim Alanı */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Özel İsim (Opsiyonel)
+            </label>
+            <input
+              type="text"
+              value={slot.displayName || ''}
+              onChange={(e) => updateTimeSlot(slot.id, 'displayName', e.target.value || undefined)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              placeholder="Örn: Çinekop, Akşam Turu, Gece Sefer..."
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Bu isim rezervasyon sayfasında saat yerine gösterilir
+            </p>
+          </div>
+        </div>
+      ))}
+      
+      <div className="flex justify-end">
+        <button
+          onClick={handleSave}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium"
+        >
+          💾 Bu Günü Kaydet
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Tarih aralığı modal komponenti
 function DateRangeModal({ boat, onClose, onSave }: DateRangeModalProps) {
   const [dateRange, setDateRange] = useState<Boat['dateRange']>({
@@ -184,10 +316,39 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
           fishingSwimming: true,
           customTours: []
         }
+      },
+      { 
+        id: 'evening', 
+        start: '19:00', 
+        end: '01:00', 
+        isActive: true,
+        availableTourTypes: {
+          normal: true,
+          private: true,
+          fishingSwimming: true,
+          customTours: []
+        }
+      },
+      { 
+        id: 'night', 
+        start: '21:00', 
+        end: '03:00', 
+        isActive: false,
+        availableTourTypes: {
+          normal: false,
+          private: true,
+          fishingSwimming: false,
+          customTours: []
+        }
       }
     ],
     note: boat.customSchedule?.note || ''
   });
+  
+  // Günlük saat yönetimi için state
+  const [showDailySchedule, setShowDailySchedule] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [dailySchedules, setDailySchedules] = useState<{[date: string]: TimeSlot[]}>(boat.customSchedule?.dailySchedules || {});
   
   // Özel turları çek
   const [customTours, setCustomTours] = useState<{id: string, name: string}[]>([]);
@@ -318,19 +479,67 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
     onSave(boat.id, schedule);
   };
   
+  // Günlük saat yönetimi fonksiyonları
+  const saveDailySchedule = (date: string, timeSlots: TimeSlot[]) => {
+    setDailySchedules(prev => ({
+      ...prev,
+      [date]: timeSlots
+    }));
+  };
+  
+  const resetDailySchedule = (date: string) => {
+    setDailySchedules(prev => {
+      const newSchedules = { ...prev };
+      delete newSchedules[date];
+      return newSchedules;
+    });
+  };
+  
+  const handleSaveWithDaily = () => {
+    const scheduleWithDaily = {
+      ...schedule,
+      dailySchedules: dailySchedules
+    };
+    onSave(boat.id, scheduleWithDaily);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">
-              🕰️ {boat.name} - Çalışma Saatleri
+              🕰️ {boat.name} - Gelişmiş Saat Yönetimi
             </h2>
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700"
             >
               ✕
+            </button>
+          </div>
+          
+          {/* Tab Navigation */}
+          <div className="flex space-x-1 mb-6 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setShowDailySchedule(false)}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                !showDailySchedule 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              🕰️ Genel Saatler
+            </button>
+            <button
+              onClick={() => setShowDailySchedule(true)}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                showDailySchedule 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              📅 Günlük Saatler
             </button>
           </div>
 
@@ -388,7 +597,7 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
                         )}
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Başlangıç Saati
@@ -412,6 +621,23 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                           />
                         </div>
+                      </div>
+                      
+                      {/* Özel İsim Alanı */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Özel İsim (Opsiyonel)
+                        </label>
+                        <input
+                          type="text"
+                          value={slot.displayName || ''}
+                          onChange={(e) => updateTimeSlot(slot.id, 'displayName', e.target.value || undefined)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                          placeholder="Örn: Çinekop, Akşam Turu, Gece Sefer..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Bu isim rezervasyon sayfasında saat yerine gösterilir
+                        </p>
                       </div>
                       
                       {/* Tur Tipi Seçimleri */}
@@ -529,8 +755,83 @@ function ScheduleModal({ boat, onClose, onSave }: ScheduleModalProps) {
               </>
             )}
             
+            {/* Günlük Saat Yönetimi */}
+            {showDailySchedule && (
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h3 className="text-amber-800 font-semibold mb-2">📅 Günlük Saat Yönetimi</h3>
+                  <p className="text-amber-700 text-sm mb-3">
+                    Belirli günler için özel saat dilimleri ayarlayabilirsiniz. Bu ayarlar genel saatleri geçersiz kılar.
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tarih Seçin
+                      </label>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      />
+                    </div>
+                    
+                    {selectedDate && (
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-medium text-gray-900">
+                            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('tr-TR', { 
+                              weekday: 'long', 
+                              day: 'numeric', 
+                              month: 'long', 
+                              year: 'numeric' 
+                            })}
+                          </h4>
+                          {dailySchedules[selectedDate] && (
+                            <button
+                              onClick={() => resetDailySchedule(selectedDate)}
+                              className="text-red-500 hover:text-red-700 text-sm font-medium"
+                            >
+                              🗑️ Sıfırla
+                            </button>
+                          )}
+                        </div>
+                        
+                        <DailyScheduleEditor
+                          date={selectedDate}
+                          initialSlots={dailySchedules[selectedDate] || schedule.timeSlots.filter(s => s.isActive)}
+                          onSave={(timeSlots) => saveDailySchedule(selectedDate, timeSlots)}
+                          customTours={customTours}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Mevcut Günlük Ayarlar */}
+                    {Object.keys(dailySchedules).length > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <h4 className="text-blue-800 font-medium mb-2">📋 Özel Ayarlı Günler</h4>
+                        <div className="space-y-1">
+                          {Object.entries(dailySchedules).map(([date, slots]) => (
+                            <div key={date} className="flex items-center justify-between text-sm">
+                              <span className="text-blue-700">
+                                {new Date(date + 'T12:00:00').toLocaleDateString('tr-TR')}
+                              </span>
+                              <span className="text-blue-600">
+                                {slots.length} saat dilimi
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Pasif durum açıklaması */}
-            {!schedule.enabled && (
+            {!showDailySchedule && !schedule.enabled && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <p className="text-gray-600 text-sm">
                   ℹ️ Özel çalışma saatleri pasifken bu tekne varsayılan sistem saatlerini kullanır.
@@ -564,6 +865,7 @@ interface TimeSlot {
   start: string;
   end: string;
   isActive: boolean;
+  displayName?: string; // Saat dilimi için özel isim (opsiyonel)
   // Hangi tur tiplerinin bu saat diliminde aktif olacağı
   availableTourTypes?: {
     normal: boolean;
@@ -608,6 +910,7 @@ interface Boat {
     enabled: boolean;
     timeSlots: TimeSlot[];
     note?: string;
+    dailySchedules?: {[date: string]: TimeSlot[]}; // Günlük özel saatler
   };
 }
 

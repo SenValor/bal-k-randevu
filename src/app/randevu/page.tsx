@@ -32,6 +32,7 @@ interface TimeSlot {
   start: string;
   end: string;
   isActive: boolean;
+  displayName?: string; // Saat dilimi için özel isim (opsiyonel)
   // Hangi tur tiplerinin bu saat diliminde aktif olacağı
   availableTourTypes?: {
     normal: boolean;
@@ -487,6 +488,8 @@ export default function RandevuPage() {
   
   // Sistem verileri
   const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']);
+  // Saat dilimlerinin detaylı bilgileri (displayName için)
+  const [timeSlotDetails, setTimeSlotDetails] = useState<{[timeRange: string]: TimeSlot}>({});
   // Tekne + Tur bazlı özel program bilgisi (not/badge için kullanılacak)
   const [activeBoatSchedule, setActiveBoatSchedule] = useState<{ note?: string; tourType?: string } | null>(null);
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
@@ -569,7 +572,17 @@ export default function RandevuPage() {
           // Tur tipi eşleşmesi ve aktif olma kontrolü
           if (bsData.enabled && bsData.tourType === tourType && Array.isArray(bsData.timeSlots)) {
             console.log(`boatSchedules bulundu (${bsId}):`, bsData);
-            setAvailableTimes(bsData.timeSlots.map((slot: any) => `${slot.start}-${slot.end}`));
+            const times = bsData.timeSlots.map((slot: any) => `${slot.start}-${slot.end}`);
+            setAvailableTimes(times);
+            
+            // TimeSlot detaylarını kaydet
+            const slotDetails: {[timeRange: string]: TimeSlot} = {};
+            bsData.timeSlots.forEach((slot: any) => {
+              const timeRange = `${slot.start}-${slot.end}`;
+              slotDetails[timeRange] = slot;
+            });
+            setTimeSlotDetails(slotDetails);
+            
             setActiveBoatSchedule({
               note: bsData.note || '',
               tourType: bsData.tourType || tourType
@@ -582,6 +595,7 @@ export default function RandevuPage() {
         if (tourType !== 'normal' && tourType !== 'private' && tourType !== 'fishing-swimming') {
           console.log(`Custom tur (${tourType}) için boatSchedules kaydı bulunamadı: ${bsId}`);
           setAvailableTimes([]);
+          setTimeSlotDetails({});
           setActiveBoatSchedule(null);
           return;
         }
@@ -597,6 +611,7 @@ export default function RandevuPage() {
         
           if (activeSlots.length > 0) {
             setAvailableTimes(activeSlots);
+            setTimeSlotDetails({}); // Özel tur için displayName yok
             return;
           }
         }
@@ -604,7 +619,7 @@ export default function RandevuPage() {
       
       // Öncelik 2: Tekne seçildi ve o teknenin özel saatleri varsa
       if (selectedBoat?.customSchedule?.enabled) {
-        const activeSlots = selectedBoat.customSchedule.timeSlots
+        const filteredSlots = selectedBoat.customSchedule.timeSlots
           .filter(slot => {
             // Saat dilimi aktif mi?
             if (!slot.isActive || !slot.start || !slot.end) return false;
@@ -620,11 +635,20 @@ export default function RandevuPage() {
             
             // Eski format uyumluluğu - availableTourTypes yoksa tüm turlar aktif
             return true;
-          })
-          .map(slot => `${slot.start}-${slot.end}`);
+          });
         
-        if (activeSlots.length > 0) {
-          setAvailableTimes(activeSlots);
+        if (filteredSlots.length > 0) {
+          const times = filteredSlots.map(slot => `${slot.start}-${slot.end}`);
+          setAvailableTimes(times);
+          
+          // TimeSlot detaylarını kaydet
+          const slotDetails: {[timeRange: string]: TimeSlot} = {};
+          filteredSlots.forEach((slot) => {
+            const timeRange = `${slot.start}-${slot.end}`;
+            slotDetails[timeRange] = slot;
+          });
+          setTimeSlotDetails(slotDetails);
+          
           return;
         }
       }
@@ -638,6 +662,7 @@ export default function RandevuPage() {
           // Özel saat ayarları var, bunları kullan
           const times = scheduleData.timeSlots.map((slot: any) => `${slot.start}-${slot.end}`);
           setAvailableTimes(times);
+          setTimeSlotDetails({}); // Eski sistem için displayName yok
           return;
         }
       }
@@ -648,18 +673,22 @@ export default function RandevuPage() {
         const data = timesDoc.data();
         if (data.times && Array.isArray(data.times)) {
           setAvailableTimes(data.times);
+          setTimeSlotDetails({}); // Genel sistem saatleri için displayName yok
         } else {
           // Firestore'da da yoksa hardcoded varsayılanları kullan
           setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+          setTimeSlotDetails({});
         }
       } else {
         // Varsayılan saatler
         setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+        setTimeSlotDetails({});
       }
     } catch (error) {
       console.error('Saatler çekilemedi:', error);
       // Hata durumunda varsayılan saatler
       setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+      setTimeSlotDetails({});
     }
   };
 
@@ -3175,7 +3204,9 @@ export default function RandevuPage() {
                               }
                             >
                               <div className="flex items-center justify-between">
-                                <span>{time}</span>
+                                <span>
+                                  {timeSlotDetails[time]?.displayName || time}
+                                </span>
                                 {/* Doluluk Göstergesi */}
                                 <div className="flex items-center space-x-1">
                                   <div className={`w-2 h-2 rounded-full ${

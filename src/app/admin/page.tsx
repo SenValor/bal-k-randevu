@@ -319,20 +319,12 @@ export default function AdminPanel() {
       stats: 'Sorular & Cevaplar'
     },
     {
-      title: 'Saat Yönetimi',
-      description: 'Günlük çalışma saatlerini düzenle',
-      href: '/admin/schedule',
-      icon: '⏰',
-      color: 'bg-amber-500 hover:bg-amber-600',
-      stats: 'Gün bazlı saatler'
-    },
-    {
       title: 'Tekne Yönetimi',
-      description: 'Tekneleri yönet, fotoğraf ekle, oturma düzeni ayarla',
+      description: 'Tekneleri yönet, saat ayarları, fotoğraf ekle, oturma düzeni ayarla',
       href: '/admin/boats',
       icon: '⛵',
       color: 'bg-cyan-500 hover:bg-cyan-600',
-      stats: 'Tekne ayarları'
+      stats: 'Tekne & Saat ayarları'
     },
     {
       title: 'Kara Liste',
