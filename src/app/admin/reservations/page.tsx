@@ -760,19 +760,109 @@ function ReservationsContent() {
     } else if (reservation.tourType === 'private') {
       return 'Kapalı Tur (Özel)';
     } else if (reservation.tourType === 'normal') {
-      // Normal tur için ekipman seçeneğini kontrol et
-      if (reservation.priceOption === 'own-equipment') {
-        return 'Normal Tur - Kendi Ekipmanı';
-      } else if (reservation.priceOption === 'with-equipment') {
-        return 'Normal Tur - Ekipman Dahil';
+      // Önce displayName'i kontrol et (eğer selectedTime displayName ise)
+      const selectedTime = reservation.selectedTime;
+      const lowerTime = selectedTime?.toLowerCase() || '';
+      
+      // DisplayName tespit et
+      let displayName = '';
+      
+      // Önce selectedTime'da displayName var mı kontrol et
+      if (lowerTime.includes('çine') || lowerTime.includes('cine')) {
+        displayName = 'ÇİNEKOP';
+      } else if (lowerTime.includes('istavrit') || lowerTime.includes('stavrit')) {
+        displayName = 'İSTAVRİT';
+      } else if (lowerTime.includes('akşam') || lowerTime.includes('aksam')) {
+        displayName = 'AKŞAM TURU';
+      } else if (lowerTime.includes('sabah')) {
+        displayName = 'SABAH TURU';
+      } else if (lowerTime.includes('gece')) {
+        displayName = 'GECE TURU';
       } else {
-        return 'Normal Tur';
+        // Saat aralığına göre displayName tahmin et
+        if (selectedTime === '20:00-02:00' || selectedTime === '21:00-03:00' || selectedTime === '22:00-04:00') {
+          displayName = 'ÇİNEKOP'; // Gece seansları genelde çinekop
+        } else if (selectedTime === '07:00-13:00' || selectedTime === '08:00-14:00') {
+          displayName = 'ÇİNEKOP'; // Sabah seansları da çinekop olabilir
+        }
+        // Diğer saat aralıkları için varsayılan displayName yok
+      }
+      
+      // DisplayName varsa onu kullan, yoksa normal tur formatı
+      if (displayName) {
+        const equipmentText = reservation.priceOption === 'own-equipment' ? ' - Kendi Ekipmanı' : 
+                             reservation.priceOption === 'with-equipment' ? ' - Ekipman Dahil' : '';
+        
+        // Gece seansı kontrolü
+        const isNightSession = selectedTime && (() => {
+          const [startStr, endStr] = selectedTime.split('-');
+          return startStr && endStr && startStr > endStr; // 20:00-02:00 gibi
+        })();
+        
+        const nightIndicator = isNightSession ? ' 🌙' : '';
+        
+        return displayName + equipmentText + nightIndicator;
+      }
+      
+      // Normal tur için ekipman seçeneğini kontrol et
+      // Gece seansı kontrolü (normal turlar için de)
+      const isNightSession = selectedTime && (() => {
+        const [startStr, endStr] = selectedTime.split('-');
+        return startStr && endStr && startStr > endStr; // 20:00-02:00 gibi
+      })();
+      
+      const nightIndicator = isNightSession ? ' 🌙' : '';
+      
+      if (reservation.priceOption === 'own-equipment') {
+        return 'Normal Tur - Kendi Ekipmanı' + nightIndicator;
+      } else if (reservation.priceOption === 'with-equipment') {
+        return 'Normal Tur - Ekipman Dahil' + nightIndicator;
+      } else {
+        return 'Normal Tur' + nightIndicator;
       }
     } else {
       // Custom tur kontrolü
       const customTour = customTours.find(tour => tour.id === reservation.tourType);
       return customTour ? customTour.name : `Bilinmeyen Tur (${reservation.tourType})`;
     }
+  };
+
+  // Saat formatını kontrol et ve gerçek saati döndür
+  const getDisplayTime = (selectedTime: string, reservation?: Reservation) => {
+    // Eğer selectedTime zaten "HH:MM-HH:MM" formatındaysa, direkt döndür
+    if (/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(selectedTime)) {
+      return selectedTime;
+    }
+    
+    // Eğer displayName ise, gerçek saati bulmaya çalış
+    // Önce yaygın saat formatlarını kontrol et
+    const commonTimeFormats = [
+      '07:00-13:00',
+      '14:00-20:00',
+      '08:00-14:00',
+      '15:00-21:00',
+      '09:00-15:00',
+      '16:00-22:00',
+      '01:00-23:00',
+      '06:00-12:00',
+      '13:00-19:00',
+      '20:00-02:00'
+    ];
+    
+    // Eğer displayName "çine", "çinekop", "akşam" gibi kelimeler içeriyorsa
+    // muhtemelen bir displayName'dir
+    const lowerTime = selectedTime.toLowerCase();
+    if (lowerTime.includes('çine') || lowerTime.includes('akşam') || lowerTime.includes('sabah') || 
+        lowerTime.includes('öğle') || lowerTime.includes('gece') || lowerTime.includes('tur') ||
+        lowerTime.includes('test')) {
+      
+      // Rezervasyon bilgisi varsa ve tekne bilgisi varsa, o teknenin saat dilimlerini kontrol edebiliriz
+      // Şimdilik genel bir mesaj döndürelim
+      return `${selectedTime} (Gerçek saat: Belirlenmedi)`;
+    }
+    
+    // Diğer durumlarda olduğu gibi döndür
+    return selectedTime;
   };
 
   const getWhatsAppMessages = (reservation: Reservation) => {
@@ -1390,7 +1480,7 @@ Anlayışınız için teşekkürler. 🙏`
                         </span>
                       </p>
                       <p><strong>Randevu Tarihi:</strong> {new Date(reservation.selectedDate).toLocaleDateString('tr-TR')}</p>
-                      <p><strong>Saat:</strong> {reservation.selectedTime}</p>
+                      <p><strong>Saat:</strong> {getDisplayTime(reservation.selectedTime, reservation)}</p>
                       <p><strong>Tur Tipi:</strong> {getReservationTourType(reservation)}</p>
                       <p><strong>Tekne:</strong> {
                         reservation.boatName ? 
