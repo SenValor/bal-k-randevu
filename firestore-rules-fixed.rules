@@ -49,6 +49,12 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
     
+    // 🚢 TEKNE SAAT PROGRAMLARI - Herkes okuyabilir (rezervasyon için gerekli)
+    match /boatSchedules/{scheduleId} {
+      allow read: if true;  // ✅ Herkes tekne saat programlarını okuyabilir
+      allow write: if request.auth != null;  // 🔒 Sadece admin değiştirebilir
+    }
+    
     // 🎯 REZERVASYONLAR - MÜŞTERİLER İÇİN AÇILDI
     match /reservations/{reservationId} {
       allow read: if true;  // ✅ Herkes okuyabilir (sorgulama için)

@@ -26,32 +26,108 @@ export const auth = getAuth(app);
 // Firestore'u optimize edilmiş ayarlarla başlat
 export const db = getFirestore(app);
 
-// Firestore ayarları (sadece client-side'da)
+// Chrome ve performans optimizasyonları (sadece client-side'da)
 if (typeof window !== 'undefined') {
-  // Cache boyutunu artır (40MB)
   try {
-    const { enableNetwork, disableNetwork } = require('firebase/firestore');
+    const { enableNetwork, disableNetwork, enableMultiTabIndexedDbPersistence, connectFirestoreEmulator } = require('firebase/firestore');
+    
+    // Chrome için özel cache ve persistence ayarları
+    enableMultiTabIndexedDbPersistence(db).catch((err) => {
+      if (err.code === 'failed-precondition') {
+        console.warn('Firestore persistence: Birden fazla sekme açık');
+      } else if (err.code === 'unimplemented') {
+        console.warn('Firestore persistence: Tarayıcı desteklemiyor');
+      }
+    });
     
     // Ağ durumu kontrolleri
     let isOnline = navigator.onLine;
+    let networkRetryCount = 0;
+    const MAX_RETRY = 3;
     
-    const handleOnline = () => {
+    const handleOnline = async () => {
       isOnline = true;
-      enableNetwork(db).catch(console.error);
+      networkRetryCount = 0;
+      try {
+        await enableNetwork(db);
+        console.log('🟢 Firebase bağlantısı yeniden kuruldu');
+      } catch (error) {
+        console.error('Firebase ağ etkinleştirme hatası:', error);
+      }
     };
     
-    const handleOffline = () => {
+    const handleOffline = async () => {
       isOnline = false;
-      disableNetwork(db).catch(console.error);
+      try {
+        await disableNetwork(db);
+        console.log('🔴 Firebase bağlantısı kapatıldı (offline)');
+      } catch (error) {
+        console.error('Firebase ağ kapatma hatası:', error);
+      }
+    };
+    
+    // Chrome'da connection retry mekanizması
+    const retryConnection = async () => {
+      if (!isOnline && networkRetryCount < MAX_RETRY) {
+        networkRetryCount++;
+        console.log(`🔄 Firebase bağlantısı yeniden deneniyor (${networkRetryCount}/${MAX_RETRY})`);
+        
+        setTimeout(async () => {
+          try {
+            await enableNetwork(db);
+            isOnline = true;
+            networkRetryCount = 0;
+            console.log('✅ Firebase bağlantısı başarıyla kuruldu');
+          } catch (error) {
+            console.error('Firebase retry hatası:', error);
+            if (networkRetryCount < MAX_RETRY) {
+              retryConnection();
+            }
+          }
+        }, 2000 * networkRetryCount); // Exponential backoff
+      }
     };
     
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
+    // Chrome için visibility change eventi
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !isOnline) {
+        retryConnection();
+      }
+    });
+    
     // Sayfa yüklendiğinde ağ durumunu kontrol et
     if (!isOnline) {
       disableNetwork(db).catch(console.error);
     }
+    
+    // Chrome için özel timeout ayarları
+    (window as any).firebaseTimeout = 15000; // 15 saniye timeout
+    
+    // Chrome Firebase hata yakalama
+    window.addEventListener('unhandledrejection', (event) => {
+      if (event.reason?.code === 'permission-denied' || 
+          event.reason?.message?.includes('Missing or insufficient permissions')) {
+        console.warn('🔴 Chrome Firebase unhandled rejection:', event.reason);
+        
+        // Kullanıcıya bilgi ver
+        setTimeout(() => {
+          const shouldReload = confirm(
+            '🔄 Bağlantı Sorunu\n\n' +
+            'Chrome tarayıcısında geçici bir sorun oluştu.\n' +
+            'Sayfayı yenilemek ister misiniz?'
+          );
+          if (shouldReload) {
+            window.location.reload();
+          }
+        }, 2000);
+        
+        event.preventDefault(); // Console'da hata göstermesini engelle
+      }
+    });
+    
   } catch (error) {
     console.warn('Firestore ağ kontrolü kurulamadı:', error);
   }

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import MaintenanceCheck from "@/components/MaintenanceCheck";
+import ChromeErrorBoundary from "@/components/ChromeErrorBoundary";
 
 // Development ortamında diagnostic log'ları etkinleştir
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -223,12 +224,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <MaintenanceCheck>
-          <Navbar />
-          <main>
-            {children}
-          </main>
-        </MaintenanceCheck>
+        <ChromeErrorBoundary>
+          <MaintenanceCheck>
+            <Navbar />
+            <main>
+              {children}
+            </main>
+          </MaintenanceCheck>
+        </ChromeErrorBoundary>
         <footer className="bg-gray-900 text-white py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Üst Bölüm - Linkler */}

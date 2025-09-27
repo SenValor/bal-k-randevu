@@ -11,6 +11,7 @@ interface TimeSlot {
   start: string;
   end: string;
   isActive: boolean;
+  displayName?: string;
 }
 
 interface CustomTour {
@@ -98,9 +99,17 @@ function AddReservationPage() {
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [dateOccupancy, setDateOccupancy] = useState<{[key: string]: number}>({});
   const [occupiedDates, setOccupiedDates] = useState<{[key: string]: number}>({});
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [boats, setBoats] = useState<Boat[]>([]);
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
-  const [boats, setBoats] = useState<any[]>([]);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  
+  // Dinamik saat sistemi
+  const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']);
+  const [timeSlotDetails, setTimeSlotDetails] = useState<{[timeRange: string]: TimeSlot}>({});
+  
+  // Takvim için
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   
   const [newReservation, setNewReservation] = useState<NewReservation>({
     tourType: 'normal',
@@ -116,11 +125,9 @@ function AddReservationPage() {
       phone: '',
       email: ''
     },
-    status: 'pending',
+    status: 'confirmed',
     paymentStatus: 'waiting'
   });
-
-  const availableTimes = ['07:00-13:00', '14:00-20:00'];
   
   const getBoatOrder = (boatId: string): string => {
     const sortedBoats = boats.sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
@@ -285,9 +292,40 @@ function AddReservationPage() {
     }
   };
 
+  // Firebase'den saat verilerini çek
+  const fetchAvailableTimes = async () => {
+    try {
+      console.log('Admin paneli - Saat verileri çekiliyor...');
+      
+      // Genel sistem saatleri
+      const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
+      if (timesDoc.exists()) {
+        const data = timesDoc.data();
+        if (data.times && Array.isArray(data.times)) {
+          console.log('Admin paneli - Sistem saatleri bulundu:', data.times);
+          setAvailableTimes(data.times);
+          
+          // Saat detaylarını da al
+          if (data.timeSlotDetails) {
+            setTimeSlotDetails(data.timeSlotDetails);
+          }
+        }
+      } else {
+        console.log('Admin paneli - availableTimes dokümanı bulunamadı, varsayılan saatler kullanılıyor');
+        setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+        setTimeSlotDetails({});
+      }
+    } catch (error) {
+      console.error('Admin paneli - Saat verileri çekilemedi:', error);
+      setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+      setTimeSlotDetails({});
+    }
+  };
+
   useEffect(() => {
     fetchCustomTours();
     fetchBoats();
+    fetchAvailableTimes();
   }, []);
 
   useEffect(() => {
@@ -954,23 +992,33 @@ function AddReservationPage() {
                     
                     {newReservation.selectedDate ? (
                       <div className="space-y-3">
-                        {availableTimes.map(time => (
-                          <button
-                            key={time}
-                            onClick={() => setNewReservation(prev => ({
-                              ...prev,
-                              selectedTime: time,
-                              selectedSeats: []
-                            }))}
-                            className={`w-full p-4 rounded-xl border-2 font-bold transition-all duration-300 ${
-                              newReservation.selectedTime === time
-                                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-blue-500 scale-105 shadow-lg'
-                                : 'bg-white text-slate-800 border-gray-300 hover:border-blue-300 hover:bg-blue-50'
-                            }`}
-                          >
-                            {time}
-                          </button>
-                        ))}
+                        {availableTimes.map(time => {
+                          const timeDetail = timeSlotDetails[time];
+                          const displayName = timeDetail?.displayName || time;
+                          
+                          return (
+                            <button
+                              key={time}
+                              onClick={() => setNewReservation(prev => ({
+                                ...prev,
+                                selectedTime: time,
+                                selectedSeats: []
+                              }))}
+                              className={`w-full p-4 rounded-xl border-2 font-bold transition-all duration-300 ${
+                                newReservation.selectedTime === time
+                                  ? 'bg-green-500 text-white border-green-500'
+                                  : 'bg-gray-50 text-slate-800 border-gray-300 hover:bg-blue-50 hover:border-blue-300'
+                              }`}
+                            >
+                              <div className="flex flex-col items-center">
+                                <span className="text-lg">{displayName}</span>
+                                {timeDetail?.displayName && (
+                                  <span className="text-sm opacity-75 mt-1">({time})</span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="text-center p-8 text-slate-500">

@@ -4,13 +4,28 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { createResilientListener } from '@/lib/firestoreHelpers';
 import { detectBrowser, logBrowserComparison, forceFirestoreConnectionInChrome } from '@/lib/browserDetection';
 import { optimizeFirestoreForChrome, chromeSpecificRetry, detectChromePrivacySettings } from '@/lib/chromeFixes';
+import { handleChromeFirebaseError } from '@/utils/chromeFirebaseFix';
+import { logChromeFirebaseDebug, checkChromeFirebasePermissions } from '@/utils/chromeDebugHelper';
 
-interface CustomTour
- {
+interface TimeSlot {
+  id: string;
+  start: string;
+  end: string;
+  isActive: boolean;
+  displayName?: string;
+  availableTourTypes?: {
+    normal: boolean;
+    private: boolean;
+    fishingSwimming: boolean;
+    customTours?: string[];
+  };
+}
+
+interface CustomTour {
   id: string;
   name: string;
   price: number;
@@ -19,26 +34,10 @@ interface CustomTour
   description: string;
   isActive: boolean;
   createdAt: Date;
-  // Çalışma saatleri
   customSchedule?: {
     enabled: boolean;
     timeSlots: TimeSlot[];
     note?: string;
-  };
-}
-
-interface TimeSlot {
-  id: string;
-  start: string;
-  end: string;
-  isActive: boolean;
-  displayName?: string; // Saat dilimi için özel isim (opsiyonel)
-  // Hangi tur tiplerinin bu saat diliminde aktif olacağı
-  availableTourTypes?: {
-    normal: boolean;
-    private: boolean;
-    fishingSwimming: boolean;
-    customTours: string[]; // Özel tur ID'leri
   };
 }
 
@@ -499,96 +498,162 @@ export default function RandevuPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   
-  // Rezervasyon tarih aralığı kontrolü
-  const [bookingDateRange, setBookingDateRange] = useState({
-    enabled: false,
-    startDate: '',
-    endDate: '',
-    disabledMessage: ''
-  });
+
+  // Chrome için Firebase retry wrapper (optimized)
+  const withRetry = async (operation: () => Promise<any>, maxRetries = 3): Promise<any> => {
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Chrome Firebase işlemi (deneme ${attempt}/${maxRetries})`);
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+        
+        console.warn(`❌ Firebase hatası (deneme ${attempt}):`, error.code || error.message);
+        
+        // Chrome'da sık görülen Firebase hataları
+        if (error?.code === 'permission-denied' || 
+            error?.code === 'unavailable' || 
+            error?.message?.includes('Missing or insufficient permissions')) {
+          
+          if (attempt < maxRetries) {
+            // Exponential backoff with jitter
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1) + Math.random() * 1000, 5000);
+            console.log(`⏳ ${delay}ms bekleyip tekrar denenecek...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } else {
+            // Son deneme başarısız oldu, kullanıcıyı bilgilendir
+            console.error('🔴 Chrome Firebase hatası - tüm denemeler başarısız');
+            handleChromeFirebaseError(error);
+          }
+        }
+        
+        // Diğer hatalar için hemen fırlat
+        throw error;
+      }
+    }
+    
+    throw lastError;
+  };
 
   // Firebase'den fiyatları çek
   const fetchPrices = async () => {
     try {
-      const pricesDoc = await getDoc(doc(db, 'settings', 'prices'));
-      if (pricesDoc.exists()) {
-        const data = pricesDoc.data();
+      const result = await withRetry(async () => {
+        const pricesDoc = await getDoc(doc(db, 'settings', 'prices'));
+        if (pricesDoc.exists()) {
+          return pricesDoc.data();
+        }
+        return null;
+      });
+      
+      if (result) {
         setPrices({
-          normalOwn: data.normalOwn || 850,
-          normalWithEquipment: data.normalWithEquipment || 1000,
-          privateTour: data.privateTour || 12000,
-          fishingSwimming: data.fishingSwimming || 15000
+          normalOwn: result.normalOwn || 850,
+          normalWithEquipment: result.normalWithEquipment || 1000,
+          privateTour: result.privateTour || 12000,
+          fishingSwimming: result.fishingSwimming || 15000
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Fiyatlar çekilemedi:', error);
+      
+      // Chrome'da permission hatası durumunda kullanıcıyı bilgilendir
+      if (error?.code === 'permission-denied' || 
+          error?.message?.includes('Missing or insufficient permissions')) {
+        console.warn('⚠️ Chrome Firebase yetki sorunu - varsayılan fiyatlar kullanılıyor');
+      }
     }
   };
 
-  // Firebase'den tarih aralığı ayarlarını çek
-  const fetchBookingDateRange = async () => {
-    try {
-      const settingsDoc = await getDoc(doc(db, 'settings', 'general'));
-      if (settingsDoc.exists()) {
-        const data = settingsDoc.data();
-        const dateRange = data.bookingDateRange;
-        
-        if (dateRange) {
-          setBookingDateRange(dateRange);
-        }
-      }
-    } catch (error) {
-      console.error('Tarih aralığı ayarları çekilemedi:', error);
-    }
-  };
 
   // Firebase'den özel turları çek
   const fetchCustomTours = async () => {
     try {
-      const toursDoc = await getDoc(doc(db, 'settings', 'customTours'));
-      if (toursDoc.exists()) {
-        const data = toursDoc.data();
-        if (data.tours && Array.isArray(data.tours)) {
-          // Sadece aktif turları göster
-          const activeTours = data.tours.filter((tour: CustomTour) => tour.isActive);
-          setCustomTours(activeTours);
+      const result = await withRetry(async () => {
+        const toursDoc = await getDoc(doc(db, 'settings', 'customTours'));
+        if (toursDoc.exists()) {
+          return toursDoc.data();
         }
+        return null;
+      });
+      
+      if (result && result.tours && Array.isArray(result.tours)) {
+        // Sadece aktif turları göster
+        const activeTours = result.tours.filter((tour: CustomTour) => tour.isActive);
+        setCustomTours(activeTours);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Özel turlar çekilemedi:', error);
+      
+      // Chrome'da permission hatası durumunda kullanıcıyı bilgilendir
+      if (error?.code === 'permission-denied' || 
+          error?.message?.includes('Missing or insufficient permissions')) {
+        console.warn('⚠️ Chrome Firebase yetki sorunu - özel turlar yüklenemedi');
+      }
     }
   };
 
   // Seçilen tekne/tur ve tarihe göre saatleri çek
   const fetchAvailableTimesForDate = async (dateString: string) => {
     try {
-      // 0) Öncelik: Tekne + Tur Tipi + Tarih için boatSchedules kontrolü
+      // 0) Öncelik: Tekne + Tur Tipi + Tarih için boatSchedules kontrolü (Chrome optimized)
       if (selectedBoat?.id && tourType) {
         const bsId = `${selectedBoat.id}_${dateString}_${tourType}`;
-        const bsDoc = await getDoc(doc(db, 'boatSchedules', bsId));
+        console.log(`🔍 Chrome: boatSchedules kontrolü - ${bsId}`);
+        logChromeFirebaseDebug('boatSchedules Check', { bsId, selectedBoat: selectedBoat.name, tourType });
         
-        if (bsDoc.exists()) {
-          const bsData = bsDoc.data();
-          // Tur tipi eşleşmesi ve aktif olma kontrolü
-          if (bsData.enabled && bsData.tourType === tourType && Array.isArray(bsData.timeSlots)) {
-            console.log(`boatSchedules bulundu (${bsId}):`, bsData);
-            const times = bsData.timeSlots.map((slot: any) => `${slot.start}-${slot.end}`);
-            setAvailableTimes(times);
+        try {
+          const bsDoc = await withRetry(async () => {
+            console.log(`📡 Chrome: Firebase çağrısı yapılıyor - boatSchedules/${bsId}`);
+            return await getDoc(doc(db, 'boatSchedules', bsId));
+          });
+          
+          if (bsDoc.exists()) {
+            const bsData = bsDoc.data();
+            console.log(`✅ Chrome: boatSchedules bulundu (${bsId}):`, bsData);
             
-            // TimeSlot detaylarını kaydet
-            const slotDetails: {[timeRange: string]: TimeSlot} = {};
-            bsData.timeSlots.forEach((slot: any) => {
-              const timeRange = `${slot.start}-${slot.end}`;
-              slotDetails[timeRange] = slot;
-            });
-            setTimeSlotDetails(slotDetails);
-            
-            setActiveBoatSchedule({
-              note: bsData.note || '',
-              tourType: bsData.tourType || tourType
-            });
-            return;
-          } 
+            // Tur tipi eşleşmesi ve aktif olma kontrolü
+            if (bsData.enabled && bsData.tourType === tourType && Array.isArray(bsData.timeSlots)) {
+              const times = bsData.timeSlots.map((slot: any) => `${slot.start}-${slot.end}`);
+              setAvailableTimes(times);
+              
+              // TimeSlot detaylarını kaydet
+              const slotDetails: {[timeRange: string]: TimeSlot} = {};
+              bsData.timeSlots.forEach((slot: any) => {
+                const timeRange = `${slot.start}-${slot.end}`;
+                slotDetails[timeRange] = slot;
+              });
+              setTimeSlotDetails(slotDetails);
+              
+              setActiveBoatSchedule({
+                note: bsData.note || '',
+                tourType: bsData.tourType || tourType
+              });
+              
+              console.log(`🎯 Chrome: Tekne özel saatleri yüklendi:`, times);
+              return;
+            } else {
+              console.log(`⚠️ Chrome: boatSchedules bulundu ama koşullar sağlanmıyor:`, {
+                enabled: bsData.enabled,
+                tourType: bsData.tourType,
+                expectedTourType: tourType,
+                hasTimeSlots: Array.isArray(bsData.timeSlots)
+              });
+            }
+          } else {
+            console.log(`ℹ️ Chrome: boatSchedules bulunamadı (${bsId})`);
+          }
+        } catch (error: any) {
+          console.error(`❌ Chrome: boatSchedules çekme hatası (${bsId}):`, error);
+          
+          // Chrome'da permission hatası durumunda bilgilendir
+          if (error?.code === 'permission-denied' || 
+              error?.message?.includes('Missing or insufficient permissions')) {
+            console.warn('⚠️ Chrome: boatSchedules permission hatası - genel saatlere geçiliyor');
+          }
         }
         
         // Custom tur için boatSchedules kaydı yoksa genel saatleri kullan
@@ -721,26 +786,54 @@ export default function RandevuPage() {
         }
       }
       
-      // Öncelik 4: Genel sistem saatleri
-      console.log('Genel sistem saatleri çekiliyor...');
-      const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
-      if (timesDoc.exists()) {
-        const data = timesDoc.data();
-        if (data.times && Array.isArray(data.times)) {
-          console.log('Genel sistem saatleri bulundu:', data.times);
-          setAvailableTimes(data.times);
-          setTimeSlotDetails({}); // Genel sistem saatleri için displayName yok
-          setActiveBoatSchedule(null); // Genel saatler için özel program yok
+      // Öncelik 4: Genel sistem saatleri (Chrome için retry ile)
+      console.log('🔄 Genel sistem saatleri çekiliyor (Chrome optimized)...');
+      
+      try {
+        const result = await withRetry(async () => {
+          const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
+          if (timesDoc.exists()) {
+            return timesDoc.data();
+          }
+          return null;
+        });
+        
+        if (result && result.times && Array.isArray(result.times)) {
+          console.log('✅ Genel sistem saatleri başarıyla çekildi:', result.times);
+          setAvailableTimes(result.times);
+          
+          // Saat detaylarını da kontrol et
+          if (result.timeSlotDetails) {
+            setTimeSlotDetails(result.timeSlotDetails);
+          } else {
+            setTimeSlotDetails({});
+          }
+          setActiveBoatSchedule(null);
         } else {
           // Firestore'da da yoksa hardcoded varsayılanları kullan
-          console.log('Firestore\'da saat verisi yok, varsayılan saatler kullanılıyor');
+          console.log('⚠️ Firestore\'da saat verisi yok, varsayılan saatler kullanılıyor');
           setAvailableTimes(['07:00-13:00', '14:00-20:00']);
           setTimeSlotDetails({});
           setActiveBoatSchedule(null);
         }
-      } else {
+      } catch (error: any) {
+        console.error('❌ Saat çekme hatası (Chrome):', error);
+        
+        // Chrome'da permission hatası durumunda kullanıcıyı bilgilendir
+        if (error?.code === 'permission-denied' || 
+            error?.message?.includes('Missing or insufficient permissions')) {
+          console.warn('⚠️ Chrome Firebase yetki sorunu - varsayılan saatler kullanılıyor');
+          
+          // Chrome için özel bildirim göster
+          try {
+            handleChromeFirebaseError(error);
+          } catch (notificationError) {
+            console.warn('Bildirim gösterilemedi:', notificationError);
+          }
+        }
+        
         // Varsayılan saatler
-        console.log('availableTimes dokümanı bulunamadı, varsayılan saatler kullanılıyor');
+        console.log('🔧 Hata durumunda varsayılan saatler kullanılıyor');
         setAvailableTimes(['07:00-13:00', '14:00-20:00']);
         setTimeSlotDetails({});
         setActiveBoatSchedule(null);
@@ -777,6 +870,27 @@ export default function RandevuPage() {
     };
   }, [selectedDate, selectedBoat?.id, selectedBoat?.customSchedule, tourType, customTours]);
 
+  // Chrome Firebase debug kontrolü
+  useEffect(() => {
+    const isChrome = navigator.userAgent.includes('Chrome');
+    if (isChrome) {
+      console.log('🔍 Chrome tespit edildi - Firebase debug başlatılıyor...');
+      logChromeFirebaseDebug('Page Load');
+      
+      // 2 saniye sonra permission test yap
+      setTimeout(() => {
+        checkChromeFirebasePermissions().then(success => {
+          if (success) {
+            console.log('✅ Chrome Firebase permissions OK');
+          } else {
+            console.error('❌ Chrome Firebase permissions FAILED');
+            alert('⚠️ Chrome Firebase Bağlantı Sorunu\n\nSayfayı yenilemeyi deneyin (Ctrl+F5)');
+          }
+        });
+      }, 2000);
+    }
+  }, []);
+
   // Firebase'den fiyatları çek
   useEffect(() => {
     // Promise rejection'ları yakala
@@ -788,9 +902,6 @@ export default function RandevuPage() {
       console.error('fetchCustomTours Promise hatası:', error);
     });
     
-    fetchBookingDateRange().catch((error) => {
-      console.error('fetchBookingDateRange Promise hatası:', error);
-    });
 
     // Fiyatları real-time dinle
     const unsubscribePrices = onSnapshot(doc(db, 'settings', 'prices'), (doc) => {
@@ -1264,11 +1375,12 @@ export default function RandevuPage() {
         const data = doc.data();
         // Sadece onaylı ve bekleyen rezervasyonları dikkate al
         if ((data.status === 'confirmed' || data.status === 'pending') && data.selectedTime) {
-          // TUR TİPİ KONTROLÜ: Sadece aynı tur tipindeki rezervasyonları say
+          // TUR TİPİ KONTROLÜ: 
           const reservationTourType = data.tourType || 'normal';
           
-          // Eğer farklı tur tipiyse bu rezervasyonu sayma
-          if (reservationTourType !== tourType) {
+          // Özel tur seçildiğinde TÜM rezervasyonları say (çünkü tüm tekneyi etkiler)
+          // Normal tur seçildiğinde sadece aynı tur tipindeki rezervasyonları say
+          if (!isSpecialTour(tourType) && reservationTourType !== tourType) {
             return; // Bu rezervasyonu atla
           }
           
@@ -1322,11 +1434,12 @@ export default function RandevuPage() {
         const data = doc.data();
         // Sadece onaylı ve bekleyen rezervasyonları dikkate al
         if (data.status === 'confirmed' || data.status === 'pending') {
-          // TUR TİPİ KONTROLÜ: Sadece aynı tur tipindeki rezervasyonları say
+          // TUR TİPİ KONTROLÜ: 
           const reservationTourType = data.tourType || 'normal';
           
-          // Eğer farklı tur tipiyse bu rezervasyonu sayma
-          if (reservationTourType !== tourType) {
+          // Özel tur seçildiğinde TÜM rezervasyonları say (çünkü tüm tekneyi etkiler)
+          // Normal tur seçildiğinde sadece aynı tur tipindeki rezervasyonları say
+          if (!isSpecialTour(tourType) && reservationTourType !== tourType) {
             return; // Bu rezervasyonu atla
           }
           
@@ -1383,6 +1496,15 @@ export default function RandevuPage() {
             const data = doc.data();
             // Sadece onaylı ve bekleyen rezervasyonları dikkate al
             if (data.status === 'confirmed' || data.status === 'pending') {
+              // TUR TİPİ KONTROLÜ: 
+              const reservationTourType = data.tourType || 'normal';
+              
+              // Özel tur seçildiğinde TÜM rezervasyonları say (çünkü tüm tekneyi etkiler)
+              // Normal tur seçildiğinde sadece aynı tur tipindeki rezervasyonları say
+              if (!isSpecialTour(tourType) && reservationTourType !== tourType) {
+                return; // Bu rezervasyonu atla
+              }
+              
               if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
                 occupied.push(...data.selectedSeats);
               }
@@ -1728,24 +1850,7 @@ export default function RandevuPage() {
 
   // Belirli tarihin seçilebilir olup olmadığını kontrol et
   const isDateSelectable = (dateString: string) => {
-    // 1. Genel sistem tarih aralığı kontrolü
-    if (bookingDateRange.enabled && bookingDateRange.startDate && bookingDateRange.endDate) {
-      const checkDate = new Date(dateString);
-      const startDate = new Date(bookingDateRange.startDate);
-      const endDate = new Date(bookingDateRange.endDate);
-      
-      // Saat karşılaştırması için gün başına ayarla
-      checkDate.setHours(0, 0, 0, 0);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(0, 0, 0, 0);
-      
-      // Genel tarih aralığı dışındaysa seçilemez
-      if (checkDate < startDate || checkDate > endDate) {
-        return false;
-      }
-    }
-    
-    // 2. Seçili teknenin tarih aralığı kontrolü
+    // Sadece teknenin tarih aralığı kontrolü
     if (selectedBoat && selectedBoat.dateRange?.enabled) {
       return isDateInBoatRange(dateString, selectedBoat);
     }
@@ -3016,43 +3121,29 @@ export default function RandevuPage() {
                         
                         const isDateNotSelectable = !isDateSelectable(dayInfo.date);
                         
-                        // Özel tur için ek kontrol: tek koltuk bile dolu olsa tarih seçilemez
-                        const isSpecialTourBlocked = isSpecialTour(tourType) && isPartiallyOccupied;
-                        
                         return (
                           <button
                             key={index}
                             onClick={() => {
-                              if (!dayInfo.isDisabled && !isFullyOccupied && !isDateNotSelectable && !isSpecialTourBlocked) {
-                                // Tarih seçimi
+                              if (!dayInfo.isDisabled && !isFullyOccupied && !isDateNotSelectable) {
+                                // Tarih seçimi - özel tur kontrolü saat seçiminde yapılacak
                                 setSelectedDate(dayInfo.date);
                                 // Tarih seçiminde hafif scroll yap
                                 setTimeout(() => scrollToContinueButton(), 400);
-                              } else if (isSpecialTourBlocked && dayInfo.isCurrentMonth) {
-                                // Özel tur için özel uyarı
-                                alert(`❌ ${getTourDisplayName(tourType)} için bu tarih seçilemez!\n\n📅 ${new Date(dayInfo.date).toLocaleDateString('tr-TR')}\n\n${getTourDisplayName(tourType)} tüm tekneyi kiralama sistemidir. Bu tarihte ${occupiedCount} koltuk dolu olduğu için özel tur alamazsınız.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\n💡 Çözüm önerileri:\n• Başka bir tarih seçin\n• Normal tur seçeneğini tercih edin`);
                               } else if (isDateNotSelectable && dayInfo.isCurrentMonth) {
-                                // Tarih aralığı dışı uyarısı - tekne ve genel tarih aralığı kontrolü
-                                let alertMessage = '❌ Bu tarih seçilemez!\n\n';
-                                
                                 // Tekne tarih aralığı kontrolü
                                 if (selectedBoat && selectedBoat.dateRange?.enabled && !isDateInBoatRange(dayInfo.date, selectedBoat)) {
+                                  let alertMessage = '❌ Bu tarih seçilemez!\n\n';
                                   alertMessage += `🚤 Seçili tekne (${selectedBoat.name}) bu tarihte hizmet vermiyor.\n\n`;
                                   alertMessage += `📅 Bu tekne için geçerli tarihler:\n${new Date(selectedBoat.dateRange.startDate).toLocaleDateString('tr-TR')} - ${new Date(selectedBoat.dateRange.endDate).toLocaleDateString('tr-TR')}`;
                                   if (selectedBoat.dateRange.note) {
                                     alertMessage += `\n\n💬 Not: ${selectedBoat.dateRange.note}`;
                                   }
-                                } 
-                                // Genel sistem tarih aralığı kontrolü  
-                                else if (bookingDateRange.enabled && bookingDateRange.startDate && bookingDateRange.endDate) {
-                                  alertMessage += `${bookingDateRange.disabledMessage || 'Bu tarih rezervasyon için kapalı'}\n\n`;
-                                  alertMessage += `📅 Rezervasyon yapılabilir tarihler:\n${new Date(bookingDateRange.startDate).toLocaleDateString('tr-TR')} - ${new Date(bookingDateRange.endDate).toLocaleDateString('tr-TR')}`;
+                                  alert(alertMessage);
                                 }
-                                
-                                alert(alertMessage);
                               }
                             }}
-                            disabled={dayInfo.isDisabled || isFullyOccupied || isDateNotSelectable || isSpecialTourBlocked}
+                            disabled={dayInfo.isDisabled || isFullyOccupied || isDateNotSelectable}
                             className={`aspect-square rounded-md sm:rounded-lg text-xs sm:text-sm font-bold transition-all duration-300 relative touch-manipulation ${
                               dayInfo.isDisabled 
                                 ? 'text-gray-300 cursor-not-allowed' 
@@ -3062,8 +3153,6 @@ export default function RandevuPage() {
                                 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-110 shadow-lg'
                                 : isFullyOccupied && dayInfo.isCurrentMonth
                                 ? 'bg-gradient-to-br from-red-500 to-red-600 text-white cursor-not-allowed opacity-75'
-                                : isSpecialTourBlocked && dayInfo.isCurrentMonth
-                                ? 'bg-gradient-to-br from-red-400 to-red-500 text-white cursor-not-allowed opacity-75 border-2 border-red-300'
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
                                 ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white hover:from-orange-500 hover:to-orange-600 hover:scale-105 shadow-md'
                                 : dayInfo.isCurrentMonth
@@ -3074,20 +3163,11 @@ export default function RandevuPage() {
                               dayInfo.isDisabled
                                 ? 'Geçmiş tarih seçilemez'
                                 : isDateNotSelectable && dayInfo.isCurrentMonth
-                                ? (() => {
-                                    // Tekne tarih aralığı kontrolü
-                                    if (selectedBoat && selectedBoat.dateRange?.enabled && !isDateInBoatRange(dayInfo.date, selectedBoat)) {
-                                      return `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${selectedBoat.name} bu tarihte hizmet vermiyor`;
-                                    }
-                                    // Genel tarih aralığı kontrolü
-                                    return `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${bookingDateRange.disabledMessage || 'Bu tarih kapalı'}`;
-                                  })()
-                                : isSpecialTourBlocked && dayInfo.isCurrentMonth
-                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${getTourDisplayName(tourType)} için müsait değil (${occupiedCount} koltuk dolu) - Özel turlar için tamamen boş günler gerekir`
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${selectedBoat?.name} bu tarihte hizmet vermiyor`
                                 : isFullyOccupied && dayInfo.isCurrentMonth
                                 ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen dolu (tüm seanslar) - Hiçbir tur türü için müsait değil`
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
-                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Kısmi dolu (${occupiedCount}/24) - Normal tur için müsait seanslar var`
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Kısmi dolu (${occupiedCount}/24) - Müsait seanslar var, saat seçiminde kontrol edin`
                                 : dayInfo.isCurrentMonth
                                 ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen boş - Tüm seanslar müsait`
                                 : ''
@@ -3117,29 +3197,10 @@ export default function RandevuPage() {
                         <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-red-500 to-red-600 rounded shadow-sm"></div>
                         <span className="font-bold text-slate-800 text-xs">Tamamen Dolu</span>
                       </div>
-                      {isSpecialTour(tourType) && (
-                        <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-red-300">
-                          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-red-400 to-red-500 rounded shadow-sm border border-red-300"></div>
-                          <span className="font-bold text-slate-800 text-xs">Özel Tur İçin Dolu</span>
-                        </div>
-                      )}
                       <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-orange-200">
                         <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-orange-400 to-orange-500 rounded shadow-sm"></div>
-                        <span className="font-bold text-slate-800 text-xs">{isSpecialTour(tourType) ? 'Boş' : 'Kısmi Dolu'}</span>
+                        <span className="font-bold text-slate-800 text-xs">Kısmi Dolu</span>
                       </div>
-                      {bookingDateRange.enabled && (
-                        <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-purple-200">
-                          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-purple-400 to-purple-500 rounded shadow-sm line-through opacity-60"></div>
-                          <span className="font-bold text-slate-800 text-xs" title={bookingDateRange.disabledMessage || 'Bu tarihler kapalı'}>
-                            {(() => {
-                              const message = bookingDateRange.disabledMessage || 'Bu tarihler kapalı';
-                              return message.length > 20 
-                                ? message.substring(0, 17) + '...' 
-                                : message;
-                            })()}
-                          </span>
-                        </div>
-                      )}
                       <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-blue-200">
                         <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-100 rounded shadow-sm"></div>
                         <span className="font-bold text-slate-800 text-xs">Boş</span>
@@ -3313,7 +3374,7 @@ export default function RandevuPage() {
                             key={time}
                             onClick={() => {
                                 if (isPrivateBlocked) {
-                                  alert(`❌ Bu seans için özel tur alamazsınız!\n\n${time} seansında ${timeOccupancy} koltuk dolu olduğu için özel tur seçimi yapılamaz.\nÖzel turlar için tamamen boş seanslar gereklidir.\n\nLütfen başka bir saat seçin veya normal tur seçeneğini tercih edin.`);
+                                  alert(`❌ ${getTourDisplayName(tourType)} için bu seans müsait değil!\n\n🕐 ${time} seansında ${timeOccupancy} koltuk dolu\n\n${getTourDisplayName(tourType)} tüm tekneyi kiralama sistemidir. Bu seansın tamamen boş olması gerekir.\n\n💡 Çözüm önerileri:\n• Başka bir saat seçin (tamamen boş seanslar)\n• Normal tur seçeneğini tercih edin\n• Başka bir tarih deneyin`);
                                   return;
                                 }
                                 if (isFullyOccupied) {
@@ -3334,15 +3395,19 @@ export default function RandevuPage() {
                                   ? 'bg-gradient-to-br from-red-400 to-red-500 text-white cursor-not-allowed opacity-75'
                                   : isPartiallyOccupied
                                   ? 'bg-gradient-to-br from-orange-100 to-orange-200 hover:from-orange-200 hover:to-orange-300 text-slate-800 border-2 border-orange-300'
+                                  : isSpecialTour(tourType)
+                                  ? 'bg-gradient-to-br from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 text-green-800 border-2 border-green-300 shadow-md'
                                   : 'bg-blue-50 hover:bg-blue-100 text-slate-800 border-2 border-blue-200'
                             }`}
                               title={
                                 isPrivateBlocked
-                                  ? `Özel tur için müsait değil (${timeOccupancy}/12 dolu)`
+                                  ? `${getTourDisplayName(tourType)} için müsait değil (${timeOccupancy}/12 dolu)`
                                   : isFullyOccupied
                                   ? `Tamamen dolu (${timeOccupancy}/12)`
                                   : isPartiallyOccupied
                                   ? `Kısmi dolu (${timeOccupancy}/12) - Normal tur için müsait${isNightSession ? ' • 🌙 Gece Seansı' : ''}`
+                                  : isSpecialTour(tourType)
+                                  ? `Tamamen boş (${timeOccupancy}/12) - ${getTourDisplayName(tourType)} için müsait${isNightSession ? ' • 🌙 Gece Seansı' : ''}`
                                   : `Tamamen boş (${timeOccupancy}/12) - Tüm tur tipleri için müsait${isNightSession ? ' • 🌙 Gece Seansı' : ''}`
                               }
                             >
