@@ -3016,16 +3016,21 @@ export default function RandevuPage() {
                         
                         const isDateNotSelectable = !isDateSelectable(dayInfo.date);
                         
+                        // Özel tur için ek kontrol: tek koltuk bile dolu olsa tarih seçilemez
+                        const isSpecialTourBlocked = isSpecialTour(tourType) && isPartiallyOccupied;
+                        
                         return (
                           <button
                             key={index}
                             onClick={() => {
-                              if (!dayInfo.isDisabled && !isFullyOccupied && !isDateNotSelectable) {
-                                // Tarih seçimi - özel tur kısıtlaması sadece tamamen dolu günler için
-                                // Kısmen dolu günlerde hangi seansın müsait olduğunu saat seçiminde göstereceğiz
+                              if (!dayInfo.isDisabled && !isFullyOccupied && !isDateNotSelectable && !isSpecialTourBlocked) {
+                                // Tarih seçimi
                                 setSelectedDate(dayInfo.date);
                                 // Tarih seçiminde hafif scroll yap
                                 setTimeout(() => scrollToContinueButton(), 400);
+                              } else if (isSpecialTourBlocked && dayInfo.isCurrentMonth) {
+                                // Özel tur için özel uyarı
+                                alert(`❌ ${getTourDisplayName(tourType)} için bu tarih seçilemez!\n\n📅 ${new Date(dayInfo.date).toLocaleDateString('tr-TR')}\n\n${getTourDisplayName(tourType)} tüm tekneyi kiralama sistemidir. Bu tarihte ${occupiedCount} koltuk dolu olduğu için özel tur alamazsınız.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\n💡 Çözüm önerileri:\n• Başka bir tarih seçin\n• Normal tur seçeneğini tercih edin`);
                               } else if (isDateNotSelectable && dayInfo.isCurrentMonth) {
                                 // Tarih aralığı dışı uyarısı - tekne ve genel tarih aralığı kontrolü
                                 let alertMessage = '❌ Bu tarih seçilemez!\n\n';
@@ -3047,7 +3052,7 @@ export default function RandevuPage() {
                                 alert(alertMessage);
                               }
                             }}
-                            disabled={dayInfo.isDisabled || isFullyOccupied || isDateNotSelectable}
+                            disabled={dayInfo.isDisabled || isFullyOccupied || isDateNotSelectable || isSpecialTourBlocked}
                             className={`aspect-square rounded-md sm:rounded-lg text-xs sm:text-sm font-bold transition-all duration-300 relative touch-manipulation ${
                               dayInfo.isDisabled 
                                 ? 'text-gray-300 cursor-not-allowed' 
@@ -3057,6 +3062,8 @@ export default function RandevuPage() {
                                 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white scale-110 shadow-lg'
                                 : isFullyOccupied && dayInfo.isCurrentMonth
                                 ? 'bg-gradient-to-br from-red-500 to-red-600 text-white cursor-not-allowed opacity-75'
+                                : isSpecialTourBlocked && dayInfo.isCurrentMonth
+                                ? 'bg-gradient-to-br from-red-400 to-red-500 text-white cursor-not-allowed opacity-75 border-2 border-red-300'
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
                                 ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white hover:from-orange-500 hover:to-orange-600 hover:scale-105 shadow-md'
                                 : dayInfo.isCurrentMonth
@@ -3075,10 +3082,12 @@ export default function RandevuPage() {
                                     // Genel tarih aralığı kontrolü
                                     return `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${bookingDateRange.disabledMessage || 'Bu tarih kapalı'}`;
                                   })()
+                                : isSpecialTourBlocked && dayInfo.isCurrentMonth
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - ${getTourDisplayName(tourType)} için müsait değil (${occupiedCount} koltuk dolu) - Özel turlar için tamamen boş günler gerekir`
                                 : isFullyOccupied && dayInfo.isCurrentMonth
                                 ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen dolu (tüm seanslar) - Hiçbir tur türü için müsait değil`
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
-                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Kısmi dolu (${occupiedCount}/24) - Müsait seanslar var, saat seçiminde görün`
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Kısmi dolu (${occupiedCount}/24) - Normal tur için müsait seanslar var`
                                 : dayInfo.isCurrentMonth
                                 ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen boş - Tüm seanslar müsait`
                                 : ''
@@ -3106,11 +3115,17 @@ export default function RandevuPage() {
                       </div>
                       <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-red-200">
                         <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-red-500 to-red-600 rounded shadow-sm"></div>
-                        <span className="font-bold text-slate-800 text-xs">Dolu (Seçilemez)</span>
+                        <span className="font-bold text-slate-800 text-xs">Tamamen Dolu</span>
                       </div>
+                      {isSpecialTour(tourType) && (
+                        <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-red-300">
+                          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-red-400 to-red-500 rounded shadow-sm border border-red-300"></div>
+                          <span className="font-bold text-slate-800 text-xs">Özel Tur İçin Dolu</span>
+                        </div>
+                      )}
                       <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-orange-200">
                         <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-br from-orange-400 to-orange-500 rounded shadow-sm"></div>
-                        <span className="font-bold text-slate-800 text-xs">Kısmi</span>
+                        <span className="font-bold text-slate-800 text-xs">{isSpecialTour(tourType) ? 'Boş' : 'Kısmi Dolu'}</span>
                       </div>
                       {bookingDateRange.enabled && (
                         <div className="flex items-center space-x-1 bg-white/95 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full shadow-lg border border-purple-200">
