@@ -3115,7 +3115,10 @@ export default function RandevuPage() {
                         const isSelected = selectedDate === dayInfo.date;
                         
                         // Teknenin toplam kapasitesini hesapla (saat sayısı × 12 koltuk)
-                        const totalCapacity = availableTimes.length * 12;
+                        // availableTimes yerine teknenin gerçek saat sayısını kullan
+                        const boatTimeSlots = selectedBoat?.customSchedule?.timeSlots?.filter(slot => slot.isActive) || [];
+                        const actualAvailableTimesCount = boatTimeSlots.length > 0 ? boatTimeSlots.length : 4; // Varsayılan 4 saat
+                        const totalCapacity = actualAvailableTimesCount * 12;
                         const isFullyOccupied = occupiedCount >= totalCapacity; // Tüm seanslar dolu
                         const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < totalCapacity;
                         
@@ -3124,6 +3127,8 @@ export default function RandevuPage() {
                           console.log(`📅 Takvim Debug - ${dayInfo.date}:`, {
                             occupiedCount,
                             availableTimesLength: availableTimes.length,
+                            actualAvailableTimesCount,
+                            boatTimeSlotsLength: boatTimeSlots.length,
                             totalCapacity,
                             isFullyOccupied,
                             isPartiallyOccupied,
