@@ -3119,6 +3119,18 @@ export default function RandevuPage() {
                         const isFullyOccupied = occupiedCount >= totalCapacity; // Tüm seanslar dolu
                         const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < totalCapacity;
                         
+                        // Debug log
+                        if (occupiedCount > 0) {
+                          console.log(`📅 Takvim Debug - ${dayInfo.date}:`, {
+                            occupiedCount,
+                            availableTimesLength: availableTimes.length,
+                            totalCapacity,
+                            isFullyOccupied,
+                            isPartiallyOccupied,
+                            selectedBoat: selectedBoat?.name
+                          });
+                        }
+                        
                         // Bu tarih için hangi seansların dolu olduğunu hesapla
                         const getSessionStatusForDate = (date: string) => {
                           // Bu implementation daha sonra eklenecek - şimdilik basit mesaj
