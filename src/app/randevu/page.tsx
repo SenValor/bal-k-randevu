@@ -1381,6 +1381,11 @@ export default function RandevuPage() {
       
       const sessionOccupancyMap: {[key: string]: number} = {};
       
+      // Önce tüm mevcut saatleri 0 ile başlat
+      availableTimes.forEach(time => {
+        sessionOccupancyMap[time] = 0;
+      });
+      
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         console.log(`📋 Rezervasyon kontrol ediliyor:`, {
@@ -1396,6 +1401,7 @@ export default function RandevuPage() {
           // Bu saat için doluluk başlat (eğer yoksa)
           if (!sessionOccupancyMap[data.selectedTime]) {
             sessionOccupancyMap[data.selectedTime] = 0;
+            console.log(`⚠️ Rezervasyon saati availableTimes'da yok: ${data.selectedTime}. AvailableTimes:`, availableTimes);
           }
           
           if (data.isPrivateTour) {
@@ -1702,12 +1708,13 @@ export default function RandevuPage() {
         }
       }
       
-      // ✅ ÖZEL TUR ÇAKIŞMA KONTROLÜ
+      // ✅ ÖZEL TUR ÇAKIŞMA KONTROLÜ (SADECE AYNI TEKNE)
       if (isSpecialTour(tourType)) {
         const specialTourQuery = query(
           collection(db, 'reservations'),
           where('selectedDate', '==', selectedDate),
           where('selectedTime', '==', selectedTime),
+          where('selectedBoat', '==', selectedBoat.id), // Sadece aynı tekne
           where('status', 'in', ['pending', 'confirmed'])
         );
         
@@ -3370,6 +3377,13 @@ export default function RandevuPage() {
                           <button
                             key={time}
                             onClick={() => {
+                                console.log(`🎯 Saat tıklandı: ${time}`);
+                                console.log(`📊 timeOccupancy: ${timeOccupancy}`);
+                                console.log(`🔍 canSelectPrivate: ${canSelectPrivate}`);
+                                console.log(`⚠️ isPrivateBlocked: ${isPrivateBlocked}`);
+                                console.log(`🚢 selectedBoat.id: ${selectedBoat?.id}`);
+                                console.log(`📋 sessionOccupancy[selectedBoat.id]:`, sessionOccupancy[selectedBoat?.id || '']);
+                                
                                 if (isPrivateBlocked) {
                                   alert(`❌ ${getTourDisplayName(tourType)} için bu seans müsait değil!\n\n🕐 ${time} seansında ${timeOccupancy} koltuk dolu\n\n${getTourDisplayName(tourType)} tüm tekneyi kiralama sistemidir. Bu seansın tamamen boş olması gerekir.\n\n💡 Çözüm önerileri:\n• Başka bir saat seçin (tamamen boş seanslar)\n• Normal tur seçeneğini tercih edin\n• Başka bir tarih deneyin`);
                                   return;

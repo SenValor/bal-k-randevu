@@ -380,7 +380,8 @@ function ReservationsContent() {
             id: doc.id,
             name: data.name,
             isActive: data.isActive,
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            location: data.location // Konum bilgisini ekle
           });
         });
         
@@ -873,28 +874,28 @@ function ReservationsContent() {
     // Tekne bilgisini bul
     const boat = boats.find(b => b.id === reservation.selectedBoat);
     
-    // DENİZ ANASI teknesini direkt kontrol et
-    const boatName = boat?.name || '';
-    
+    // Tekne konum bilgisini al
     let locationInfo;
     
-    // DENİZ ANASI teknesiyse 2. tekne konumu kullan
-    if (boatName === 'DENİZ ANASI') {
+    if (boat?.location && boat.location.googleMapsUrl) {
+      // Tekne için özel konum bilgisi varsa onu kullan
       locationInfo = {
-        name: '2. Tekne Kalkış Noktası',
-        address: '41°09\'42.5"N 29°02\'51.2"E',
-        coordinates: '41.161793, 29.047543',
-        googleMapsUrl: 'https://maps.app.goo.gl/w9ns57QT6rCAeHF19',
-        directions: '2. tekne için özel kalkış noktası. Detaylı ulaşım bilgisi için bizimle iletişime geçebilirsiniz.'
+        name: boat.location.name || boat.name + ' Kalkış Noktası',
+        address: boat.location.address || 'Konum bilgisi mevcut',
+        coordinates: boat.location.coordinates ? 
+          `${boat.location.coordinates.latitude}, ${boat.location.coordinates.longitude}` : 
+          'Koordinat bilgisi mevcut',
+        googleMapsUrl: boat.location.googleMapsUrl,
+        directions: boat.location.directions || 'Detaylı ulaşım bilgisi için bizimle iletişime geçebilirsiniz.'
       };
     } else {
-      // Diğer tekneler için 1. tekne konumu
+      // Tekne için konum bilgisi yoksa varsayılan konum kullan
       locationInfo = {
-        name: 'Eyüp Odabaşı Sporcular Parkı - İskele',
-        address: 'Sarıyer/İstanbul',
-        coordinates: '41.1675, 29.0488',
-        googleMapsUrl: 'https://maps.app.goo.gl/fVPxCBB9JphkEMBH7',
-        directions: 'Yakında özel otopark bulunmakta ve civar sokaklarda park yerleri mevcut'
+        name: 'Kalkış Noktası',
+        address: 'Konum bilgisi güncelleniyor',
+        coordinates: 'Koordinat bilgisi güncelleniyor',
+        googleMapsUrl: 'https://maps.app.goo.gl/fVPxCBB9JphkEMBH7', // Varsayılan konum
+        directions: 'Konum bilgisi için bizimle iletişime geçebilirsiniz.'
       };
     }
     
