@@ -1025,10 +1025,11 @@ export default function RandevuPage() {
             totalOccupied += sessions[time];
           });
           
-          // Eğer her iki seans da tamamen dolu ise (2x12=24) günü tamamen dolu say
-          // Diğer durumlarda kısmi dolu olarak işaretle
-          if (fullyOccupiedSessions === Object.keys(sessions).length && Object.keys(sessions).length >= 2) {
-            dateOccupancy[date] = 24; // Her iki seans dolu
+          // Teknenin TÜM saatleri dolu olduğunda günü tamamen dolu say
+          // availableTimes.length kadar saat varsa ve hepsi dolu ise
+          const totalAvailableSessions = availableTimes.length;
+          if (fullyOccupiedSessions === totalAvailableSessions && totalAvailableSessions > 0) {
+            dateOccupancy[date] = 24; // Tüm seanslar dolu
           } else {
             dateOccupancy[date] = Math.min(totalOccupied, 23); // Kısmi dolu (max 23 olsun ki 24'ten az olsun)
           }
@@ -3112,8 +3113,11 @@ export default function RandevuPage() {
                       {calendarDays.map((dayInfo, index) => {
                         const occupiedCount = selectedBoat?.id ? (occupiedDates[selectedBoat.id]?.[dayInfo.date] || 0) : 0;
                         const isSelected = selectedDate === dayInfo.date;
-                        const isFullyOccupied = occupiedCount >= 24; // Her iki seans da tamamen dolu
-                        const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < 24;
+                        
+                        // Teknenin toplam kapasitesini hesapla (saat sayısı × 12 koltuk)
+                        const totalCapacity = availableTimes.length * 12;
+                        const isFullyOccupied = occupiedCount >= totalCapacity; // Tüm seanslar dolu
+                        const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < totalCapacity;
                         
                         // Bu tarih için hangi seansların dolu olduğunu hesapla
                         const getSessionStatusForDate = (date: string) => {
@@ -3171,7 +3175,7 @@ export default function RandevuPage() {
                                 : isFullyOccupied && dayInfo.isCurrentMonth
                                 ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen dolu (tüm seanslar) - Hiçbir tur türü için müsait değil`
                                 : isPartiallyOccupied && dayInfo.isCurrentMonth
-                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Kısmi dolu (${occupiedCount}/24) - Müsait seanslar var, saat seçiminde kontrol edin`
+                                ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Kısmi dolu (${occupiedCount}/${totalCapacity}) - Müsait seanslar var, saat seçiminde kontrol edin`
                                 : dayInfo.isCurrentMonth
                                 ? `${new Date(dayInfo.date).toLocaleDateString('tr-TR')} - Tamamen boş - Tüm seanslar müsait`
                                 : ''

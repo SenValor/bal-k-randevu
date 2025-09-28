@@ -481,8 +481,15 @@ function AddReservationPage() {
           {calendarDays.map((dayInfo, index) => {
             const occupancy = occupiedDates[dayInfo.date] || 0;
             const isSelected = newReservation.selectedDate === dayInfo.date;
-            const isFullyOccupied = occupancy >= 24;
-            const isPartiallyOccupied = occupancy > 0 && occupancy < 24;
+            
+            // Teknenin toplam kapasitesini hesapla (saat sayısı × 12 koltuk)
+            const selectedBoat = boats.find(b => b.id === newReservation.selectedBoat);
+            const totalCapacity = selectedBoat?.customSchedule?.timeSlots?.length ? 
+              selectedBoat.customSchedule.timeSlots.filter(slot => slot.isActive).length * 12 : 
+              48; // Varsayılan 4 saat × 12 koltuk
+            
+            const isFullyOccupied = occupancy >= totalCapacity;
+            const isPartiallyOccupied = occupancy > 0 && occupancy < totalCapacity;
             
             let buttonClass = "h-10 w-10 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300 border ";
             
@@ -516,7 +523,7 @@ function AddReservationPage() {
                   !dayInfo.isCurrentMonth ? 'Diğer ay' :
                   dayInfo.isDisabled ? 'Geçmiş tarih' :
                   isFullyOccupied ? `${dayInfo.day} - Tamamen dolu` :
-                  isPartiallyOccupied ? `${dayInfo.day} - Kısmi dolu (${occupancy}/24)` :
+                  isPartiallyOccupied ? `${dayInfo.day} - Kısmi dolu (${occupancy}/${totalCapacity})` :
                   `${dayInfo.day} - Boş`
                 }
               >
