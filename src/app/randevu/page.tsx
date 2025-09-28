@@ -844,6 +844,13 @@ export default function RandevuPage() {
       setAvailableTimes(['07:00-13:00', '14:00-20:00']);
       setTimeSlotDetails({});
     }
+    
+    // Saatler yüklendikten sonra seans doluluk bilgisini çek
+    if (selectedBoat?.id && dateString) {
+      fetchSessionOccupancy(dateString).catch(error => {
+        console.error('Session occupancy fetch error:', error);
+      });
+    }
   };
 
   // Seçilen tarih, tekne veya tur değiştiğinde saatleri çek
@@ -1349,8 +1356,18 @@ export default function RandevuPage() {
   };
 
   // Seçili tarih için seans bazlı doluluk bilgisini çek (tekne bazlı)
-  const fetchSessionOccupancy = async (date: string, isCancelled?: () => boolean) => {
-    if (!date || !selectedBoat?.id) return;
+  const fetchSessionOccupancy = async (date: string) => {
+    if (!date || !selectedBoat?.id) {
+      console.log('❌ fetchSessionOccupancy: Tarih veya tekne eksik', { date, boatId: selectedBoat?.id });
+      return;
+    }
+    
+    console.log(`🔍 fetchSessionOccupancy başlatılıyor - Tarih: ${date}, Tekne: ${selectedBoat.name} (${selectedBoat.id})`);
+    console.log(`🔍 Arama kriterleri:`, {
+      selectedDate: date,
+      selectedBoat: selectedBoat.id,
+      query: `where('selectedDate', '==', '${date}') AND where('selectedBoat', '==', '${selectedBoat.id}')`
+    });
     
     try {
       const q = query(
@@ -1360,55 +1377,54 @@ export default function RandevuPage() {
       );
       
       const querySnapshot = await getDocs(q);
-      
-      // Component unmount olduysa state güncellemesi yapma
-      if (isCancelled && isCancelled()) return;
+      console.log(`📊 Rezervasyon sorgusu tamamlandı - ${querySnapshot.size} rezervasyon bulundu`);
       
       const sessionOccupancyMap: {[key: string]: number} = {};
       
-      // Her saat için doluluk sayısını hesapla
-      availableTimes.forEach(time => {
-        sessionOccupancyMap[time] = 0;
-      });
-      
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        console.log(`📋 Rezervasyon kontrol ediliyor:`, {
+          id: doc.id,
+          status: data.status,
+          selectedTime: data.selectedTime,
+          isPrivateTour: data.isPrivateTour,
+          selectedSeats: data.selectedSeats
+        });
+        
         // Sadece onaylı ve bekleyen rezervasyonları dikkate al
         if ((data.status === 'confirmed' || data.status === 'pending') && data.selectedTime) {
-          // TUR TİPİ KONTROLÜ: 
-          const reservationTourType = data.tourType || 'normal';
-          
-          // Özel tur seçildiğinde TÜM rezervasyonları say (çünkü tüm tekneyi etkiler)
-          // Normal tur seçildiğinde sadece aynı tur tipindeki rezervasyonları say
-          if (!isSpecialTour(tourType) && reservationTourType !== tourType) {
-            return; // Bu rezervasyonu atla
+          // Bu saat için doluluk başlat (eğer yoksa)
+          if (!sessionOccupancyMap[data.selectedTime]) {
+            sessionOccupancyMap[data.selectedTime] = 0;
           }
           
           if (data.isPrivateTour) {
             // Özel tur: tüm tekneyi kaplar (12 koltuk)
+            console.log(`🔴 Özel tur bulundu - ${data.selectedTime}: 12 koltuk`);
             sessionOccupancyMap[data.selectedTime] = 12;
           } else if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
             // Normal tur: koltuk sayısı kadar
             const currentOccupancy = sessionOccupancyMap[data.selectedTime] || 0;
             const newOccupancy = currentOccupancy + data.selectedSeats.length;
+            console.log(`🟡 Normal tur bulundu - ${data.selectedTime}: ${data.selectedSeats.length} koltuk (toplam: ${newOccupancy})`);
             sessionOccupancyMap[data.selectedTime] = Math.min(newOccupancy, 12);
           }
+        } else {
+          console.log(`⚠️ Rezervasyon atlandı - Status: ${data.status}, Time: ${data.selectedTime}`);
         }
       });
       
-      // Component unmount olduysa state güncellemesi yapma
-      if (isCancelled && isCancelled()) return;
+      console.log(`✅ Session occupancy hesaplandı:`, sessionOccupancyMap);
       
       // Tekne bazlı state güncelle
       setSessionOccupancy(prev => ({
         ...prev,
         [selectedBoat.id]: sessionOccupancyMap
       }));
+      
+      console.log(`🎯 Session occupancy state güncellendi - Tekne: ${selectedBoat.id}`);
     } catch (error) {
-      // Component unmount olduysa error handling yapma
-      if (!isCancelled || !isCancelled()) {
-        console.error('Seans doluluk bilgisi çekilemedi:', error);
-      }
+      console.error('❌ Seans doluluk bilgisi çekilemedi:', error);
     }
   };
 
@@ -1576,26 +1592,17 @@ export default function RandevuPage() {
     }
   }, [selectedDate, tourType, selectedBoat, customTours]); // selectedBoat dependency eklendi
 
-  // Tarih seçildiğinde seans bazlı doluluk bilgisini çek
+  // Tarih veya tekne değiştiğinde session occupancy'yi çek
   useEffect(() => {
-    let isCancelled = false; // Cleanup kontrolü için flag
-    
     if (selectedDate && selectedBoat?.id) {
-      fetchSessionOccupancy(selectedDate, () => isCancelled).catch((error) => {
-        // Promise rejection'ları da yakala
-        if (!isCancelled) {
-          console.error('fetchSessionOccupancy Promise hatası:', error);
-        }
+      console.log(`🔄 Session occupancy çekiliyor - Tarih: ${selectedDate}, Tekne: ${selectedBoat.name}`);
+      fetchSessionOccupancy(selectedDate).catch(error => {
+        console.error('Session occupancy fetch error:', error);
       });
     } else {
       setSessionOccupancy({});
     }
-    
-    // Cleanup function
-    return () => {
-      isCancelled = true;
-    };
-  }, [selectedDate, selectedBoat?.id, availableTimes]); // selectedBoat dependency eklendi
+  }, [selectedDate, selectedBoat?.id]);
 
   // Tekne değiştiğinde seçili tarihin geçerliliğini kontrol et
   useEffect(() => {
@@ -2327,11 +2334,6 @@ export default function RandevuPage() {
                 {/* Özel Tur */}
                 <div 
                   onClick={() => {
-                    // Seçili tarih kısmi dolu ise uyarı ver
-                    if (selectedDate && selectedBoat?.id && occupiedDates[selectedBoat.id]?.[selectedDate] > 0) {
-                      alert(`❌ Özel tur alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedBoat.id]?.[selectedDate]} koltuk dolu olduğu için özel tur seçimi yapılamaz.\n\nÖzel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
-                      return;
-                    }
                     setTourType('private');
                     // Tur seçiminde hafif scroll yap
                     setTimeout(() => scrollToContinueButton(), 500);
@@ -2366,11 +2368,6 @@ export default function RandevuPage() {
                 {/* Balık + Yüzme Turu */}
                 <div 
                   onClick={() => {
-                    // Seçili tarih kısmi dolu ise uyarı ver
-                    if (selectedDate && selectedBoat?.id && occupiedDates[selectedBoat.id]?.[selectedDate] > 0) {
-                      alert(`❌ Balık + Yüzme turu alamazsınız!\n\nSeçili tarihte (${new Date(selectedDate).toLocaleDateString('tr-TR')}) ${occupiedDates[selectedBoat.id]?.[selectedDate]} koltuk dolu olduğu için balık+yüzme turu seçimi yapılamaz.\n\nBu özel turlar için tamamen boş günler gereklidir.\n\nLütfen başka bir tarih seçin veya normal tur seçeneğini tercih edin.`);
-                      return;
-                    }
                     setTourType('fishing-swimming');
                     // Tur seçiminde hafif scroll yap
                     setTimeout(() => scrollToContinueButton(), 500);

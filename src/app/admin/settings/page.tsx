@@ -664,115 +664,36 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Randevu Saatleri Yönetimi */}
+          {/* Randevu Saatleri Yönetimi (Kapatıldı) */}
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">🕐 Randevu Saatleri</h2>
-              <button
-                onClick={() => setEditingTimes(!editingTimes)}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                {editingTimes ? 'İptal' : 'Düzenle'}
-              </button>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">🕐 Randevu Saatleri</h2>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <span className="text-blue-600 mr-3">ℹ️</span>
+                <div>
+                  <p className="text-sm text-blue-800">
+                    Randevu saatlerinin yönetimi artık <strong>Tekne Yönetimi</strong> üzerinden yapılıyor. Her tekne için ayrı saat dilimleri ve günlük özel saatler tanımlanabilir.
+                  </p>
+                  <p className="text-sm text-blue-800 mt-2">
+                    Lütfen saat düzenlemeleri için <Link href="/admin/boats" className="text-blue-700 underline font-medium">Tekneler</Link> sayfasına gidin.
+                  </p>
+                </div>
+              </div>
             </div>
-
-            <div className="space-y-4">
-              {/* Mevcut Saatler */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-3">📋 Mevcut Randevu Saatleri</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {availableTimes.map((timeSlot, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                      <span className="font-medium text-blue-700">{timeSlot}</span>
-                      {editingTimes && (
-                        <button
-                          onClick={() => removeTimeSlot(timeSlot)}
-                          className="text-red-500 hover:text-red-700 ml-2"
-                        >
-                          ❌
-                        </button>
-                      )}
+            {/* Mevcut kayıtlı sistem saatlerini sadece görüntüle (varsa) */}
+            {availableTimes?.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-2">Sisteminizde kayıtlı (pasif) saatler</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {availableTimes.map((t, i) => (
+                    <div key={i} className="px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-700">
+                      {t}
                     </div>
                   ))}
                 </div>
+                <p className="text-xs text-gray-500 mt-2">Bu saatler yalnızca görüntüleme amaçlıdır; rezervasyonlarda kullanılmaz.</p>
               </div>
-
-              {/* Yeni Saat Ekleme */}
-              {editingTimes && (
-                <div className="border-t pt-4">
-                  <h3 className="text-lg font-medium text-gray-900 mb-3">➕ Yeni Saat Dilimi Ekle</h3>
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Başlangıç Saati
-                      </label>
-                      <input
-                        type="time"
-                        value={newTimeSlot.start}
-                        onChange={(e) => setNewTimeSlot({...newTimeSlot, start: e.target.value})}
-                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Bitiş Saati
-                      </label>
-                      <input
-                        type="time"
-                        value={newTimeSlot.end}
-                        onChange={(e) => setNewTimeSlot({...newTimeSlot, end: e.target.value})}
-                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      />
-                    </div>
-                    <div className="pt-6">
-                      <button
-                        onClick={addTimeSlot}
-                        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                      >
-                        ➕ Ekle
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Kaydet Butonu */}
-              {editingTimes && (
-                <div className="border-t pt-4">
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      onClick={() => setEditingTimes(false)}
-                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-                    >
-                      İptal
-                    </button>
-                    <button
-                      onClick={saveTimes}
-                      disabled={saving}
-                      className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-                    >
-                      {saving ? 'Kaydediliyor...' : 'Saatleri Kaydet'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Bilgi Notu */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-start">
-                  <span className="text-yellow-600 mr-2">💡</span>
-                  <div>
-                    <h4 className="font-medium text-yellow-800 mb-1">Bilgi:</h4>
-                    <ul className="text-sm text-yellow-700 space-y-1">
-                      <li>• Randevu saatleri saat dilimi olarak belirlenir (örn: 07:00-13:00)</li>
-                      <li>• Müşteriler bu saat dilimlerinden birini seçebilir</li>
-                      <li>• Değişiklikler anında aktif olur</li>
-                      <li>• En az 1 saat dilimi bulunmalıdır</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Özel Tur Yönetimi */}

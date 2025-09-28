@@ -46,6 +46,13 @@ interface Boat {
     googleMapsUrl?: string;
     directions?: string;
   };
+  // Tekne bazlı çalışma saatleri (Tekne Yönetimi'nden)
+  customSchedule?: {
+    enabled: boolean;
+    timeSlots: TimeSlot[];
+    dailySchedules?: { [date: string]: TimeSlot[] };
+    note?: string;
+  };
 }
 
 interface Reservation {
@@ -105,7 +112,7 @@ function AddReservationPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   
   // Dinamik saat sistemi
-  const [availableTimes, setAvailableTimes] = useState<string[]>(['07:00-13:00', '14:00-20:00']);
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [timeSlotDetails, setTimeSlotDetails] = useState<{[timeRange: string]: TimeSlot}>({});
   
   // Takvim için
@@ -292,32 +299,44 @@ function AddReservationPage() {
     }
   };
 
-  // Firebase'den saat verilerini çek
-  const fetchAvailableTimes = async () => {
+  // Seçilen teknenin çalışma saatlerinden uygun saatleri hesapla (günlük override destekli)
+  const updateAvailableTimesFromBoat = async (boatId: string, date: string) => {
+    if (!boatId || !date) {
+      setAvailableTimes([]);
+      setTimeSlotDetails({});
+      return;
+    }
     try {
-      console.log('Admin paneli - Saat verileri çekiliyor...');
-      
-      // Genel sistem saatleri
-      const timesDoc = await getDoc(doc(db, 'settings', 'availableTimes'));
-      if (timesDoc.exists()) {
-        const data = timesDoc.data();
-        if (data.times && Array.isArray(data.times)) {
-          console.log('Admin paneli - Sistem saatleri bulundu:', data.times);
-          setAvailableTimes(data.times);
-          
-          // Saat detaylarını da al
-          if (data.timeSlotDetails) {
-            setTimeSlotDetails(data.timeSlotDetails);
-          }
-        }
-      } else {
-        console.log('Admin paneli - availableTimes dokümanı bulunamadı, varsayılan saatler kullanılıyor');
-        setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+      const boatDoc = await getDoc(doc(db, 'boats', boatId));
+      if (!boatDoc.exists()) {
+        setAvailableTimes([]);
         setTimeSlotDetails({});
+        return;
       }
-    } catch (error) {
-      console.error('Admin paneli - Saat verileri çekilemedi:', error);
-      setAvailableTimes(['07:00-13:00', '14:00-20:00']);
+      const boatData = boatDoc.data() as Boat;
+      const schedule = boatData.customSchedule;
+      if (!schedule || !schedule.enabled) {
+        // Tekne özel saatleri kapalı ise varsayılan saatleri kullanma; boş bırak
+        setAvailableTimes([]);
+        setTimeSlotDetails({});
+        return;
+      }
+
+      // Günlük özel saat var mı?
+      const dailySlots = schedule.dailySchedules?.[date];
+      const baseSlots = (dailySlots && Array.isArray(dailySlots) ? dailySlots : schedule.timeSlots) || [];
+
+      // Yalnızca aktif ve geçerli saatleri al
+      const activeSlots = baseSlots.filter(s => s.isActive && s.start && s.end);
+      const ranges = activeSlots.map(s => `${s.start}-${s.end}`);
+      const details: {[k: string]: TimeSlot} = {};
+      activeSlots.forEach(s => { details[`${s.start}-${s.end}`] = s; });
+
+      setAvailableTimes(ranges);
+      setTimeSlotDetails(details);
+    } catch (err) {
+      console.error('Tekne saatleri alınamadı:', err);
+      setAvailableTimes([]);
       setTimeSlotDetails({});
     }
   };
@@ -325,7 +344,6 @@ function AddReservationPage() {
   useEffect(() => {
     fetchCustomTours();
     fetchBoats();
-    fetchAvailableTimes();
   }, []);
 
   useEffect(() => {
@@ -339,6 +357,18 @@ function AddReservationPage() {
       fetchOccupiedSeats(newReservation.selectedDate, newReservation.selectedTime);
     }
   }, [newReservation.selectedDate, newReservation.selectedTime, newReservation.selectedBoat]);
+
+  // Seçilen tekne/tarih değişince saatleri güncelle
+  useEffect(() => {
+    if (newReservation.selectedBoat && newReservation.selectedDate) {
+      updateAvailableTimesFromBoat(newReservation.selectedBoat, newReservation.selectedDate);
+      // Saat değişince koltuk seçimlerini sıfırla
+      setNewReservation(prev => ({ ...prev, selectedTime: '', selectedSeats: [] }));
+    } else {
+      setAvailableTimes([]);
+      setTimeSlotDetails({});
+    }
+  }, [newReservation.selectedBoat, newReservation.selectedDate]);
 
   // Ay değiştirme fonksiyonları
   const nextMonth = () => {
