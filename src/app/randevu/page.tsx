@@ -2328,7 +2328,7 @@ export default function RandevuPage() {
                           Olta ve ilk takım Balık Sefası tarafından sağlanır
                         </p>
                         <div className="text-xs sm:text-sm text-slate-500">
-                          • 1-12 kişi arası • Kaliteli olta, ip, yem dahil • 07:00-13:00 veya 14:00-20:00
+                          • 1-12 kişi arası • Kaliteli olta, ip, (yem size aittir) • 07:00-13:00 veya 14:00-20:00
                         </div>
                       </div>
                     </div>

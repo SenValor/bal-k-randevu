@@ -216,7 +216,7 @@ export default function IletisimPage() {
                   <li>• Sarıyer istikametine doğru ilerleyin</li>
                   <li>• Eyüp - Alibeyköy yolunu takip edin</li>
                   <li>• Odabaşı Sporcular Parkı tabelalarını izleyin</li>
-                  <li>• Park içerisinde ücretsiz otopark mevcut</li>
+                  
                 </ul>
               </div>
 

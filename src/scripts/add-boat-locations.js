@@ -26,7 +26,7 @@ const boatLocations = {
       longitude: 29.0488
     },
     googleMapsUrl: "https://maps.app.goo.gl/fVPxCBB9JphkEMBH7",
-    directions: "Metro ile Eyüpsultan durağından veya otobüsle kolayca ulaşabilirsiniz. Park içinde otopark da mevcut. Yakında özel otopark bulunmakta ve civar sokaklarda park yerleri mevcut."
+    directions: "Metro ile Eyüpsultan durağından veya otobüsle kolayca ulaşabilirsiniz. Civar sokaklarda park yerleri mevcut."
   },
   "2. Tekne": {
     name: "2. Tekne Kalkış Noktası",

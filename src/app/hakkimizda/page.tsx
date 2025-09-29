@@ -69,7 +69,7 @@ export default function HakkimizdaPage() {
     {
       id: '1',
       question: 'Nereden Kalkıyoruz?',
-      answer: 'Turlarımız Eyüp Odabaşı Sporcular Parkı\'ndan başlıyor. Metro ile Eyüpsultan durağından veya otobüsle kolayca ulaşabilirsiniz. Park içinde otopark da mevcut.',
+      answer: 'Turlarımız Eyüp Odabaşı Sporcular Parkı\'ndan başlıyor. Metro ile Eyüpsultan durağından veya otobüsle kolayca ulaşabilirsiniz.',
       emoji: '🚤',
       color: 'blue-700',
       order: 1

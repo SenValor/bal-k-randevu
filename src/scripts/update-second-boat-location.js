@@ -63,7 +63,7 @@ async function updateSecondBoatLocation() {
             longitude: 29.0488
           },
           googleMapsUrl: "https://maps.app.goo.gl/fVPxCBB9JphkEMBH7",
-          directions: "Metro ile Eyüpsultan durağından veya otobüsle kolayca ulaşabilirsiniz. Park içinde otopark da mevcut."
+          directions: "Metro ile Eyüpsultan durağından veya otobüsle kolayca ulaşabilirsiniz."
         };
         
         await updateDoc(doc(db, 'boats', boatDoc.id), {
