@@ -1992,20 +1992,20 @@ export default function RandevuPage() {
       <div className="max-w-2xl mx-auto px-4 py-4 sm:py-8">
         <div className="flex items-center justify-center mb-4 sm:mb-8">
           {(() => {
-            // Yeni akış: 1-Tekne, 2-Tur, 3-Kişi, 4-Tarih, 5-İletişim
-            // Ama gerçek sıra: 1-Tekne, 4-Tarih, 2-Tur, 3-Kişi, 5-İletişim
-            const steps = isSpecialTour(tourType) ? [1, 4, 2, 5] : [1, 4, 2, 3, 5];
+            // Yeni akış: 1-Tekne, 4-Tarih+Kişi, 2-Tur, 3.5-Olta, 5-İletişim
+            // Normal Tur: Tekne → Tarih → Tur → Olta → Bilgiler
+            // Özel Tur: Tekne → Tarih → Tur → Bilgiler
+            const steps = isSpecialTour(tourType) ? [1, 4, 2, 5] : [1, 4, 2, 3.5, 5];
             const stepLabels = isSpecialTour(tourType) 
               ? ['Tekne', 'Tarih', 'Tur', 'Bilgiler']
-              : ['Tekne', 'Tarih', 'Tur', 'Kişi', 'Bilgiler'];
+              : ['Tekne', 'Tarih', 'Tur', 'Olta', 'Bilgiler'];
             
-            // Gerçek sıra: 1-Tekne, 4-Tarih, 2-Tur, 3-Kişi, 5-İletişim
             const getProgressIndex = (currentStep: number) => {
               if (currentStep === 1) return 0; // Tekne
-              if (currentStep === 4) return 1; // Tarih
+              if (currentStep === 4) return 1; // Tarih (+ Kişi Sayısı)
               if (currentStep === 2) return 2; // Tur
-              if (currentStep === 3 || currentStep === 3.5) return 3; // Kişi/Olta
-              if (currentStep === 5 || currentStep === 6) return 4; // İletişim/Başarı
+              if (currentStep === 3.5) return 3; // Olta (sadece normal tur)
+              if (currentStep === 5 || currentStep === 6) return isSpecialTour(tourType) ? 3 : 4; // İletişim/Başarı
               return 0;
             };
             
@@ -2280,7 +2280,7 @@ export default function RandevuPage() {
 
               <div className="mt-8 sm:mt-10">
                 <button
-                  onClick={() => setCurrentStep(4)} 
+                  onClick={() => setCurrentStep(4)} // Tekne seçiminden sonra Tarih+Kişi seçimine git
                   disabled={!selectedBoat?.id}
                   className={`px-6 sm:px-8 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
                     selectedBoat?.id
@@ -2531,14 +2531,28 @@ export default function RandevuPage() {
                 </div>
               </div>
 
-                              <button
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mt-6 sm:mt-8">
+                <button
+                  onClick={() => {
+                    setCurrentStep(4); // Tarih+Kişi seçimine dön
+                    setTimeout(() => {
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }, 100);
+                  }}
+                  className="bg-gray-400 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg hover:bg-gray-500 transition-all duration-300 shadow-lg"
+                >
+                  ← Geri
+                </button>
+                <button
                   data-continue-button
                   onClick={() => {
-                    // Özel tur seçildiyse kişi sayısı adımını atla, doğrudan 5. adıma git
-                    if (isSpecialTour(tourType)) {
-                      setCurrentStep(5);
+                    // Tur seçiminden sonra: Normal tur ise olta seçimi, değilse iletişim bilgileri
+                    if (tourType === 'normal' && (ageGroups.adults > 0 || ageGroups.children > 0)) {
+                      setCurrentStep(3.5); // Olta seçimi
                     } else {
-                      setCurrentStep(3);
+                      setCurrentStep(5); // İletişim bilgileri
                     }
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
@@ -2548,7 +2562,7 @@ export default function RandevuPage() {
                     }, 100);
                   }}
                   disabled={!tourType}
-                  className={`mt-6 sm:mt-8 px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all duration-300 shadow-lg w-full sm:w-auto ${
+                  className={`px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg transition-all duration-300 shadow-lg ${
                     tourType 
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -2556,11 +2570,12 @@ export default function RandevuPage() {
                 >
                   Devam Et →
                 </button>
+              </div>
             </div>
           )}
 
-          {/* Adım 3: Kişi Sayısı (Sadece Normal Tur İçin) */}
-          {currentStep === 3 && (
+          {/* Adım 3: Kişi Sayısı (Sadece Normal Tur İçin) - ARTIK KULLANILMIYOR, Adım 4'e taşındı */}
+          {false && currentStep === 3 && (
             <div className="text-center">
               {tourType === 'normal' ? (
                 <>
@@ -2808,7 +2823,7 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(3);
+                    setCurrentStep(2); // Tur seçimine dön
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -3094,7 +3109,7 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(3);
+                    setCurrentStep(2); // Tur seçimine dön
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -3125,11 +3140,123 @@ export default function RandevuPage() {
             </div>
           )}
 
-                    {/* Adım 4: Tarih ve Saat Seçimi */}
+                    {/* Adım 4: Tarih ve Saat Seçimi (Kişi Sayısı Dahil) */}
           {currentStep === 4 && (
             <div>
+              {/* Kişi Sayısı Seçimi - Sadece Normal Tur İçin */}
+              {tourType === 'normal' && (
+                <div className="mb-6 sm:mb-8">
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 text-center">
+                    👥 Kaç Kişi Katılacak?
+                  </h2>
+                  
+                  <div className="max-w-3xl mx-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                      {/* Yetişkin (7+ yaş) */}
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                        <div className="text-center mb-3">
+                          <div className="text-2xl mb-1">👨‍👩‍👦</div>
+                          <h3 className="text-sm font-bold text-blue-800">Yetişkin (7+ yaş)</h3>
+                          <p className="text-xs text-blue-600">Tam fiyat</p>
+                        </div>
+                        <div className="flex items-center justify-center space-x-3">
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              adults: Math.max(1, prev.adults - 1)
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-2xl font-bold text-blue-800 w-10 text-center">{ageGroups.adults}</span>
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              adults: Math.min(12 - prev.children - prev.babies, prev.adults + 1)
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Çocuk (3-6 yaş) */}
+                      <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                        <div className="text-center mb-3">
+                          <div className="text-2xl mb-1">👶</div>
+                          <h3 className="text-sm font-bold text-orange-800">Çocuk (3-6 yaş)</h3>
+                          <p className="text-xs text-orange-600">%50 indirim</p>
+                        </div>
+                        <div className="flex items-center justify-center space-x-3">
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              children: Math.max(0, prev.children - 1)
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-2xl font-bold text-orange-800 w-10 text-center">{ageGroups.children}</span>
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              children: Math.min(12 - prev.adults - prev.babies, prev.children + 1)
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Bebek (0-3 yaş) */}
+                      <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                        <div className="text-center mb-3">
+                          <div className="text-2xl mb-1">🍼</div>
+                          <h3 className="text-sm font-bold text-green-800">Bebek (0-3 yaş)</h3>
+                          <p className="text-xs text-green-600">Ücretsiz</p>
+                        </div>
+                        <div className="flex items-center justify-center space-x-3">
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              babies: Math.max(0, prev.babies - 1)
+                            }))}
+                            className="w-8 h-8 bg-red-500 text-white rounded-full font-bold hover:bg-red-600 transition-all duration-300"
+                          >
+                            -
+                          </button>
+                          <span className="text-2xl font-bold text-green-800 w-10 text-center">{ageGroups.babies}</span>
+                          <button
+                            onClick={() => setAgeGroups(prev => ({
+                              ...prev,
+                              babies: Math.min(12 - prev.adults - prev.children, prev.babies + 1)
+                            }))}
+                            className="w-8 h-8 bg-green-500 text-white rounded-full font-bold hover:bg-green-600 transition-all duration-300"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Özet Bilgi */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center mb-6">
+                      <p className="text-blue-800 font-bold text-sm">
+                        📊 Toplam: <span className="text-lg">{getTotalGuestCount()}</span> kişi
+                        {ageGroups.children > 0 && <span className="text-xs ml-2">(çocuklar %50 indirimli)</span>}
+                        {ageGroups.babies > 0 && <span className="text-xs ml-2">(bebekler ücretsiz)</span>}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <h2 className="text-lg sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6 text-center">
-                Tarih {tourType === 'normal' ? 've Saat' : ''} Seçin
+                📅 Tarih ve Saat Seçin
               </h2>
               
               {/* Seçim Özeti */}
@@ -3868,7 +3995,7 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(2);
+                    setCurrentStep(1); // Tekne seçimine dön
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -3883,6 +4010,7 @@ export default function RandevuPage() {
                 <button
                   data-continue-button
                   onClick={() => {
+                    // Tarih+Kişi seçiminden sonra Tur seçimine git
                     setCurrentStep(2);
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
@@ -4048,11 +4176,11 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    // Normal tur ise ve olta seçimi varsa 3.5'e, yoksa 3'e git
+                    // Normal tur ise ve olta kullanan kişi varsa 3.5'e (olta seçimi), değilse 2'ye (tur seçimi) dön
                     if (tourType === 'normal' && (ageGroups.adults > 0 || ageGroups.children > 0)) {
                       setCurrentStep(3.5);
                     } else {
-                      setCurrentStep(3);
+                      setCurrentStep(2); // Tur seçimine dön
                     }
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
