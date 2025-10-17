@@ -5,11 +5,24 @@ import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 
+interface TimeSlot {
+  id: string;
+  start: string;
+  end: string;
+  isActive: boolean;
+  displayName?: string;
+}
+
 interface Boat {
   id: string;
   name: string;
   isActive: boolean;
   createdAt: string;
+  customSchedule?: {
+    enabled: boolean;
+    timeSlots: TimeSlot[];
+    note?: string;
+  };
 }
 
 interface Reservation {
@@ -71,7 +84,8 @@ export default function AdminCalendarPage() {
             id: doc.id,
             name: data.name,
             isActive: data.isActive,
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            customSchedule: data.customSchedule
           });
         });
         
@@ -86,6 +100,29 @@ export default function AdminCalendarPage() {
   const getBoatOrder = (boatId: string) => {
     const index = boats.findIndex(boat => boat.id === boatId);
     return index >= 0 ? `T${index + 1}` : 'T?';
+  };
+
+  // Dinamik kapasite hesaplama fonksiyonu
+  const calculateBoatCapacity = (boat: Boat): number => {
+    if (boat.customSchedule?.enabled && boat.customSchedule.timeSlots) {
+      const activeSlots = boat.customSchedule.timeSlots.filter(slot => slot.isActive);
+      return activeSlots.length * 12; // Her saat 12 koltuk
+    }
+    return 4 * 12; // Varsayılan 4 saat × 12 koltuk = 48
+  };
+
+  // Toplam sistem kapasitesi hesaplama
+  const calculateTotalCapacity = (): number => {
+    if (selectedBoatFilter) {
+      // Belirli tekne seçildi
+      const selectedBoat = boats.find(boat => boat.id === selectedBoatFilter);
+      return selectedBoat ? calculateBoatCapacity(selectedBoat) : 48;
+    } else {
+      // Tüm aktif tekneler
+      return boats
+        .filter(boat => boat.isActive)
+        .reduce((total, boat) => total + calculateBoatCapacity(boat), 0);
+    }
   };
 
   // Ayın rezervasyonlarını çek
@@ -250,16 +287,8 @@ export default function AdminCalendarPage() {
     if (isToday) return 'bg-blue-100 border-2 border-blue-500 text-blue-800 font-bold';
     if (!stats || stats.total === 0) return 'text-gray-700 hover:bg-gray-100';
     
-    // Tekne bazlı maksimum koltuk hesaplama
-    let maxSeats = 24; // Varsayılan tek tekne kapasitesi
-    
-    if (selectedBoatFilter) {
-      // Belirli tekne seçildi - o teknenin kapasitesi
-      maxSeats = 24;
-    } else {
-      // Tüm tekneler - aktif tekne sayısı * 24
-      maxSeats = boats.filter(boat => boat.isActive).length * 24 || 24;
-    }
+    // Dinamik kapasite hesaplama
+    const maxSeats = calculateTotalCapacity();
     
     const occupancyRate = stats.seats / maxSeats;
     
@@ -404,7 +433,7 @@ export default function AdminCalendarPage() {
                             </div>
                             <div className="flex items-center justify-between">
                               <span>💺</span>
-                              <span className="font-medium">{stats.seats}/{selectedBoatFilter ? 24 : (boats.filter(boat => boat.isActive).length * 24 || 24)}</span>
+                              <span className="font-medium">{stats.seats}/{calculateTotalCapacity()}</span>
                             </div>
                             {stats.revenue > 0 && (
                               <div className="text-green-700 font-bold text-xs">
@@ -478,7 +507,7 @@ export default function AdminCalendarPage() {
                     <div className="text-sm text-blue-600">Toplam Rezervasyon</div>
                   </div>
                   <div className="bg-green-50 p-4 rounded-xl border border-green-200">
-                    <div className="text-2xl font-bold text-green-800">{selectedDayStats.seats}/24</div>
+                    <div className="text-2xl font-bold text-green-800">{selectedDayStats.seats}/{calculateTotalCapacity()}</div>
                     <div className="text-sm text-green-600">Koltuk Doluluk</div>
                   </div>
                   <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 col-span-2">

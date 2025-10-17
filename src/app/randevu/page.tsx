@@ -357,6 +357,9 @@ export default function RandevuPage() {
     privateTour: 12000,
     fishingSwimming: 15000
   });
+  
+  // Dinamik tur tipleri
+  const [tourTypes, setTourTypes] = useState<any[]>([]);
   // Yaş grubu bilgileri
   const [ageGroups, setAgeGroups] = useState({
     adults: 1,    // 7+ yaş - tam fiyat
@@ -436,14 +439,42 @@ export default function RandevuPage() {
     }
   }, [tourType, priceOption, ageGroups]); // Tur tipi ve priceOption değiştiğinde hemen güncelle
 
-  // Esnek fiyat hesaplama (kişi bazında olta seçimi)
+  // Ay bazlı fiyat hesaplama fonksiyonu
+  const getMonthlyPrice = (tourTypeId: string, date: string): number => {
+    if (!date) return 0;
+    
+    const selectedMonth = new Date(date).getMonth() + 1; // 1-12
+    const selectedYear = new Date(date).getFullYear();
+    
+    // TourTypes'dan ilgili turu bul
+    const tour = tourTypes.find(t => t.id === tourTypeId);
+    if (!tour) return 0;
+    
+    // Ay bazlı fiyatlandırma aktif mi?
+    if (!tour.monthlyPricing?.enabled) {
+      return tour.price; // Varsayılan fiyat
+    }
+    
+    // Seçilen ay için özel fiyat var mı?
+    const monthlyPrice = tour.monthlyPricing.prices.find(
+      p => p.month === selectedMonth && p.year === selectedYear && p.isActive
+    );
+    
+    return monthlyPrice ? monthlyPrice.price : tour.price;
+  };
+
+  // Esnek fiyat hesaplama (kişi bazında olta seçimi) - Ay bazlı fiyatlarla
   const calculateFlexiblePrice = () => {
     if (tourType !== 'normal') return null;
     
-    const adultWithEquipment = equipmentChoices.adults.withEquipment * prices.normalWithEquipment;
-    const adultOwnEquipment = equipmentChoices.adults.ownEquipment * prices.normalOwn;
-    const childWithEquipment = equipmentChoices.children.withEquipment * prices.normalWithEquipment * 0.5;
-    const childOwnEquipment = equipmentChoices.children.ownEquipment * prices.normalOwn * 0.5;
+    // Ay bazlı fiyatları kullan
+    const monthlyPriceWithEquipment = getMonthlyPrice('normalWithEquipment', selectedDate);
+    const monthlyPriceOwnEquipment = getMonthlyPrice('normalOwn', selectedDate);
+    
+    const adultWithEquipment = equipmentChoices.adults.withEquipment * monthlyPriceWithEquipment;
+    const adultOwnEquipment = equipmentChoices.adults.ownEquipment * monthlyPriceOwnEquipment;
+    const childWithEquipment = equipmentChoices.children.withEquipment * monthlyPriceWithEquipment * 0.5;
+    const childOwnEquipment = equipmentChoices.children.ownEquipment * monthlyPriceOwnEquipment * 0.5;
     
     const totalPrice = adultWithEquipment + adultOwnEquipment + childWithEquipment + childOwnEquipment;
     
@@ -451,12 +482,12 @@ export default function RandevuPage() {
       totalPrice,
       breakdown: {
         adults: {
-          withEquipment: { count: equipmentChoices.adults.withEquipment, unitPrice: prices.normalWithEquipment, totalPrice: adultWithEquipment },
-          ownEquipment: { count: equipmentChoices.adults.ownEquipment, unitPrice: prices.normalOwn, totalPrice: adultOwnEquipment }
+          withEquipment: { count: equipmentChoices.adults.withEquipment, unitPrice: monthlyPriceWithEquipment, totalPrice: adultWithEquipment },
+          ownEquipment: { count: equipmentChoices.adults.ownEquipment, unitPrice: monthlyPriceOwnEquipment, totalPrice: adultOwnEquipment }
         },
         children: {
-          withEquipment: { count: equipmentChoices.children.withEquipment, unitPrice: prices.normalWithEquipment * 0.5, totalPrice: childWithEquipment },
-          ownEquipment: { count: equipmentChoices.children.ownEquipment, unitPrice: prices.normalOwn * 0.5, totalPrice: childOwnEquipment }
+          withEquipment: { count: equipmentChoices.children.withEquipment, unitPrice: monthlyPriceWithEquipment * 0.5, totalPrice: childWithEquipment },
+          ownEquipment: { count: equipmentChoices.children.ownEquipment, unitPrice: monthlyPriceOwnEquipment * 0.5, totalPrice: childOwnEquipment }
         },
         babies: { count: ageGroups.babies, unitPrice: 0, totalPrice: 0 }
       }
@@ -568,6 +599,65 @@ export default function RandevuPage() {
     }
   };
 
+
+  // Firebase'den tur tiplerini çek
+  const fetchTourTypes = async () => {
+    console.log('🔄 Tur tipleri yükleniyor...');
+    
+    try {
+      // Önce doğrudan Firebase'den çekmeyi dene
+      console.log('📡 Firebase bağlantısı test ediliyor...');
+      const tourTypesDoc = await getDoc(doc(db, 'settings', 'tourTypes'));
+      
+      console.log('📄 Firebase döküman durumu:', {
+        exists: tourTypesDoc.exists(),
+        id: tourTypesDoc.id,
+        data: tourTypesDoc.exists() ? tourTypesDoc.data() : null
+      });
+      
+      if (tourTypesDoc.exists()) {
+        const data = tourTypesDoc.data();
+        console.log('📋 Ham veri:', data);
+        
+        if (data && data.types && Array.isArray(data.types)) {
+          // Sadece aktif turları göster
+          const activeTourTypes = data.types.filter((tour: any) => tour.isActive);
+          setTourTypes(activeTourTypes);
+          console.log('✅ Aktif tur tipleri yüklendi:', activeTourTypes);
+          console.log('📊 Toplam tur sayısı:', data.types.length, 'Aktif tur sayısı:', activeTourTypes.length);
+          return; // Başarılı, çık
+        } else {
+          console.warn('⚠️ Veri formatı geçersiz:', data);
+        }
+      } else {
+        console.warn('⚠️ tourTypes dökümanı bulunamadı');
+      }
+      
+      // Eğer buraya geldiyse, veri yok veya geçersiz - varsayılan turları yükle
+      console.log('🔄 Varsayılan turlar yükleniyor...');
+      const defaultTours = [
+        { id: 'normalOwn', name: 'Normal Tur (Kendi Malzemesi)', price: 850, description: 'Kendi oltanızla katılım', isActive: true, isSystem: true, color: 'blue' },
+        { id: 'normalWithEquipment', name: 'Normal Tur (Malzeme Dahil)', price: 1000, description: 'Olta ve takım dahil', isActive: true, isSystem: true, color: 'green' },
+        { id: 'privateTour', name: 'Özel Tur', price: 12000, description: 'Tüm tekne kiralama', isActive: true, isSystem: true, color: 'purple' },
+        { id: 'fishingSwimming', name: 'Balık Tutma & Yüzme', price: 15000, description: '6 saat balık + yüzme', isActive: true, isSystem: true, color: 'orange' }
+      ];
+      setTourTypes(defaultTours);
+      console.log('✅ Varsayılan turlar yüklendi:', defaultTours);
+      
+    } catch (error: any) {
+      console.error('❌ Tur tipleri çekme hatası:', error);
+      
+      // Hata durumunda da varsayılan turları yükle
+      const defaultTours = [
+        { id: 'normalOwn', name: 'Normal Tur (Kendi Malzemesi)', price: 850, description: 'Kendi oltanızla katılım', isActive: true, isSystem: true, color: 'blue' },
+        { id: 'normalWithEquipment', name: 'Normal Tur (Malzeme Dahil)', price: 1000, description: 'Olta ve takım dahil', isActive: true, isSystem: true, color: 'green' },
+        { id: 'privateTour', name: 'Özel Tur', price: 12000, description: 'Tüm tekne kiralama', isActive: true, isSystem: true, color: 'purple' },
+        { id: 'fishingSwimming', name: 'Balık Tutma & Yüzme', price: 15000, description: '6 saat balık + yüzme', isActive: true, isSystem: true, color: 'orange' }
+      ];
+      setTourTypes(defaultTours);
+      console.log('🚨 Hata durumunda varsayılan turlar yüklendi:', defaultTours);
+    }
+  };
 
   // Firebase'den özel turları çek
   const fetchCustomTours = async () => {
@@ -905,6 +995,10 @@ export default function RandevuPage() {
       console.error('fetchPrices Promise hatası:', error);
     });
     
+    fetchTourTypes().catch((error) => {
+      console.error('fetchTourTypes Promise hatası:', error);
+    });
+    
     fetchCustomTours().catch((error) => {
       console.error('fetchCustomTours Promise hatası:', error);
     });
@@ -1026,12 +1120,15 @@ export default function RandevuPage() {
           });
           
           // Teknenin TÜM saatleri dolu olduğunda günü tamamen dolu say
-          // availableTimes.length kadar saat varsa ve hepsi dolu ise
-          const totalAvailableSessions = availableTimes.length;
-          if (fullyOccupiedSessions === totalAvailableSessions && totalAvailableSessions > 0) {
-            dateOccupancy[date] = 24; // Tüm seanslar dolu
+          // Dinamik saat sayısı hesaplaması (tekne özel saatleri dikkate alınarak)
+          const boatTimeSlots = selectedBoat?.customSchedule?.timeSlots?.filter(slot => slot.isActive) || [];
+          const actualAvailableTimesCount = boatTimeSlots.length > 0 ? boatTimeSlots.length : availableTimes.length;
+          const maxCapacityForDate = actualAvailableTimesCount * 12; // Teknenin o tarihteki maksimum kapasitesi
+          
+          if (fullyOccupiedSessions === actualAvailableTimesCount && actualAvailableTimesCount > 0) {
+            dateOccupancy[date] = maxCapacityForDate; // Tüm seanslar dolu - dinamik maksimum değer
           } else {
-            dateOccupancy[date] = Math.min(totalOccupied, 23); // Kısmi dolu (max 23 olsun ki 24'ten az olsun)
+            dateOccupancy[date] = Math.min(totalOccupied, maxCapacityForDate - 1); // Kısmi dolu (max'tan 1 az olsun ki tamamen dolu görünmesin)
           }
         });
         
@@ -1085,9 +1182,12 @@ export default function RandevuPage() {
   };
 
   const getTourPrice = (type: string) => {
-    if (type === 'normal') return priceOption === 'own-equipment' ? prices.normalOwn : prices.normalWithEquipment;
-    if (type === 'private') return prices.privateTour;
-    if (type === 'fishing-swimming') return prices.fishingSwimming;
+    if (type === 'normal') {
+      const tourId = priceOption === 'own-equipment' ? 'normalOwn' : 'normalWithEquipment';
+      return selectedDate ? getMonthlyPrice(tourId, selectedDate) : (priceOption === 'own-equipment' ? prices.normalOwn : prices.normalWithEquipment);
+    }
+    if (type === 'private') return selectedDate ? getMonthlyPrice('privateTour', selectedDate) : prices.privateTour;
+    if (type === 'fishing-swimming') return selectedDate ? getMonthlyPrice('fishingSwimming', selectedDate) : prices.fishingSwimming;
     const customTour = getSelectedCustomTour(type);
     return customTour ? customTour.price : 0;
   };
@@ -1756,11 +1856,11 @@ export default function RandevuPage() {
         totalAmount = priceCalculation ? priceCalculation.totalPrice : 0;
         ageBasedBreakdown = priceCalculation ? priceCalculation.breakdown : null;
       } else if (tourType === 'private') {
-        selectedPrice = prices.privateTour;
+        selectedPrice = getMonthlyPrice('privateTour', selectedDate) || prices.privateTour;
         priceDetails = 'Kapalı Tur (Özel) - Tüm Tekne';
         totalAmount = selectedPrice;
       } else if (tourType === 'fishing-swimming') {
-        selectedPrice = prices.fishingSwimming;
+        selectedPrice = getMonthlyPrice('fishingSwimming', selectedDate) || prices.fishingSwimming;
         priceDetails = 'Balık + Yüzme Turu - 6 Saat';
         totalAmount = selectedPrice;
       } else if (customTour) {
@@ -1891,22 +1991,43 @@ export default function RandevuPage() {
       {/* Adım İndikatörü */}
       <div className="max-w-2xl mx-auto px-4 py-4 sm:py-8">
         <div className="flex items-center justify-center mb-4 sm:mb-8">
-          {[1, 2, 3, 4, 5].map((step) => (
-            <div key={step} className="flex items-center">
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-sm sm:text-base ${
-                currentStep >= step 
-                  ? 'bg-green-500 text-white' 
-                  : 'bg-gray-200 text-gray-500'
-              }`}>
-                {step}
+          {(() => {
+            // Yeni akış: 1-Tekne, 2-Tur, 3-Kişi, 4-Tarih, 5-İletişim
+            // Ama gerçek sıra: 1-Tekne, 4-Tarih, 2-Tur, 3-Kişi, 5-İletişim
+            const steps = isSpecialTour(tourType) ? [1, 4, 2, 5] : [1, 4, 2, 3, 5];
+            const stepLabels = isSpecialTour(tourType) 
+              ? ['Tekne', 'Tarih', 'Tur', 'Bilgiler']
+              : ['Tekne', 'Tarih', 'Tur', 'Kişi', 'Bilgiler'];
+            
+            // Gerçek sıra: 1-Tekne, 4-Tarih, 2-Tur, 3-Kişi, 5-İletişim
+            const getProgressIndex = (currentStep: number) => {
+              if (currentStep === 1) return 0; // Tekne
+              if (currentStep === 4) return 1; // Tarih
+              if (currentStep === 2) return 2; // Tur
+              if (currentStep === 3 || currentStep === 3.5) return 3; // Kişi/Olta
+              if (currentStep === 5 || currentStep === 6) return 4; // İletişim/Başarı
+              return 0;
+            };
+            
+            const currentProgressIndex = getProgressIndex(currentStep);
+            
+            return steps.map((step, index) => (
+              <div key={step} className="flex items-center">
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-sm sm:text-base ${
+                  index <= currentProgressIndex
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-gray-200 text-gray-500'
+                }`}>
+                  {index + 1}
+                </div>
+                {index < steps.length - 1 && (
+                  <div className={`w-8 sm:w-16 h-1 ${
+                    index < currentProgressIndex ? 'bg-green-500' : 'bg-gray-200'
+                  }`}></div>
+                )}
               </div>
-              {step < 5 && (
-                <div className={`w-8 sm:w-16 h-1 ${
-                  currentStep > step ? 'bg-green-500' : 'bg-gray-200'
-                }`}></div>
-              )}
-            </div>
-          ))}
+            ));
+          })()}
         </div>
 
         {/* Form İçeriği */}
@@ -2077,20 +2198,32 @@ export default function RandevuPage() {
                           </div>
                         )}
                         
-                        <Image
-                          src={boat.imageUrl}
-                          alt={boat.name}
-                          fill
-                          className={`object-cover transition-all duration-300 hover:scale-110 ${
-                            imageLoadingStates[boat.id] ? 'opacity-0' : 'opacity-100'
-                          }`}
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                          priority={selectedDate ? getAvailableBoatsForDate(selectedDate).length <= 3 : false}
-                          onLoad={() => handleImageLoad(boat.id)}
-                          onError={() => handleImageError(boat.id)}
-                          placeholder="blur"
-                          blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
-                        />
+                        {boat.imageUrl && boat.imageUrl.startsWith('http') ? (
+                          <Image
+                            src={boat.imageUrl}
+                            alt={boat.name}
+                            fill
+                            className={`object-cover transition-all duration-300 hover:scale-110 ${
+                              imageLoadingStates[boat.id] ? 'opacity-0' : 'opacity-100'
+                            }`}
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            priority={selectedDate ? getAvailableBoatsForDate(selectedDate).length <= 3 : false}
+                            onLoad={() => handleImageLoad(boat.id)}
+                            onError={() => {
+                              console.error(`Görsel yüklenemedi: ${boat.imageUrl}`);
+                              handleImageError(boat.id);
+                            }}
+                            placeholder="blur"
+                            blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="text-4xl mb-2">🚢</div>
+                              <p className="text-blue-600 text-sm font-medium">Görsel Yükleniyor</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="p-4 sm:p-5 flex-1 flex flex-col items-start text-left w-full">
@@ -2147,7 +2280,7 @@ export default function RandevuPage() {
 
               <div className="mt-8 sm:mt-10">
                 <button
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => setCurrentStep(4)} 
                   disabled={!selectedBoat?.id}
                   className={`px-6 sm:px-8 py-3 rounded-xl font-bold transition-all duration-300 touch-manipulation text-sm sm:text-base ${
                     selectedBoat?.id
@@ -2172,6 +2305,7 @@ export default function RandevuPage() {
               </p>
               
               <div className="grid grid-cols-1 gap-4 sm:gap-6 max-w-6xl mx-auto">
+
 
                 {/* Dinamik Özel Turlar (en üstte, yeni eklenenler önce) */}
                 {customTours
@@ -2271,141 +2405,106 @@ export default function RandevuPage() {
                   );
                 })}
                 
-                {/* Normal Tur - Kendi Ekipmanı */}
-                <div 
-                  onClick={() => {
-                    setTourType('normal');
-                    setPriceOption('own-equipment');
-                    // Tur seçiminde hafif scroll yap
-                    setTimeout(() => scrollToContinueButton(), 500);
-                  }}
-                  className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
-                    tourType === 'normal' && priceOption === 'own-equipment'
-                      ? 'border-green-500 bg-green-50 scale-105 shadow-xl'
-                      : 'border-gray-200 hover:border-green-300 hover:bg-green-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="text-3xl sm:text-4xl">🎣</div>
-                      <div className="text-left">
-                        <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">Normal Tur - Kendi Ekipmanı</h3>
-                        <p className="text-sm sm:text-base text-slate-600 mb-2">
-                          Kendi oltanızla diğer misafirlerle birlikte katılım
-                        </p>
-                        <div className="text-xs sm:text-sm text-slate-500">
-                          • 1-12 kişi arası • Koltuk bazlı rezervasyon • 07:00-13:00 veya 14:00-20:00
+                {/* Dinamik Tur Tipleri */}
+                {tourTypes.length === 0 ? (
+                  <div className="text-center py-8 bg-yellow-50 border border-yellow-200 rounded-xl">
+                    <div className="text-4xl mb-4">⚠️</div>
+                    <h3 className="text-xl font-bold text-yellow-800 mb-2">Tur Tipleri Yüklenemedi</h3>
+                    <p className="text-yellow-700 mb-4">
+                      Sistem ayarlarından tur tipleri yüklenemiyor. Lütfen sayfayı yenileyin.
+                    </p>
+                    <button 
+                      onClick={() => window.location.reload()} 
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-medium"
+                    >
+                      🔄 Sayfayı Yenile
+                    </button>
+                  </div>
+                ) : (
+                  tourTypes.map((tour, index) => {
+                  const colorClasses = {
+                    blue: { border: 'border-blue-500', bg: 'bg-blue-50', text: 'text-blue-600', hover: 'hover:border-blue-300 hover:bg-blue-50' },
+                    green: { border: 'border-green-500', bg: 'bg-green-50', text: 'text-green-600', hover: 'hover:border-green-300 hover:bg-green-50' },
+                    purple: { border: 'border-purple-500', bg: 'bg-purple-50', text: 'text-purple-600', hover: 'hover:border-purple-300 hover:bg-purple-50' },
+                    orange: { border: 'border-orange-500', bg: 'bg-orange-50', text: 'text-orange-600', hover: 'hover:border-orange-300 hover:bg-orange-50' },
+                    indigo: { border: 'border-indigo-500', bg: 'bg-indigo-50', text: 'text-indigo-600', hover: 'hover:border-indigo-300 hover:bg-indigo-50' },
+                    red: { border: 'border-red-500', bg: 'bg-red-50', text: 'text-red-600', hover: 'hover:border-red-300 hover:bg-red-50' },
+                    yellow: { border: 'border-yellow-500', bg: 'bg-yellow-50', text: 'text-yellow-600', hover: 'hover:border-yellow-300 hover:bg-yellow-50' },
+                    cyan: { border: 'border-cyan-500', bg: 'bg-cyan-50', text: 'text-cyan-600', hover: 'hover:border-cyan-300 hover:bg-cyan-50' }
+                  };
+                  
+                  const colors = colorClasses[tour.color as keyof typeof colorClasses] || colorClasses.blue;
+                  
+                  // Özel durumlar için emoji ve açıklama
+                  const getEmojiAndDetails = (tourId: string, tourName: string) => {
+                    if (tourId === 'normalOwn') return { emoji: '🎣', details: '• 1-12 kişi arası • Koltuk bazlı rezervasyon • Kendi oltanız' };
+                    if (tourId === 'normalWithEquipment') return { emoji: '🐟', details: '• 1-12 kişi arası • Kaliteli olta, ip dahil • Yem size aittir' };
+                    if (tourId === 'privateTour') return { emoji: '⭐', details: '• 12 kişiye kadar • Tüm tekne kiralama • Tüm ekipman dahil' };
+                    if (tourId === 'fishingSwimming') return { emoji: '🏊‍♂️', details: '• 12 kişiye kadar • Tüm ekipman dahil • Yüzme molası' };
+                    return { emoji: '🎯', details: '• Özel tur deneyimi • Detaylar için iletişime geçin' };
+                  };
+                  
+                  const { emoji, details } = getEmojiAndDetails(tour.id, tour.name);
+                  
+                  // Normal tur için özel mantık (kendi/ekipman dahil seçimi)
+                  const isNormalTour = tour.id === 'normalOwn' || tour.id === 'normalWithEquipment';
+                  const isSelected = isNormalTour 
+                    ? (tourType === 'normal' && ((tour.id === 'normalOwn' && priceOption === 'own-equipment') || (tour.id === 'normalWithEquipment' && priceOption === 'with-equipment')))
+                    : tourType === tour.id;
+                  
+                  return (
+                    <div 
+                      key={tour.id}
+                      onClick={() => {
+                        if (tour.id === 'normalOwn') {
+                          setTourType('normal');
+                          setPriceOption('own-equipment');
+                        } else if (tour.id === 'normalWithEquipment') {
+                          setTourType('normal');
+                          setPriceOption('with-equipment');
+                        } else {
+                          setTourType(tour.id);
+                        }
+                        setTimeout(() => scrollToContinueButton(), 500);
+                      }}
+                      className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
+                        isSelected
+                          ? `${colors.border} ${colors.bg} scale-105 shadow-xl`
+                          : `border-gray-200 ${colors.hover}`
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="text-3xl sm:text-4xl">{emoji}</div>
+                          <div className="text-left">
+                            <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">{tour.name}</h3>
+                            <p className="text-sm sm:text-base text-slate-600 mb-2">
+                              {tour.description}
+                            </p>
+                            <div className="text-xs sm:text-sm text-slate-500">
+                              {details}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-2xl sm:text-3xl font-bold ${colors.text}`}>
+                            {(selectedDate ? getMonthlyPrice(tour.id, selectedDate) : tour.price).toLocaleString('tr-TR')} TL
+                          </div>
+                          <div className="text-xs sm:text-sm text-slate-500">
+                            {isNormalTour ? 'kişi başı' : 'grup fiyatı'}
+                          </div>
+                          {!isNormalTour && (
+                            <div className={`text-xs ${colors.text} font-medium`}>
+                              {tour.id === 'privateTour' ? 'tüm ekipman dahil' : 
+                               tour.id === 'fishingSwimming' ? 'balık + yüzme' : 'özel tur'}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl sm:text-3xl font-bold text-green-600">{prices.normalOwn.toLocaleString('tr-TR')} TL</div>
-                      <div className="text-xs sm:text-sm text-slate-500">kişi başı</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Normal Tur - Ekipman Dahil */}
-                <div 
-                  onClick={() => {
-                    setTourType('normal');
-                    setPriceOption('with-equipment');
-                    // Tur seçiminde hafif scroll yap
-                    setTimeout(() => scrollToContinueButton(), 500);
-                  }}
-                  className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
-                    tourType === 'normal' && priceOption === 'with-equipment'
-                      ? 'border-blue-500 bg-blue-50 scale-105 shadow-xl'
-                      : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="text-3xl sm:text-4xl">🐟</div>
-                      <div className="text-left">
-                        <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">Normal Tur - Ekipman Dahil</h3>
-                        <p className="text-sm sm:text-base text-slate-600 mb-2">
-                          Olta ve ilk takım Balık Sefası tarafından sağlanır
-                        </p>
-                        <div className="text-xs sm:text-sm text-slate-500">
-                          • 1-12 kişi arası • Kaliteli olta, ip, (yem size aittir) • 07:00-13:00 veya 14:00-20:00
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl sm:text-3xl font-bold text-blue-600">{prices.normalWithEquipment.toLocaleString('tr-TR')} TL</div>
-                      <div className="text-xs sm:text-sm text-slate-500">kişi başı</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Özel Tur */}
-                <div 
-                  onClick={() => {
-                    setTourType('private');
-                    // Tur seçiminde hafif scroll yap
-                    setTimeout(() => scrollToContinueButton(), 500);
-                  }}
-                  className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
-                    tourType === 'private'
-                      ? 'border-purple-500 bg-purple-50 scale-105 shadow-xl'
-                      : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="text-3xl sm:text-4xl">⭐</div>
-                      <div className="text-left">
-                        <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">Kapalı Tur (Özel)</h3>
-                        <p className="text-sm sm:text-base text-slate-600 mb-2">
-                          Tüm tekne sadece sizin grubunuz için - 12 olta ve takım dahil
-                        </p>
-                        <div className="text-xs sm:text-sm text-slate-500">
-                          • 12 kişiye kadar • Tüm tekne kiralama • 6 saat (Sabah veya Öğleden sonra seansı)
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl sm:text-3xl font-bold text-purple-600">{prices.privateTour.toLocaleString('tr-TR')} TL</div>
-                      <div className="text-xs sm:text-sm text-slate-500">grup fiyatı</div>
-                      <div className="text-xs text-purple-600 font-medium">tüm ekipman dahil</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Balık + Yüzme Turu */}
-                <div 
-                  onClick={() => {
-                    setTourType('fishing-swimming');
-                    // Tur seçiminde hafif scroll yap
-                    setTimeout(() => scrollToContinueButton(), 500);
-                  }}
-                  className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
-                    tourType === 'fishing-swimming'
-                      ? 'border-cyan-500 bg-cyan-50 scale-105 shadow-xl'
-                      : 'border-gray-200 hover:border-cyan-300 hover:bg-cyan-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="text-3xl sm:text-4xl">🏊‍♂️</div>
-                      <div className="text-left">
-                        <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">Balık + Yüzme Turu</h3>
-                        <p className="text-sm sm:text-base text-slate-600 mb-2">
-                          6 saat - İlk balık avı ardından yüzme keyfi (Özel tur)
-                        </p>
-                        <div className="text-xs sm:text-sm text-slate-500">
-                          • 12 kişiye kadar • Tüm ekipman dahil • Yüzme molası • 6 saat süre
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl sm:text-3xl font-bold text-cyan-600">{prices.fishingSwimming.toLocaleString('tr-TR')} TL</div>
-                      <div className="text-xs sm:text-sm text-slate-500">grup fiyatı</div>
-                      <div className="text-xs text-cyan-600 font-medium">balık + yüzme</div>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })
+                )}
               </div>
 
               {/* Yaş Ücretlendirmesi Bilgisi */}
@@ -2423,11 +2522,11 @@ export default function RandevuPage() {
 
               {/* İkinci Tekne Bilgilendirmesi */}
               <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                <h4 className="font-bold text-blue-800 mb-2">🚤 İkinci Teknemiz</h4>
+                <h4 className="font-bold text-blue-800 mb-2">🚤 Üçüncü Teknemiz</h4>
                 <div className="text-sm text-blue-700">
-                  <p>📱 <strong>Seçtiğiniz tarih doluysa ikinci teknemiz için bize WhatsApp üzerinden ulaşın.</strong></p>
+                  <p>📱 <strong>Seçtiğiniz tarih doluysa üçüncü teknemiz için bize WhatsApp üzerinden ulaşın.</strong></p>
                   <p className="text-xs text-blue-600 mt-2">
-                    💡 Aynı kapasitede ikinci teknemizle size alternatif saatler sunabiliriz
+                    💡 Aynı kapasitede üçüncü teknemizle size alternatif saatler sunabiliriz
                   </p>
                 </div>
               </div>
@@ -2435,7 +2534,12 @@ export default function RandevuPage() {
                               <button
                   data-continue-button
                   onClick={() => {
-                    setCurrentStep(3);
+                    // Özel tur seçildiyse kişi sayısı adımını atla, doğrudan 5. adıma git
+                    if (isSpecialTour(tourType)) {
+                      setCurrentStep(5);
+                    } else {
+                      setCurrentStep(3);
+                    }
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -2723,7 +2827,7 @@ export default function RandevuPage() {
                     if (tourType === 'normal' && (ageGroups.adults > 0 || ageGroups.children > 0)) {
                       setCurrentStep(3.5);
                     } else {
-                      setCurrentStep(4);
+                      setCurrentStep(5);
                     }
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
@@ -2763,7 +2867,7 @@ export default function RandevuPage() {
                       {/* Ekipman Dahil */}
                       <div className="bg-white rounded-lg p-4 border-2 border-orange-200">
                         <h4 className="font-bold text-orange-800 mb-2">🎣 Ekipman Dahil</h4>
-                        <p className="text-sm text-orange-600 mb-3">{prices.normalWithEquipment.toLocaleString('tr-TR')} ₺/kişi</p>
+                        <p className="text-sm text-orange-600 mb-3">{(selectedDate ? getMonthlyPrice('normalWithEquipment', selectedDate) : prices.normalWithEquipment).toLocaleString('tr-TR')} ₺/kişi</p>
                         
                         <div className="flex items-center justify-center space-x-3">
                           <button
@@ -2799,7 +2903,7 @@ export default function RandevuPage() {
                       {/* Kendi Ekipmanı */}
                       <div className="bg-white rounded-lg p-4 border-2 border-green-200">
                         <h4 className="font-bold text-green-800 mb-2">🎒 Kendi Ekipmanı</h4>
-                        <p className="text-sm text-green-600 mb-3">{prices.normalOwn.toLocaleString('tr-TR')} ₺/kişi</p>
+                        <p className="text-sm text-green-600 mb-3">{(selectedDate ? getMonthlyPrice('normalOwn', selectedDate) : prices.normalOwn).toLocaleString('tr-TR')} ₺/kişi</p>
                         
                         <div className="flex items-center justify-center space-x-3">
                           <button
@@ -2846,7 +2950,7 @@ export default function RandevuPage() {
                       {/* Ekipman Dahil */}
                       <div className="bg-white rounded-lg p-4 border-2 border-orange-200">
                         <h4 className="font-bold text-orange-800 mb-2">🎣 Ekipman Dahil</h4>
-                        <p className="text-sm text-orange-600 mb-3">{(prices.normalWithEquipment * 0.5).toLocaleString('tr-TR')} ₺/kişi (%50)</p>
+                        <p className="text-sm text-orange-600 mb-3">{((selectedDate ? getMonthlyPrice('normalWithEquipment', selectedDate) : prices.normalWithEquipment) * 0.5).toLocaleString('tr-TR')} ₺/kişi (%50)</p>
                         
                         <div className="flex items-center justify-center space-x-3">
                           <button
@@ -2882,7 +2986,7 @@ export default function RandevuPage() {
                       {/* Kendi Ekipmanı */}
                       <div className="bg-white rounded-lg p-4 border-2 border-green-200">
                         <h4 className="font-bold text-green-800 mb-2">🎒 Kendi Ekipmanı</h4>
-                        <p className="text-sm text-green-600 mb-3">{(prices.normalOwn * 0.5).toLocaleString('tr-TR')} ₺/kişi (%50)</p>
+                        <p className="text-sm text-green-600 mb-3">{((selectedDate ? getMonthlyPrice('normalOwn', selectedDate) : prices.normalOwn) * 0.5).toLocaleString('tr-TR')} ₺/kişi (%50)</p>
                         
                         <div className="flex items-center justify-center space-x-3">
                           <button
@@ -3005,7 +3109,7 @@ export default function RandevuPage() {
                 <button
                   data-continue-button
                   onClick={() => {
-                    setCurrentStep(4);
+                    setCurrentStep(5);
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -3115,9 +3219,9 @@ export default function RandevuPage() {
                         const isSelected = selectedDate === dayInfo.date;
                         
                         // Teknenin toplam kapasitesini hesapla (saat sayısı × 12 koltuk)
-                        // availableTimes yerine teknenin gerçek saat sayısını kullan
+                        // Tekne özel saatleri varsa onu kullan, yoksa mevcut availableTimes'ı kullan
                         const boatTimeSlots = selectedBoat?.customSchedule?.timeSlots?.filter(slot => slot.isActive) || [];
-                        const actualAvailableTimesCount = boatTimeSlots.length > 0 ? boatTimeSlots.length : 4; // Varsayılan 4 saat
+                        const actualAvailableTimesCount = boatTimeSlots.length > 0 ? boatTimeSlots.length : availableTimes.length;
                         const totalCapacity = actualAvailableTimesCount * 12;
                         const isFullyOccupied = occupiedCount >= totalCapacity; // Tüm seanslar dolu
                         const isPartiallyOccupied = occupiedCount > 0 && occupiedCount < totalCapacity;
@@ -3764,7 +3868,7 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(3);
+                    setCurrentStep(2);
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -3779,7 +3883,7 @@ export default function RandevuPage() {
                 <button
                   data-continue-button
                   onClick={() => {
-                    setCurrentStep(5);
+                    setCurrentStep(2);
                     // Adım geçişinde sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -3944,7 +4048,12 @@ export default function RandevuPage() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <button
                   onClick={() => {
-                    setCurrentStep(5);
+                    // Normal tur ise ve olta seçimi varsa 3.5'e, yoksa 3'e git
+                    if (tourType === 'normal' && (ageGroups.adults > 0 || ageGroups.children > 0)) {
+                      setCurrentStep(3.5);
+                    } else {
+                      setCurrentStep(3);
+                    }
                     // Geri giderken sayfayı üste scroll yap
                     setTimeout(() => {
                       if (typeof window !== 'undefined') {
@@ -4145,12 +4254,10 @@ export default function RandevuPage() {
                           <span className="text-slate-600">💵 Fiyat:</span>
                           <span className="font-bold text-green-600 text-xs sm:text-sm">
                             {tourType === 'normal' ? 
-                              (priceOption === 'own-equipment' ? 
-                                `${prices.normalOwn.toLocaleString('tr-TR')} TL/kişi` : 
-                                `${prices.normalWithEquipment.toLocaleString('tr-TR')} TL/kişi`) :
+                              `${getTourPrice('normal').toLocaleString('tr-TR')} ₺/kişi` : 
                               tourType === 'private' ? 
-                                `${prices.privateTour.toLocaleString('tr-TR')} TL (Grup)` : 
-                                `${prices.fishingSwimming.toLocaleString('tr-TR')} TL (Grup)`}
+                                `${(selectedDate ? getMonthlyPrice('privateTour', selectedDate) : prices.privateTour).toLocaleString('tr-TR')} TL (Grup)` : 
+                                `${(selectedDate ? getMonthlyPrice('fishingSwimming', selectedDate) : prices.fishingSwimming).toLocaleString('tr-TR')} TL (Grup)`}
                           </span>
                         </div>
                         <div className="flex justify-between items-center border-t pt-2">
@@ -4158,9 +4265,11 @@ export default function RandevuPage() {
                           <span className="font-bold text-green-700 text-sm sm:text-base">
                             {(() => {
                               if (tourType === 'private') {
-                                return `${prices.privateTour.toLocaleString('tr-TR')} TL`;
+                                const monthlyPrice = selectedDate ? getMonthlyPrice('privateTour', selectedDate) : prices.privateTour;
+                                return `${monthlyPrice.toLocaleString('tr-TR')} TL`;
                               } else if (tourType === 'fishing-swimming') {
-                                return `${prices.fishingSwimming.toLocaleString('tr-TR')} TL`;
+                                const monthlyPrice = selectedDate ? getMonthlyPrice('fishingSwimming', selectedDate) : prices.fishingSwimming;
+                                return `${monthlyPrice.toLocaleString('tr-TR')} TL`;
                               } else {
                                 // Normal tur için esnek fiyatlama sistemini kullan
                                 const priceInfo = getCurrentPrice();

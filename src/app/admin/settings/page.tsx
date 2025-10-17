@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore';
 
 interface Settings {
   siteName: string;
@@ -22,6 +22,29 @@ interface Prices {
   normalWithEquipment: number;
   privateTour: number;
   fishingSwimming: number;
+}
+
+// Ay bazlı fiyat yapısı
+interface MonthlyPrice {
+  month: number; // 1-12 (Ocak-Aralık)
+  year: number;
+  price: number;
+  isActive: boolean;
+}
+
+interface TourType {
+  id: string;
+  name: string;
+  price: number; // Varsayılan fiyat
+  description: string;
+  isActive: boolean;
+  isSystem: boolean; // Sistem turları (silinemez)
+  color: string; // UI rengi
+  // Ay bazlı fiyatlandırma
+  monthlyPricing?: {
+    enabled: boolean;
+    prices: MonthlyPrice[];
+  };
 }
 
 interface AvailableTimes {
@@ -91,6 +114,32 @@ export default function SettingsPage() {
     description: '',
     isActive: true
   });
+  
+  // Dinamik tur tipleri yönetimi
+  const [tourTypes, setTourTypes] = useState<TourType[]>([
+    { id: 'normalOwn', name: 'Normal Tur (Kendi Malzemesi)', price: 850, description: 'Kendi oltanızla katılım', isActive: true, isSystem: true, color: 'blue' },
+    { id: 'normalWithEquipment', name: 'Normal Tur (Malzeme Dahil)', price: 1000, description: 'Olta ve takım dahil', isActive: true, isSystem: true, color: 'green' },
+    { id: 'privateTour', name: 'Özel Tur', price: 12000, description: 'Tüm tekne kiralama', isActive: true, isSystem: true, color: 'purple' },
+    { id: 'fishingSwimming', name: 'Balık Tutma & Yüzme', price: 15000, description: '6 saat balık + yüzme', isActive: true, isSystem: true, color: 'orange' }
+  ]);
+  const [editingTourTypes, setEditingTourTypes] = useState(false);
+  const [newTourType, setNewTourType] = useState({
+    name: '',
+    price: 0,
+    description: '',
+    isActive: true,
+    color: 'indigo'
+  });
+
+  // Ay bazlı fiyat yönetimi
+  const [editingMonthlyPrices, setEditingMonthlyPrices] = useState<string | null>(null); // Hangi tur için ay bazlı fiyat düzenleniyor
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  // Ay isimleri
+  const monthNames = [
+    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+  ];
 
   // Ayarları dinle
   useEffect(() => {
@@ -139,6 +188,17 @@ export default function SettingsPage() {
         setLoading(false);
       }
     );
+
+    // Tur tiplerini yükle ve ilk kurulum kontrolü yap
+    loadTourTypes().then(() => {
+      // Eğer tourTypes boşsa, ilk kurulum için varsayılan turları kaydet
+      setTimeout(() => {
+        if (tourTypes.length === 0) {
+          console.log('🔧 İlk kurulum: Varsayılan tur tipleri kaydediliyor...');
+          saveTourTypes();
+        }
+      }, 1000);
+    });
 
     return () => unsubscribe();
   }, []);
@@ -230,6 +290,143 @@ export default function SettingsPage() {
       alert('Saatler kaydedilirken hata oluştu');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Tur tipi yönetimi fonksiyonları
+  const loadTourTypes = async () => {
+    try {
+      const tourTypesDoc = await getDoc(doc(db, 'settings', 'tourTypes'));
+      if (tourTypesDoc.exists()) {
+        const data = tourTypesDoc.data();
+        if (data.types && Array.isArray(data.types)) {
+          setTourTypes(data.types);
+        }
+      }
+    } catch (error) {
+      console.error('Tur tipleri yüklenemedi:', error);
+    }
+  };
+
+  const saveTourTypes = async () => {
+    setSaving(true);
+    try {
+      await setDoc(doc(db, 'settings', 'tourTypes'), {
+        types: tourTypes,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      // Eski prices formatını da güncelle (geriye uyumluluk için)
+      const systemTours = tourTypes.filter(t => t.isSystem);
+      const updatedPrices = {
+        normalOwn: systemTours.find(t => t.id === 'normalOwn')?.price || 850,
+        normalWithEquipment: systemTours.find(t => t.id === 'normalWithEquipment')?.price || 1000,
+        privateTour: systemTours.find(t => t.id === 'privateTour')?.price || 12000,
+        fishingSwimming: systemTours.find(t => t.id === 'fishingSwimming')?.price || 15000
+      };
+      
+      await setDoc(doc(db, 'settings', 'prices'), updatedPrices);
+      setPrices(updatedPrices);
+      
+      setEditingTourTypes(false);
+      alert('Tur tipleri başarıyla kaydedildi!');
+    } catch (error) {
+      console.error('Tur tipleri kaydedilemedi:', error);
+      alert('Tur tipleri kaydedilirken hata oluştu');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addTourType = () => {
+    if (!newTourType.name.trim() || newTourType.price <= 0) {
+      alert('Lütfen tur adı ve geçerli bir fiyat girin!');
+      return;
+    }
+
+    const tourType: TourType = {
+      id: `custom_${Date.now()}`,
+      name: newTourType.name.trim(),
+      price: newTourType.price,
+      description: newTourType.description.trim(),
+      isActive: newTourType.isActive,
+      isSystem: false,
+      color: newTourType.color
+    };
+
+    setTourTypes([...tourTypes, tourType]);
+    setNewTourType({
+      name: '',
+      price: 0,
+      description: '',
+      isActive: true,
+      color: 'indigo'
+    });
+  };
+
+  const updateTourType = async (id: string, updates: Partial<TourType>) => {
+    const updatedTourTypes = tourTypes.map(tour => 
+      tour.id === id ? { ...tour, ...updates } : tour
+    );
+    setTourTypes(updatedTourTypes);
+    
+    // Otomatik kaydet
+    try {
+      await setDoc(doc(db, 'settings', 'tourTypes'), {
+        types: updatedTourTypes,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      // Eski prices formatını da güncelle (geriye uyumluluk için)
+      const systemTours = updatedTourTypes.filter(t => t.isSystem);
+      const updatedPrices = {
+        normalOwn: systemTours.find(t => t.id === 'normalOwn')?.price || 850,
+        normalWithEquipment: systemTours.find(t => t.id === 'normalWithEquipment')?.price || 1000,
+        privateTour: systemTours.find(t => t.id === 'privateTour')?.price || 12000,
+        fishingSwimming: systemTours.find(t => t.id === 'fishingSwimming')?.price || 15000
+      };
+      
+      await setDoc(doc(db, 'settings', 'prices'), updatedPrices);
+      setPrices(updatedPrices);
+      
+      console.log('✅ Tur tipi otomatik kaydedildi:', id, updates);
+    } catch (error) {
+      console.error('❌ Tur tipi kaydetme hatası:', error);
+      alert('Tur tipi kaydedilirken hata oluştu');
+      // Hata durumunda state'i geri al
+      setTourTypes(tourTypes);
+    }
+  };
+
+  const removeTourType = async (id: string) => {
+    const tour = tourTypes.find(t => t.id === id);
+    if (tour?.isSystem) {
+      alert('Sistem turları silinemez!');
+      return;
+    }
+    
+    if (confirm(`"${tour?.name}" turunu silmek istediğinizden emin misiniz?`)) {
+      const updatedTourTypes = tourTypes.filter(t => t.id !== id);
+      setTourTypes(updatedTourTypes);
+      
+      // Otomatik kaydet
+      try {
+        await setDoc(doc(db, 'settings', 'tourTypes'), {
+          types: updatedTourTypes,
+          updatedAt: new Date(),
+          updatedBy: 'admin'
+        });
+        
+        console.log('✅ Tur tipi silindi ve kaydedildi:', id);
+        alert(`"${tour?.name}" turu başarıyla silindi!`);
+      } catch (error) {
+        console.error('❌ Tur tipi silme hatası:', error);
+        alert('Tur tipi silinirken hata oluştu');
+        // Hata durumunda state'i geri al
+        setTourTypes(tourTypes);
+      }
     }
   };
 
@@ -350,7 +547,111 @@ export default function SettingsPage() {
     }
   };
 
+  // Ay bazlı fiyat yönetimi fonksiyonları
+  const toggleMonthlyPricing = async (tourId: string) => {
+    const updatedTourTypes = tourTypes.map(tour => {
+      if (tour.id === tourId) {
+        const monthlyPricing = tour.monthlyPricing || { enabled: false, prices: [] };
+        return {
+          ...tour,
+          monthlyPricing: {
+            ...monthlyPricing,
+            enabled: !monthlyPricing.enabled
+          }
+        };
+      }
+      return tour;
+    });
+    setTourTypes(updatedTourTypes);
+    
+    // Otomatik kaydet
+    try {
+      await setDoc(doc(db, 'settings', 'tourTypes'), {
+        types: updatedTourTypes,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      console.log('✅ Ay bazlı fiyat ayarı kaydedildi:', tourId);
+    } catch (error) {
+      console.error('❌ Ay bazlı fiyat ayarı kaydetme hatası:', error);
+      alert('Ay bazlı fiyat ayarı kaydedilirken hata oluştu');
+      setTourTypes(tourTypes);
+    }
+  };
 
+  const updateMonthlyPrice = async (tourId: string, month: number, price: number) => {
+    const updatedTourTypes = tourTypes.map(tour => {
+      if (tour.id === tourId) {
+        const monthlyPricing = tour.monthlyPricing || { enabled: true, prices: [] };
+        const existingPriceIndex = monthlyPricing.prices.findIndex(p => p.month === month && p.year === selectedYear);
+        
+        let updatedPrices = [...monthlyPricing.prices];
+        
+        // Eğer fiyat 0 veya boş ise, o ayın fiyatını sil
+        if (!price || price === 0) {
+          if (existingPriceIndex >= 0) {
+            updatedPrices.splice(existingPriceIndex, 1);
+          }
+        } else {
+          // Fiyat var ise güncelle veya ekle
+          if (existingPriceIndex >= 0) {
+            // Mevcut fiyatı güncelle
+            updatedPrices[existingPriceIndex] = {
+              ...updatedPrices[existingPriceIndex],
+              price: price
+            };
+          } else {
+            // Yeni fiyat ekle
+            updatedPrices.push({
+              month: month,
+              year: selectedYear,
+              price: price,
+              isActive: true
+            });
+          }
+        }
+        
+        return {
+          ...tour,
+          monthlyPricing: {
+            ...monthlyPricing,
+            prices: updatedPrices
+          }
+        };
+      }
+      return tour;
+    });
+    setTourTypes(updatedTourTypes);
+    
+    // Otomatik kaydet
+    try {
+      await setDoc(doc(db, 'settings', 'tourTypes'), {
+        types: updatedTourTypes,
+        updatedAt: new Date(),
+        updatedBy: 'admin'
+      });
+      
+      console.log('✅ Aylık fiyat kaydedildi:', tourId, month, price);
+    } catch (error) {
+      console.error('❌ Aylık fiyat kaydetme hatası:', error);
+      alert('Aylık fiyat kaydedilirken hata oluştu');
+      setTourTypes(tourTypes);
+    }
+  };
+
+  const getMonthlyPrice = (tourId: string, month: number): number => {
+    const tour = tourTypes.find(t => t.id === tourId);
+    if (!tour?.monthlyPricing?.enabled) return tour?.price || 0;
+    
+    const monthlyPrice = tour.monthlyPricing.prices.find(p => p.month === month && p.year === selectedYear);
+    return monthlyPrice?.price || tour.price;
+  };
+
+  const getCurrentMonthPrice = (tourId: string): number => {
+    const currentMonth = new Date().getMonth() + 1; // 1-12
+    return getMonthlyPrice(tourId, currentMonth);
+  };
 
   if (loading) {
     return (
@@ -567,101 +868,422 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Fiyat Yönetimi */}
+          {/* Dinamik Tur Tipi Yönetimi */}
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">💰 Fiyat Yönetimi</h2>
-              <button
-                onClick={() => setEditingPrices(!editingPrices)}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                {editingPrices ? 'İptal' : 'Düzenle'}
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <h3 className="font-medium text-gray-900 mb-2">Normal Tur (Kendi Malzemesi)</h3>
-                {editingPrices ? (
-                                     <input
-                     type="number"
-                     value={prices.normalOwn}
-                     onChange={(e) => setPrices({...prices, normalOwn: parseInt(e.target.value)})}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                   />
-                 ) : (
-                   <p className="text-2xl font-bold text-blue-600">
-                     {formatPrice(prices.normalOwn)}
-                   </p>
-                 )}
-               </div>
-               
-               <div className="p-4 bg-green-50 rounded-lg">
-                 <h3 className="font-medium text-gray-900 mb-2">Normal Tur (Malzeme Dahil)</h3>
-                 {editingPrices ? (
-                   <input
-                     type="number"
-                     value={prices.normalWithEquipment}
-                     onChange={(e) => setPrices({...prices, normalWithEquipment: parseInt(e.target.value)})}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                   />
-                 ) : (
-                   <p className="text-2xl font-bold text-green-600">
-                     {formatPrice(prices.normalWithEquipment)}
-                   </p>
-                 )}
-               </div>
-               
-               <div className="p-4 bg-purple-50 rounded-lg">
-                 <h3 className="font-medium text-gray-900 mb-2">Özel Tur</h3>
-                 {editingPrices ? (
-                   <input
-                     type="number"
-                     value={prices.privateTour}
-                     onChange={(e) => setPrices({...prices, privateTour: parseInt(e.target.value)})}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                   />
-                 ) : (
-                   <p className="text-2xl font-bold text-purple-600">
-                     {formatPrice(prices.privateTour)}
-                   </p>
-                 )}
-               </div>
-               
-               <div className="p-4 bg-orange-50 rounded-lg">
-                 <h3 className="font-medium text-gray-900 mb-2">Balık Tutma & Yüzme</h3>
-                 {editingPrices ? (
-                   <input
-                     type="number"
-                     value={prices.fishingSwimming}
-                     onChange={(e) => setPrices({...prices, fishingSwimming: parseInt(e.target.value)})}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                   />
-                ) : (
-                  <p className="text-2xl font-bold text-orange-600">
-                    {formatPrice(prices.fishingSwimming)}
-                  </p>
-                )}
+              <h2 className="text-xl font-bold text-gray-900">💰 Tur Tipi & Fiyat Yönetimi</h2>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setEditingTourTypes(!editingTourTypes)}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {editingTourTypes ? 'İptal' : 'Yeni Tur Ekle'}
+                </button>
+                <button
+                  onClick={saveTourTypes}
+                  disabled={saving}
+                  className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {saving ? 'Kaydediliyor...' : 'Tur Tiplerini Kaydet'}
+                </button>
               </div>
             </div>
             
-            {editingPrices && (
-              <div className="mt-6 flex justify-end space-x-2">
-                <button
-                  onClick={() => setEditingPrices(false)}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-                >
-                  İptal
-                </button>
-                <button
-                  onClick={savePrices}
-                  disabled={saving}
-                  className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-                >
-                  {saving ? 'Kaydediliyor...' : 'Fiyatları Kaydet'}
-                </button>
+            {/* Mevcut Tur Tipleri */}
+            {tourTypes.length === 0 ? (
+              <div className="text-center py-8 bg-yellow-50 border border-yellow-200 rounded-xl mb-6">
+                <div className="text-4xl mb-4">⚠️</div>
+                <h3 className="text-xl font-bold text-yellow-800 mb-2">İlk Kurulum Gerekli</h3>
+                <p className="text-yellow-700 mb-4">
+                  Tur tipleri henüz kaydedilmemiş. Sistem turlarını aktif etmek için "Tur Tiplerini Kaydet" butonuna tıklayın.
+                </p>
+                <p className="text-sm text-yellow-600">
+                  Bu işlem Normal Tur, Özel Tur, Balık+Yüzme turlarını müşteri sayfasında görünür hale getirecek.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                {tourTypes.map((tour) => {
+                const colorClasses = {
+                  blue: 'bg-blue-50 border-blue-200 text-blue-800',
+                  green: 'bg-green-50 border-green-200 text-green-800',
+                  purple: 'bg-purple-50 border-purple-200 text-purple-800',
+                  orange: 'bg-orange-50 border-orange-200 text-orange-800',
+                  indigo: 'bg-indigo-50 border-indigo-200 text-indigo-800',
+                  red: 'bg-red-50 border-red-200 text-red-800',
+                  yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                };
+                
+                return (
+                  <div key={tour.id} className={`p-4 rounded-lg border-2 ${colorClasses[tour.color as keyof typeof colorClasses] || colorClasses.blue} ${!tour.isActive ? 'opacity-60' : ''}`}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h3 className="font-bold text-gray-900">{tour.name}</h3>
+                          {tour.isSystem && (
+                            <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded-full">Sistem</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{tour.description}</p>
+                        
+                        {/* Fiyat Düzenleme */}
+                        <div className="mb-2">
+                          <input
+                            type="number"
+                            value={tour.price}
+                            onChange={(e) => updateTourType(tour.id, { price: parseInt(e.target.value) || 0 })}
+                            className="w-full px-2 py-1 text-lg font-bold border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col items-end space-y-2 ml-2">
+                        {/* Aktif/Pasif Toggle */}
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tour.isActive}
+                            onChange={(e) => updateTourType(tour.id, { isActive: e.target.checked })}
+                            className="sr-only"
+                          />
+                          <div className={`relative w-8 h-5 rounded-full transition-colors ${tour.isActive ? 'bg-green-500' : 'bg-gray-300'}`}>
+                            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${tour.isActive ? 'translate-x-3' : 'translate-x-0'}`}></div>
+                          </div>
+                        </label>
+                        
+                        {/* Silme Butonu (sadece custom turlar için) */}
+                        {!tour.isSystem && (
+                          <button
+                            onClick={() => removeTourType(tour.id)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                            title="Sil"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Ay Bazlı Fiyat Toggle */}
+                    <div className="mb-2">
+                      <label className="flex items-center cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={tour.monthlyPricing?.enabled || false}
+                          onChange={() => toggleMonthlyPricing(tour.id)}
+                          className="mr-2"
+                        />
+                        <span className="text-gray-600">Ay bazlı fiyat</span>
+                      </label>
+                    </div>
+
+                    {/* Ay Bazlı Fiyat Butonu */}
+                    {tour.monthlyPricing?.enabled && (
+                      <div className="mb-2">
+                        <button
+                          onClick={() => setEditingMonthlyPrices(editingMonthlyPrices === tour.id ? null : tour.id)}
+                          className="w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2 py-1 rounded text-xs font-medium transition-colors"
+                        >
+                          📅 Aylık Fiyatları Düzenle
+                        </button>
+                      </div>
+                    )}
+                    
+                    {/* Durum */}
+                    <div className="flex items-center justify-between">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${tour.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {tour.isActive ? '✅ Aktif' : '❌ Pasif'}
+                      </span>
+                      <div className="text-right">
+                        {tour.monthlyPricing?.enabled ? (
+                          <div>
+                            <div className="text-lg font-bold text-green-600">
+                              {formatPrice(getCurrentMonthPrice(tour.id))}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Bu ay ({monthNames[new Date().getMonth()]})
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-lg font-bold">
+                            {formatPrice(tour.price)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
               </div>
             )}
+
+            {/* Ay Bazlı Fiyat Düzenleme Paneli */}
+            {editingMonthlyPrices && (
+              <div className="border-t pt-6 mb-6">
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-indigo-800">
+                      📅 {tourTypes.find(t => t.id === editingMonthlyPrices)?.name} - Aylık Fiyat Yönetimi
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <label className="text-sm font-medium text-indigo-700">Yıl:</label>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                        className="px-3 py-1 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+                      >
+                        <option value={new Date().getFullYear() - 1}>{new Date().getFullYear() - 1}</option>
+                        <option value={new Date().getFullYear()}>{new Date().getFullYear()}</option>
+                        <option value={new Date().getFullYear() + 1}>{new Date().getFullYear() + 1}</option>
+                      </select>
+                      <button
+                        onClick={() => setEditingMonthlyPrices(null)}
+                        className="text-indigo-600 hover:text-indigo-800 font-medium"
+                      >
+                        ✕ Kapat
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {monthNames.map((monthName, index) => {
+                      const monthNumber = index + 1;
+                      const currentPrice = getMonthlyPrice(editingMonthlyPrices, monthNumber);
+                      const isCurrentMonth = new Date().getMonth() === index && new Date().getFullYear() === selectedYear;
+                      
+                      return (
+                        <div key={monthNumber} className={`p-4 rounded-xl border-2 transition-all shadow-sm hover:shadow-md ${
+                          isCurrentMonth 
+                            ? 'border-green-400 bg-gradient-to-br from-green-50 to-green-100' 
+                            : 'border-indigo-200 bg-gradient-to-br from-white to-indigo-50 hover:border-indigo-300'
+                        }`}>
+                          <div className="text-center mb-2">
+                            <div className={`font-bold text-sm ${isCurrentMonth ? 'text-green-700' : 'text-indigo-700'}`}>
+                              {monthName}
+                              {isCurrentMonth && <span className="ml-1">🟢</span>}
+                            </div>
+                            <div className="text-xs text-gray-500">{selectedYear}</div>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            {/* Fiyat Input Alanı */}
+                            <div className="relative">
+                              <input
+                                type="number"
+                                value={currentPrice === (tourTypes.find(t => t.id === editingMonthlyPrices)?.price || 0) ? '' : currentPrice}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value === '') {
+                                    updateMonthlyPrice(editingMonthlyPrices, monthNumber, 0);
+                                  } else {
+                                    updateMonthlyPrice(editingMonthlyPrices, monthNumber, parseInt(value) || 0);
+                                  }
+                                }}
+                                className="w-full px-3 py-2 text-center font-semibold border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-gray-800 bg-white"
+                                placeholder="Varsayılan"
+                              />
+                              <div className="absolute -top-1 -right-1">
+                                {currentPrice !== (tourTypes.find(t => t.id === editingMonthlyPrices)?.price || 0) && (
+                                  <button
+                                    onClick={() => updateMonthlyPrice(editingMonthlyPrices, monthNumber, 0)}
+                                    className="w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs transition-colors shadow-lg"
+                                    title="Bu ayın fiyatını sil"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Fiyat Gösterimi */}
+                            <div className="text-center">
+                              {currentPrice === (tourTypes.find(t => t.id === editingMonthlyPrices)?.price || 0) ? (
+                                <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                                  Varsayılan: {formatPrice(currentPrice)}
+                                </div>
+                              ) : (
+                                <div className="text-sm font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded">
+                                  {formatPrice(currentPrice)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Kaydet/İptal Butonları */}
+                  <div className="mt-6 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-indigo-600">💡</span>
+                      <span className="text-sm text-indigo-700">
+                        Değişiklikler otomatik kaydedilir
+                      </span>
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => setEditingMonthlyPrices(null)}
+                        className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                      >
+                        Kapat
+                      </button>
+                      <button
+                        onClick={saveTourTypes}
+                        disabled={saving}
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
+                      >
+                        {saving ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Kaydediliyor...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>💾</span>
+                            <span>Kaydet</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 p-3 bg-indigo-100 rounded-lg">
+                    <div className="flex items-start space-x-2">
+                      <span className="text-indigo-600">💡</span>
+                      <div className="text-sm text-indigo-700">
+                        <p className="font-medium mb-1">Ay Bazlı Fiyatlandırma Nasıl Çalışır?</p>
+                        <ul className="space-y-1 text-xs">
+                          <li>• Yeşil işaretli ay mevcut aydır ve aktif fiyattır</li>
+                          <li>• Boş bırakılan aylar varsayılan fiyatı kullanır</li>
+                          <li>• <strong>Fiyat silmek için:</strong> Input'u boş bırakın veya × butonuna tıklayın</li>
+                          <li>• Rezervasyon sırasında seçilen tarihin ayına göre fiyat belirlenir</li>
+                          <li>• Kaydet butonuna tıklayarak değişiklikleri Firebase'e kaydedin</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Yeni Tur Ekleme Formu */}
+            {editingTourTypes && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">➕ Yeni Tur Tipi Ekle</h3>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tur Adı *
+                      </label>
+                      <input
+                        type="text"
+                        value={newTourType.name}
+                        onChange={(e) => setNewTourType({...newTourType, name: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        placeholder="Örn: Gece Turu"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fiyat (TL) *
+                      </label>
+                      <input
+                        type="number"
+                        value={newTourType.price}
+                        onChange={(e) => setNewTourType({...newTourType, price: parseInt(e.target.value) || 0})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        placeholder="0"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Renk Teması
+                      </label>
+                      <select
+                        value={newTourType.color}
+                        onChange={(e) => setNewTourType({...newTourType, color: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      >
+                        <option value="indigo">İndigo</option>
+                        <option value="red">Kırmızı</option>
+                        <option value="yellow">Sarı</option>
+                        <option value="blue">Mavi</option>
+                        <option value="green">Yeşil</option>
+                        <option value="purple">Mor</option>
+                        <option value="orange">Turuncu</option>
+                      </select>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newTourType.isActive}
+                          onChange={(e) => setNewTourType({...newTourType, isActive: e.target.checked})}
+                          className="sr-only"
+                        />
+                        <div className={`relative w-10 h-6 rounded-full transition-colors ${newTourType.isActive ? 'bg-green-500' : 'bg-gray-300'}`}>
+                          <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${newTourType.isActive ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                        </div>
+                        <span className="ml-3 text-sm font-medium text-gray-700">
+                          {newTourType.isActive ? 'Aktif' : 'Pasif'}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Açıklama
+                    </label>
+                    <input
+                      type="text"
+                      value={newTourType.description}
+                      onChange={(e) => setNewTourType({...newTourType, description: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      placeholder="Bu turun kısa açıklaması..."
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end space-x-2 mt-4">
+                    <button
+                      onClick={() => setEditingTourTypes(false)}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      onClick={addTourType}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      ➕ Tur Ekle
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Bilgi Notu */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+              <div className="flex items-start">
+                <span className="text-blue-600 mr-2">💡</span>
+                <div>
+                  <h4 className="font-medium text-blue-800 mb-1">Tur Tipi Yönetimi Hakkında:</h4>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• <strong>İlk Kurulum:</strong> "Tur Tiplerini Kaydet" butonuna tıklayarak sistem turlarını aktif edin</li>
+                    <li>• Sistem turları (Normal, Özel, Balık+Yüzme) silinemez ama fiyatları değiştirilebilir</li>
+                    <li>• Yeni tur tipleri ekleyebilir, aktif/pasif durumlarını kontrol edebilirsiniz</li>
+                    <li>• Pasif turlar rezervasyon sayfasında görünmez</li>
+                    <li>• Değişiklikler anında rezervasyon sistemine yansır</li>
+                    <li>• Fiyat değişiklikleri için "Tur Tiplerini Kaydet" butonuna tıklayın</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Randevu Saatleri Yönetimi (Kapatıldı) */}

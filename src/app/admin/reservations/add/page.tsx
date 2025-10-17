@@ -491,7 +491,7 @@ function AddReservationPage() {
             const isFullyOccupied = occupancy >= totalCapacity;
             const isPartiallyOccupied = occupancy > 0 && occupancy < totalCapacity;
             
-            let buttonClass = "h-10 w-10 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300 border ";
+            let buttonClass = "h-12 w-12 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300 border ";
             
             if (dayInfo.isDisabled || !dayInfo.isCurrentMonth) {
               buttonClass += "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200";
@@ -522,12 +522,29 @@ function AddReservationPage() {
                 title={
                   !dayInfo.isCurrentMonth ? 'Diğer ay' :
                   dayInfo.isDisabled ? 'Geçmiş tarih' :
-                  isFullyOccupied ? `${dayInfo.day} - Tamamen dolu` :
+                  isFullyOccupied ? `${dayInfo.day} - Tamamen dolu (${occupancy}/${totalCapacity})` :
                   isPartiallyOccupied ? `${dayInfo.day} - Kısmi dolu (${occupancy}/${totalCapacity})` :
-                  `${dayInfo.day} - Boş`
+                  `${dayInfo.day} - Boş (0/${totalCapacity})`
                 }
               >
-                {dayInfo.day}
+                <div className="flex flex-col items-center">
+                  <span className="text-sm font-bold">{dayInfo.day}</span>
+                  {dayInfo.isCurrentMonth && (occupancy > 0 || isSelected) && (
+                    <div className="flex items-center space-x-1 mt-1">
+                      {/* Doluluk göstergesi */}
+                      <div className={`w-1 h-1 rounded-full ${
+                        isFullyOccupied 
+                          ? 'bg-white/80' 
+                          : isPartiallyOccupied 
+                          ? 'bg-white/70' 
+                          : 'bg-white/60'
+                      }`}></div>
+                      <span className="text-[8px] font-medium opacity-90">
+                        {isSelected ? '✓' : `${occupancy}/${totalCapacity}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -1033,25 +1050,89 @@ function AddReservationPage() {
                           const timeDetail = timeSlotDetails[time];
                           const displayName = timeDetail?.displayName || time;
                           
+                          // Bu saat için doluluk hesapla
+                          const timeOccupancy = dateOccupancy[`${newReservation.selectedDate}-${time}`] || 0;
+                          const isFullyOccupied = timeOccupancy >= 12;
+                          const isPartiallyOccupied = timeOccupancy > 0 && timeOccupancy < 12;
+                          
+                          let buttonClass = "w-full p-4 rounded-xl border-2 font-bold transition-all duration-300 ";
+                          let statusText = "";
+                          let statusColor = "";
+                          
+                          if (newReservation.selectedTime === time) {
+                            buttonClass += "bg-green-500 text-white border-green-500 scale-105 shadow-lg";
+                          } else if (isFullyOccupied) {
+                            buttonClass += "bg-red-500 text-white border-red-500 cursor-not-allowed opacity-75";
+                            statusText = "Dolu";
+                            statusColor = "text-red-100";
+                          } else if (isPartiallyOccupied) {
+                            buttonClass += "bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-200 hover:border-orange-400";
+                            statusText = `${timeOccupancy}/12 Dolu`;
+                            statusColor = "text-orange-600";
+                          } else {
+                            buttonClass += "bg-blue-50 text-slate-800 border-blue-300 hover:bg-blue-100 hover:border-blue-400";
+                            statusText = "Boş";
+                            statusColor = "text-blue-600";
+                          }
+                          
                           return (
                             <button
                               key={time}
-                              onClick={() => setNewReservation(prev => ({
-                                ...prev,
-                                selectedTime: time,
-                                selectedSeats: []
-                              }))}
-                              className={`w-full p-4 rounded-xl border-2 font-bold transition-all duration-300 ${
-                                newReservation.selectedTime === time
-                                  ? 'bg-green-500 text-white border-green-500'
-                                  : 'bg-gray-50 text-slate-800 border-gray-300 hover:bg-blue-50 hover:border-blue-300'
-                              }`}
+                              onClick={() => {
+                                if (!isFullyOccupied) {
+                                  setNewReservation(prev => ({
+                                    ...prev,
+                                    selectedTime: time,
+                                    selectedSeats: []
+                                  }));
+                                }
+                              }}
+                              disabled={isFullyOccupied}
+                              className={buttonClass}
+                              title={
+                                isFullyOccupied 
+                                  ? `${displayName} - Tamamen dolu (${timeOccupancy}/12)`
+                                  : isPartiallyOccupied 
+                                  ? `${displayName} - Kısmi dolu (${timeOccupancy}/12)`
+                                  : `${displayName} - Boş (0/12)`
+                              }
                             >
                               <div className="flex flex-col items-center">
-                                <span className="text-lg">{displayName}</span>
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="text-lg">{displayName}</span>
+                                  <div className="flex items-center space-x-2">
+                                    {/* Doluluk göstergesi */}
+                                    <div className={`w-2 h-2 rounded-full ${
+                                      isFullyOccupied 
+                                        ? 'bg-white/80' 
+                                        : isPartiallyOccupied 
+                                        ? 'bg-orange-600' 
+                                        : 'bg-blue-600'
+                                    }`}></div>
+                                    <span className={`text-xs font-medium ${statusColor}`}>
+                                      {statusText}
+                                    </span>
+                                  </div>
+                                </div>
                                 {timeDetail?.displayName && (
                                   <span className="text-sm opacity-75 mt-1">({time})</span>
                                 )}
+                                
+                                {/* Doluluk çubuğu */}
+                                <div className="w-full mt-2">
+                                  <div className="w-full bg-white/30 rounded-full h-1.5">
+                                    <div 
+                                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                                        isFullyOccupied 
+                                          ? 'bg-white/80' 
+                                          : isPartiallyOccupied 
+                                          ? 'bg-orange-600' 
+                                          : 'bg-blue-600'
+                                      }`}
+                                      style={{ width: `${(timeOccupancy / 12) * 100}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
                               </div>
                             </button>
                           );
