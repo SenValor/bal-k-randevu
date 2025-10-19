@@ -604,9 +604,15 @@ export default function RandevuPage() {
   };
 
 
-  // Cache invalidation - Fiyat versiyonu kontrolü
+  // Cache invalidation - Fiyat versiyonu kontrolü (Chrome/Gizli Sekme Uyumlu)
   const checkAndClearOldCache = (newVersion: number) => {
     try {
+      // Gizli sekmede localStorage kullanılamayabilir
+      if (typeof window === 'undefined' || !window.localStorage) {
+        console.warn('⚠️ localStorage kullanılamıyor (gizli sekme olabilir)');
+        return false;
+      }
+      
       const cachedVersion = localStorage.getItem('priceVersion');
       
       if (cachedVersion) {
@@ -638,59 +644,65 @@ export default function RandevuPage() {
         return false;
       }
     } catch (error) {
-      console.error('Cache kontrol hatası:', error);
+      console.warn('⚠️ localStorage hatası (gizli sekme?):', error);
       return false;
     }
   };
 
-  // Firebase'den tur tiplerini çek
+  // Firebase'den tur tiplerini çek (Chrome/Gizli Sekme Uyumlu)
   const fetchTourTypes = async () => {
     console.log('🔄 Tur tipleri yükleniyor...');
     
     try {
-      // Önce doğrudan Firebase'den çekmeyi dene
-      console.log('📡 Firebase bağlantısı test ediliyor...');
-      const tourTypesDoc = await getDoc(doc(db, 'settings', 'tourTypes'));
+      // withRetry ile Chrome/Gizli Sekme uyumlu çekme
+      console.log('📡 Firebase bağlantısı test ediliyor (retry ile)...');
       
-      console.log('📄 Firebase döküman durumu:', {
-        exists: tourTypesDoc.exists(),
-        id: tourTypesDoc.id,
-        data: tourTypesDoc.exists() ? tourTypesDoc.data() : null
-      });
+      const result = await withRetry(async () => {
+        const tourTypesDoc = await getDoc(doc(db, 'settings', 'tourTypes'));
+        
+        console.log('📄 Firebase döküman durumu:', {
+          exists: tourTypesDoc.exists(),
+          id: tourTypesDoc.id,
+          data: tourTypesDoc.exists() ? tourTypesDoc.data() : null
+        });
+        
+        if (!tourTypesDoc.exists()) {
+          throw new Error('tourTypes dökümanı bulunamadı');
+        }
+        
+        return tourTypesDoc.data();
+      }, 3); // 3 deneme
       
-      if (tourTypesDoc.exists()) {
-        const data = tourTypesDoc.data();
-        console.log('📋 Ham veri:', data);
+      if (result) {
+        console.log('📋 Ham veri:', result);
         
         // 🆕 Fiyat versiyonu kontrol et ve eski cache'i temizle
-        if (data.priceVersion) {
-          const cacheCleared = checkAndClearOldCache(data.priceVersion);
-          setCurrentPriceVersion(data.priceVersion);
+        if (result.priceVersion) {
+          const cacheCleared = checkAndClearOldCache(result.priceVersion);
+          setCurrentPriceVersion(result.priceVersion);
           
           if (cacheCleared) {
             console.log('🔄 Yeni fiyatlar yükleniyor (cache temizlendi)...');
           }
         }
         
-        if (data && data.types && Array.isArray(data.types)) {
+        if (result && result.types && Array.isArray(result.types)) {
           // Sadece aktif turları göster
-          const activeTourTypes = data.types.filter((tour: any) => tour.isActive);
+          const activeTourTypes = result.types.filter((tour: any) => tour.isActive);
           setTourTypes(activeTourTypes);
           setPricesLoaded(true);  // ✅ Fiyatlar başarıyla yüklendi
           console.log('✅ Aktif tur tipleri yüklendi:', activeTourTypes);
-          console.log('📊 Toplam tur sayısı:', data.types.length, 'Aktif tur sayısı:', activeTourTypes.length);
+          console.log('📊 Toplam tur sayısı:', result.types.length, 'Aktif tur sayısı:', activeTourTypes.length);
           
           // Son güncelleme tarihini göster
-          if (data.lastPriceUpdate) {
-            console.log('📅 Son fiyat güncellemesi:', new Date(data.lastPriceUpdate).toLocaleString('tr-TR'));
+          if (result.lastPriceUpdate) {
+            console.log('📅 Son fiyat güncellemesi:', new Date(result.lastPriceUpdate).toLocaleString('tr-TR'));
           }
           
           return; // Başarılı, çık
         } else {
-          console.warn('⚠️ Veri formatı geçersiz:', data);
+          console.warn('⚠️ Veri formatı geçersiz:', result);
         }
-      } else {
-        console.warn('⚠️ tourTypes dökümanı bulunamadı');
       }
       
       // Eğer buraya geldiyse, veri yok veya geçersiz - admin panelden fiyat girilmemiş
@@ -699,7 +711,12 @@ export default function RandevuPage() {
       setPricesLoaded(false);
       
     } catch (error: any) {
-      console.error('❌ Tur tipleri çekme hatası:', error);
+      console.error('❌ Tur tipleri çekme hatası (tüm denemeler başarısız):', error);
+      console.error('🔧 Chrome/Gizli Sekme sorunu olabilir:', {
+        errorCode: error?.code,
+        errorMessage: error?.message,
+        browser: detectBrowser().name
+      });
       
       // Hata durumunda boş liste
       console.error('🚨 Tur tipleri yüklenemedi - Firebase bağlantı hatası');
@@ -1037,8 +1054,13 @@ export default function RandevuPage() {
     }
   }, []);
 
-  // Firebase'den fiyatları çek
+  // Firebase'den fiyatları çek (Chrome/Gizli Sekme Uyumlu)
   useEffect(() => {
+    let isMounted = true;
+    let unsubscribeTourTypes: (() => void) | null = null;
+    let unsubscribePrices: (() => void) | null = null;
+    let unsubscribeCustomTours: (() => void) | null = null;
+    
     // İlk yükleme için fonksiyonları çağır
     fetchPrices().catch((error) => {
       console.error('fetchPrices Promise hatası:', error);
@@ -1052,85 +1074,157 @@ export default function RandevuPage() {
       console.error('fetchCustomTours Promise hatası:', error);
     });
     
-    // 🆕 Tur tiplerini real-time dinle (EN ÖNEMLİ!)
-    const unsubscribeTourTypes = onSnapshot(doc(db, 'settings', 'tourTypes'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        console.log('🔄 Real-time tur tipleri güncellendi:', data);
-        
-        // 🆕 Fiyat versiyonu kontrol et ve eski cache'i temizle
-        if (data.priceVersion) {
-          const cacheCleared = checkAndClearOldCache(data.priceVersion);
-          setCurrentPriceVersion(data.priceVersion);
+    // 🆕 Tur tiplerini real-time dinle (Chrome/Gizli Sekme için özel hata yönetimi)
+    try {
+      unsubscribeTourTypes = onSnapshot(
+        doc(db, 'settings', 'tourTypes'),
+        (doc) => {
+          if (!isMounted) return;
           
-          if (cacheCleared) {
-            console.log('🔄 Yeni fiyatlar yükleniyor (cache temizlendi)...');
+          if (doc.exists()) {
+            const data = doc.data();
+            console.log('🔄 Real-time tur tipleri güncellendi:', data);
+            
+            // 🆕 Fiyat versiyonu kontrol et ve eski cache'i temizle
+            if (data.priceVersion) {
+              const cacheCleared = checkAndClearOldCache(data.priceVersion);
+              setCurrentPriceVersion(data.priceVersion);
+              
+              if (cacheCleared) {
+                console.log('🔄 Yeni fiyatlar yükleniyor (cache temizlendi)...');
+              }
+            }
+            
+            if (data && data.types && Array.isArray(data.types)) {
+              // Sadece aktif turları göster
+              const activeTourTypes = data.types.filter((tour: any) => tour.isActive);
+              setTourTypes(activeTourTypes);
+              setPricesLoaded(true);  // ✅ Fiyatlar başarıyla yüklendi
+              console.log('✅ Real-time aktif tur tipleri yüklendi:', activeTourTypes);
+              
+              // Son güncelleme tarihini göster
+              if (data.lastPriceUpdate) {
+                console.log('📅 Son fiyat güncellemesi:', new Date(data.lastPriceUpdate).toLocaleString('tr-TR'));
+              }
+            } else {
+              console.warn('⚠️ Veri formatı geçersiz:', data);
+              setTourTypes([]);
+              setPricesLoaded(false);
+            }
+          } else {
+            console.warn('⚠️ tourTypes dökümanı bulunamadı');
+            setTourTypes([]);
+            setPricesLoaded(false);
           }
-        }
-        
-        if (data && data.types && Array.isArray(data.types)) {
-          // Sadece aktif turları göster
-          const activeTourTypes = data.types.filter((tour: any) => tour.isActive);
-          setTourTypes(activeTourTypes);
-          setPricesLoaded(true);  // ✅ Fiyatlar başarıyla yüklendi
-          console.log('✅ Real-time aktif tur tipleri yüklendi:', activeTourTypes);
+        },
+        (error) => {
+          if (!isMounted) return;
           
-          // Son güncelleme tarihini göster
-          if (data.lastPriceUpdate) {
-            console.log('📅 Son fiyat güncellemesi:', new Date(data.lastPriceUpdate).toLocaleString('tr-TR'));
-          }
-        } else {
-          console.warn('⚠️ Veri formatı geçersiz:', data);
-          setTourTypes([]);
-          setPricesLoaded(false);
+          console.error('❌ Real-time tur tipleri dinleme hatası:', error);
+          console.error('🔧 Chrome/Gizli Sekme sorunu olabilir, fallback kullanılıyor...');
+          
+          // Fallback: onSnapshot başarısız olursa fetchTourTypes kullan
+          fetchTourTypes().catch((err) => {
+            console.error('❌ Fallback fetchTourTypes hatası:', err);
+            setTourTypes([]);
+            setPricesLoaded(false);
+          });
         }
-      } else {
-        console.warn('⚠️ tourTypes dökümanı bulunamadı');
-        setTourTypes([]);
-        setPricesLoaded(false);
-      }
-    }, (error) => {
-      console.error('❌ Real-time tur tipleri dinleme hatası:', error);
-      setTourTypes([]);
-      setPricesLoaded(false);
-    });
+      );
+    } catch (error) {
+      console.error('❌ onSnapshot başlatma hatası:', error);
+      // Fallback: onSnapshot kurulamazsa fetchTourTypes kullan
+      fetchTourTypes().catch((err) => {
+        console.error('❌ Fallback fetchTourTypes hatası:', err);
+      });
+    }
 
     // Fiyatları real-time dinle (eski sistem - geriye dönük uyumluluk için)
-    const unsubscribePrices = onSnapshot(doc(db, 'settings', 'prices'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        const newPrices = {
-          normalOwn: data.normalOwn || 0,  // ✅ Varsayılan 0
-          normalWithEquipment: data.normalWithEquipment || 0,  // ✅ Varsayılan 0
-          privateTour: data.privateTour || 0,  // ✅ Varsayılan 0
-          fishingSwimming: data.fishingSwimming || 0  // ✅ Varsayılan 0
-        };
-        setPrices(newPrices);
-        console.log('📊 Eski fiyat sistemi güncellendi:', newPrices);
-      }
-    });
+    try {
+      unsubscribePrices = onSnapshot(
+        doc(db, 'settings', 'prices'),
+        (doc) => {
+          if (!isMounted) return;
+          
+          if (doc.exists()) {
+            const data = doc.data();
+            const newPrices = {
+              normalOwn: data.normalOwn || 0,  // ✅ Varsayılan 0
+              normalWithEquipment: data.normalWithEquipment || 0,  // ✅ Varsayılan 0
+              privateTour: data.privateTour || 0,  // ✅ Varsayılan 0
+              fishingSwimming: data.fishingSwimming || 0  // ✅ Varsayılan 0
+            };
+            setPrices(newPrices);
+            console.log('📊 Eski fiyat sistemi güncellendi:', newPrices);
+          }
+        },
+        (error) => {
+          if (!isMounted) return;
+          console.warn('⚠️ Prices listener hatası:', error);
+        }
+      );
+    } catch (error) {
+      console.warn('⚠️ Prices onSnapshot başlatma hatası:', error);
+    }
 
     // Özel turları real-time dinle
-    const unsubscribeCustomTours = onSnapshot(doc(db, 'settings', 'customTours'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        if (data.tours && Array.isArray(data.tours)) {
-          // Sadece aktif turları göster
-          const activeTours = data.tours.filter((tour: CustomTour) => tour.isActive);
-          setCustomTours(activeTours);
-          console.log('🎯 Özel turlar güncellendi:', activeTours);
+    try {
+      unsubscribeCustomTours = onSnapshot(
+        doc(db, 'settings', 'customTours'),
+        (doc) => {
+          if (!isMounted) return;
+          
+          if (doc.exists()) {
+            const data = doc.data();
+            if (data.tours && Array.isArray(data.tours)) {
+              // Sadece aktif turları göster
+              const activeTours = data.tours.filter((tour: CustomTour) => tour.isActive);
+              setCustomTours(activeTours);
+              console.log('🎯 Özel turlar güncellendi:', activeTours);
+            }
+          } else {
+            setCustomTours([]);
+          }
+        },
+        (error) => {
+          if (!isMounted) return;
+          console.warn('⚠️ Custom tours listener hatası:', error);
         }
-      } else {
-        setCustomTours([]);
-      }
-    });
+      );
+    } catch (error) {
+      console.warn('⚠️ Custom tours onSnapshot başlatma hatası:', error);
+    }
 
     return () => {
-      unsubscribeTourTypes();  // 🆕 Yeni listener'ı temizle
-      unsubscribePrices();
-      unsubscribeCustomTours();
+      isMounted = false;
+      if (unsubscribeTourTypes) unsubscribeTourTypes();
+      if (unsubscribePrices) unsubscribePrices();
+      if (unsubscribeCustomTours) unsubscribeCustomTours();
     };
   }, []);
+
+  // 🕒 Timeout mekanizması: Fiyatlar yüklenmediyse hata göster
+  useEffect(() => {
+    // Eğer fiyatlar zaten yüklendiyse timeout başlatma
+    if (pricesLoaded) {
+      return;
+    }
+    
+    const timeoutId = setTimeout(() => {
+      if (!pricesLoaded) {
+        console.error('⏱️ Timeout: Fiyatlar 15 saniyede yüklenemedi');
+        console.error('🔧 Chrome/Gizli Sekme sorunu olabilir');
+        console.error('💡 Öneri: Sayfayı yenileyin veya normal bir tarayıcı sekmesinde deneyin');
+        
+        // Kullanıcıya bilgi ver (tourTypes zaten boş olacak)
+        setPricesLoaded(false);
+      }
+    }, 15000); // 15 saniye
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [pricesLoaded]); // pricesLoaded değiştiğinde yeniden çalış
 
   // Ayın dolu günlerini seans bazlı çek
   useEffect(() => {
@@ -2502,25 +2596,40 @@ export default function RandevuPage() {
                   <div className="text-center py-12 bg-blue-50 border-2 border-blue-200 rounded-xl">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"></div>
                     <h3 className="text-xl font-bold text-blue-800 mb-2">💰 Fiyatlar Yükleniyor...</h3>
-                    <p className="text-blue-600">
+                    <p className="text-blue-600 mb-2">
                       Lütfen bekleyin, güncel fiyatları getiriyoruz.
+                    </p>
+                    <p className="text-xs text-blue-500 mt-4">
+                      ⏱️ Maksimum 15 saniye bekleniyor...<br/>
+                      🔧 Chrome/Gizli Sekme kullanıyorsanız ve yükleme uzun sürüyorsa, sayfayı yenilemeyi deneyin (Ctrl+F5)
                     </p>
                   </div>
                 ) : tourTypes.length === 0 ? (
                   <div className="text-center py-8 bg-red-50 border-2 border-red-200 rounded-xl">
                     <div className="text-4xl mb-4">⚠️</div>
-                    <h3 className="text-xl font-bold text-red-800 mb-2">Henüz Fiyat Belirlenmemiş</h3>
+                    <h3 className="text-xl font-bold text-red-800 mb-2">Fiyatlar Yüklenemedi</h3>
                     <p className="text-red-700 mb-4">
-                      Admin panelden tur fiyatları girilmemiş. Lütfen daha sonra tekrar deneyin veya bizimle iletişime geçin.
+                      Fiyatlar yüklenirken bir sorun oluştu. Lütfen sayfayı yenileyin veya bizimle iletişime geçin.
                     </p>
-                    <a 
-                      href="https://wa.me/905310892537" 
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium"
-                    >
-                      📞 WhatsApp ile İletişim
-                    </a>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium"
+                      >
+                        🔄 Sayfayı Yenile
+                      </button>
+                      <a 
+                        href="https://wa.me/905310892537" 
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium"
+                      >
+                        📞 WhatsApp ile İletişim
+                      </a>
+                    </div>
+                    <p className="text-xs text-red-600 mt-4">
+                      💡 Chrome/Gizli Sekme kullanıyorsanız, normal bir tarayıcı sekmesinde deneyin
+                    </p>
                   </div>
                 ) : (
                   tourTypes.map((tour, index) => {
