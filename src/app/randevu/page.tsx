@@ -1039,7 +1039,7 @@ export default function RandevuPage() {
 
   // Firebase'den fiyatları çek
   useEffect(() => {
-    // Promise rejection'ları yakala
+    // İlk yükleme için fonksiyonları çağır
     fetchPrices().catch((error) => {
       console.error('fetchPrices Promise hatası:', error);
     });
@@ -1052,19 +1052,61 @@ export default function RandevuPage() {
       console.error('fetchCustomTours Promise hatası:', error);
     });
     
+    // 🆕 Tur tiplerini real-time dinle (EN ÖNEMLİ!)
+    const unsubscribeTourTypes = onSnapshot(doc(db, 'settings', 'tourTypes'), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        console.log('🔄 Real-time tur tipleri güncellendi:', data);
+        
+        // 🆕 Fiyat versiyonu kontrol et ve eski cache'i temizle
+        if (data.priceVersion) {
+          const cacheCleared = checkAndClearOldCache(data.priceVersion);
+          setCurrentPriceVersion(data.priceVersion);
+          
+          if (cacheCleared) {
+            console.log('🔄 Yeni fiyatlar yükleniyor (cache temizlendi)...');
+          }
+        }
+        
+        if (data && data.types && Array.isArray(data.types)) {
+          // Sadece aktif turları göster
+          const activeTourTypes = data.types.filter((tour: any) => tour.isActive);
+          setTourTypes(activeTourTypes);
+          setPricesLoaded(true);  // ✅ Fiyatlar başarıyla yüklendi
+          console.log('✅ Real-time aktif tur tipleri yüklendi:', activeTourTypes);
+          
+          // Son güncelleme tarihini göster
+          if (data.lastPriceUpdate) {
+            console.log('📅 Son fiyat güncellemesi:', new Date(data.lastPriceUpdate).toLocaleString('tr-TR'));
+          }
+        } else {
+          console.warn('⚠️ Veri formatı geçersiz:', data);
+          setTourTypes([]);
+          setPricesLoaded(false);
+        }
+      } else {
+        console.warn('⚠️ tourTypes dökümanı bulunamadı');
+        setTourTypes([]);
+        setPricesLoaded(false);
+      }
+    }, (error) => {
+      console.error('❌ Real-time tur tipleri dinleme hatası:', error);
+      setTourTypes([]);
+      setPricesLoaded(false);
+    });
 
-    // Fiyatları real-time dinle
+    // Fiyatları real-time dinle (eski sistem - geriye dönük uyumluluk için)
     const unsubscribePrices = onSnapshot(doc(db, 'settings', 'prices'), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
         const newPrices = {
-          normalOwn: data.normalOwn || 850,
-          normalWithEquipment: data.normalWithEquipment || 1000,
-          privateTour: data.privateTour || 12000,
-          fishingSwimming: data.fishingSwimming || 15000
+          normalOwn: data.normalOwn || 0,  // ✅ Varsayılan 0
+          normalWithEquipment: data.normalWithEquipment || 0,  // ✅ Varsayılan 0
+          privateTour: data.privateTour || 0,  // ✅ Varsayılan 0
+          fishingSwimming: data.fishingSwimming || 0  // ✅ Varsayılan 0
         };
         setPrices(newPrices);
-        console.log('Fiyatlar güncellendi:', newPrices);
+        console.log('📊 Eski fiyat sistemi güncellendi:', newPrices);
       }
     });
 
@@ -1076,7 +1118,7 @@ export default function RandevuPage() {
           // Sadece aktif turları göster
           const activeTours = data.tours.filter((tour: CustomTour) => tour.isActive);
           setCustomTours(activeTours);
-          console.log('Özel turlar güncellendi:', activeTours);
+          console.log('🎯 Özel turlar güncellendi:', activeTours);
         }
       } else {
         setCustomTours([]);
@@ -1084,6 +1126,7 @@ export default function RandevuPage() {
     });
 
     return () => {
+      unsubscribeTourTypes();  // 🆕 Yeni listener'ı temizle
       unsubscribePrices();
       unsubscribeCustomTours();
     };
