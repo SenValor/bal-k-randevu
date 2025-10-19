@@ -352,11 +352,13 @@ export default function RandevuPage() {
   const [tourType, setTourType] = useState<string>('normal'); // normal, private, fishing-swimming, veya custom tur ID'si
   const [priceOption, setPriceOption] = useState<'own-equipment' | 'with-equipment'>('own-equipment');
   const [prices, setPrices] = useState({
-    normalOwn: 850,
-    normalWithEquipment: 1000,
-    privateTour: 12000,
-    fishingSwimming: 15000
+    normalOwn: 0,  // Firebase'den yüklenecek
+    normalWithEquipment: 0,  // Firebase'den yüklenecek
+    privateTour: 0,
+    fishingSwimming: 0
   });
+  const [pricesLoaded, setPricesLoaded] = useState(false);  // Fiyatlar yüklendi mi?
+  const [currentPriceVersion, setCurrentPriceVersion] = useState<number>(0);  // Mevcut fiyat versiyonu
   
   // Dinamik tur tipleri
   const [tourTypes, setTourTypes] = useState<any[]>([]);
@@ -569,7 +571,7 @@ export default function RandevuPage() {
     throw lastError;
   };
 
-  // Firebase'den fiyatları çek
+  // Firebase'den fiyatları çek (Eski format - geriye uyumluluk için)
   const fetchPrices = async () => {
     try {
       const result = await withRetry(async () => {
@@ -581,12 +583,14 @@ export default function RandevuPage() {
       });
       
       if (result) {
+        // Eski format fiyatları state'e kaydet (tourTypes'tan fiyat alınamazsa fallback olarak kullanılacak)
         setPrices({
-          normalOwn: result.normalOwn || 850,
-          normalWithEquipment: result.normalWithEquipment || 1000,
-          privateTour: result.privateTour || 12000,
-          fishingSwimming: result.fishingSwimming || 15000
+          normalOwn: result.normalOwn || 0,
+          normalWithEquipment: result.normalWithEquipment || 0,
+          privateTour: result.privateTour || 0,
+          fishingSwimming: result.fishingSwimming || 0
         });
+        console.log('💰 Eski format fiyatlar yüklendi (fallback):', result);
       }
     } catch (error: any) {
       console.error('Fiyatlar çekilemedi:', error);
@@ -594,11 +598,50 @@ export default function RandevuPage() {
       // Chrome'da permission hatası durumunda kullanıcıyı bilgilendir
       if (error?.code === 'permission-denied' || 
           error?.message?.includes('Missing or insufficient permissions')) {
-        console.warn('⚠️ Chrome Firebase yetki sorunu - varsayılan fiyatlar kullanılıyor');
+        console.warn('⚠️ Chrome Firebase yetki sorunu - fiyatlar yüklenemedi');
       }
     }
   };
 
+
+  // Cache invalidation - Fiyat versiyonu kontrolü
+  const checkAndClearOldCache = (newVersion: number) => {
+    try {
+      const cachedVersion = localStorage.getItem('priceVersion');
+      
+      if (cachedVersion) {
+        const oldVersion = parseInt(cachedVersion, 10);
+        
+        if (oldVersion < newVersion) {
+          console.log('🗑️ Eski cache tespit edildi - temizleniyor...');
+          console.log(`   Eski version: ${oldVersion}`);
+          console.log(`   Yeni version: ${newVersion}`);
+          
+          // Tüm fiyat ile ilgili cache'i temizle
+          localStorage.removeItem('tourTypes');
+          localStorage.removeItem('prices');
+          localStorage.removeItem('priceVersion');
+          
+          // Yeni versiyonu kaydet
+          localStorage.setItem('priceVersion', newVersion.toString());
+          
+          console.log('✅ Cache temizlendi ve yeni version kaydedildi');
+          return true; // Cache temizlendi
+        } else {
+          console.log('✅ Cache güncel - Version:', oldVersion);
+          return false; // Cache güncel
+        }
+      } else {
+        // İlk kez yükleniyorsa versiyonu kaydet
+        localStorage.setItem('priceVersion', newVersion.toString());
+        console.log('🆕 İlk version kaydedildi:', newVersion);
+        return false;
+      }
+    } catch (error) {
+      console.error('Cache kontrol hatası:', error);
+      return false;
+    }
+  };
 
   // Firebase'den tur tiplerini çek
   const fetchTourTypes = async () => {
@@ -619,12 +662,29 @@ export default function RandevuPage() {
         const data = tourTypesDoc.data();
         console.log('📋 Ham veri:', data);
         
+        // 🆕 Fiyat versiyonu kontrol et ve eski cache'i temizle
+        if (data.priceVersion) {
+          const cacheCleared = checkAndClearOldCache(data.priceVersion);
+          setCurrentPriceVersion(data.priceVersion);
+          
+          if (cacheCleared) {
+            console.log('🔄 Yeni fiyatlar yükleniyor (cache temizlendi)...');
+          }
+        }
+        
         if (data && data.types && Array.isArray(data.types)) {
           // Sadece aktif turları göster
           const activeTourTypes = data.types.filter((tour: any) => tour.isActive);
           setTourTypes(activeTourTypes);
+          setPricesLoaded(true);  // ✅ Fiyatlar başarıyla yüklendi
           console.log('✅ Aktif tur tipleri yüklendi:', activeTourTypes);
           console.log('📊 Toplam tur sayısı:', data.types.length, 'Aktif tur sayısı:', activeTourTypes.length);
+          
+          // Son güncelleme tarihini göster
+          if (data.lastPriceUpdate) {
+            console.log('📅 Son fiyat güncellemesi:', new Date(data.lastPriceUpdate).toLocaleString('tr-TR'));
+          }
+          
           return; // Başarılı, çık
         } else {
           console.warn('⚠️ Veri formatı geçersiz:', data);
@@ -633,29 +693,18 @@ export default function RandevuPage() {
         console.warn('⚠️ tourTypes dökümanı bulunamadı');
       }
       
-      // Eğer buraya geldiyse, veri yok veya geçersiz - varsayılan turları yükle
-      console.log('🔄 Varsayılan turlar yükleniyor...');
-      const defaultTours = [
-        { id: 'normalOwn', name: 'Normal Tur (Kendi Malzemesi)', price: 850, description: 'Kendi oltanızla katılım', isActive: true, isSystem: true, color: 'blue' },
-        { id: 'normalWithEquipment', name: 'Normal Tur (Malzeme Dahil)', price: 1000, description: 'Olta ve takım dahil', isActive: true, isSystem: true, color: 'green' },
-        { id: 'privateTour', name: 'Özel Tur', price: 12000, description: 'Tüm tekne kiralama', isActive: true, isSystem: true, color: 'purple' },
-        { id: 'fishingSwimming', name: 'Balık Tutma & Yüzme', price: 15000, description: '6 saat balık + yüzme', isActive: true, isSystem: true, color: 'orange' }
-      ];
-      setTourTypes(defaultTours);
-      console.log('✅ Varsayılan turlar yüklendi:', defaultTours);
+      // Eğer buraya geldiyse, veri yok veya geçersiz - admin panelden fiyat girilmemiş
+      console.warn('⚠️ Firebase\'den tur tipleri yüklenemedi - admin panelden fiyat girmelisiniz!');
+      setTourTypes([]);  // Boş liste - müşteriye "Henüz fiyat belirlenmemiş" mesajı gösterilecek
+      setPricesLoaded(false);
       
     } catch (error: any) {
       console.error('❌ Tur tipleri çekme hatası:', error);
       
-      // Hata durumunda da varsayılan turları yükle
-      const defaultTours = [
-        { id: 'normalOwn', name: 'Normal Tur (Kendi Malzemesi)', price: 850, description: 'Kendi oltanızla katılım', isActive: true, isSystem: true, color: 'blue' },
-        { id: 'normalWithEquipment', name: 'Normal Tur (Malzeme Dahil)', price: 1000, description: 'Olta ve takım dahil', isActive: true, isSystem: true, color: 'green' },
-        { id: 'privateTour', name: 'Özel Tur', price: 12000, description: 'Tüm tekne kiralama', isActive: true, isSystem: true, color: 'purple' },
-        { id: 'fishingSwimming', name: 'Balık Tutma & Yüzme', price: 15000, description: '6 saat balık + yüzme', isActive: true, isSystem: true, color: 'orange' }
-      ];
-      setTourTypes(defaultTours);
-      console.log('🚨 Hata durumunda varsayılan turlar yüklendi:', defaultTours);
+      // Hata durumunda boş liste
+      console.error('🚨 Tur tipleri yüklenemedi - Firebase bağlantı hatası');
+      setTourTypes([]);
+      setPricesLoaded(false);
     }
   };
 
@@ -2406,19 +2455,29 @@ export default function RandevuPage() {
                 })}
                 
                 {/* Dinamik Tur Tipleri */}
-                {tourTypes.length === 0 ? (
-                  <div className="text-center py-8 bg-yellow-50 border border-yellow-200 rounded-xl">
-                    <div className="text-4xl mb-4">⚠️</div>
-                    <h3 className="text-xl font-bold text-yellow-800 mb-2">Tur Tipleri Yüklenemedi</h3>
-                    <p className="text-yellow-700 mb-4">
-                      Sistem ayarlarından tur tipleri yüklenemiyor. Lütfen sayfayı yenileyin.
+                {!pricesLoaded ? (
+                  <div className="text-center py-12 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"></div>
+                    <h3 className="text-xl font-bold text-blue-800 mb-2">💰 Fiyatlar Yükleniyor...</h3>
+                    <p className="text-blue-600">
+                      Lütfen bekleyin, güncel fiyatları getiriyoruz.
                     </p>
-                    <button 
-                      onClick={() => window.location.reload()} 
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-medium"
+                  </div>
+                ) : tourTypes.length === 0 ? (
+                  <div className="text-center py-8 bg-red-50 border-2 border-red-200 rounded-xl">
+                    <div className="text-4xl mb-4">⚠️</div>
+                    <h3 className="text-xl font-bold text-red-800 mb-2">Henüz Fiyat Belirlenmemiş</h3>
+                    <p className="text-red-700 mb-4">
+                      Admin panelden tur fiyatları girilmemiş. Lütfen daha sonra tekrar deneyin veya bizimle iletişime geçin.
+                    </p>
+                    <a 
+                      href="https://wa.me/905310892537" 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium"
                     >
-                      🔄 Sayfayı Yenile
-                    </button>
+                      📞 WhatsApp ile İletişim
+                    </a>
                   </div>
                 ) : (
                   tourTypes.map((tour, index) => {
@@ -2487,12 +2546,29 @@ export default function RandevuPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className={`text-2xl sm:text-3xl font-bold ${colors.text}`}>
-                            {(selectedDate ? getMonthlyPrice(tour.id, selectedDate) : tour.price).toLocaleString('tr-TR')} TL
-                          </div>
-                          <div className="text-xs sm:text-sm text-slate-500">
-                            {isNormalTour ? 'kişi başı' : 'grup fiyatı'}
-                          </div>
+                          {(() => {
+                            const displayPrice = selectedDate ? getMonthlyPrice(tour.id, selectedDate) : tour.price;
+                            
+                            // ⚠️ Fiyat 0 ise yüklenme durumunda
+                            if (!displayPrice || displayPrice === 0) {
+                              return (
+                                <div className="text-sm text-gray-500 italic">
+                                  Yükleniyor...
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <>
+                                <div className={`text-2xl sm:text-3xl font-bold ${colors.text}`}>
+                                  {displayPrice.toLocaleString('tr-TR')} TL
+                                </div>
+                                <div className="text-xs sm:text-sm text-slate-500">
+                                  {isNormalTour ? 'kişi başı' : 'grup fiyatı'}
+                                </div>
+                              </>
+                            );
+                          })()}
                           {!isNormalTour && (
                             <div className={`text-xs ${colors.text} font-medium`}>
                               {tour.id === 'privateTour' ? 'tüm ekipman dahil' : 
@@ -3054,6 +3130,18 @@ export default function RandevuPage() {
 
               {/* Fiyat Özeti */}
               {(() => {
+                // ⚠️ Fiyatlar yüklenene kadar gösterme
+                if (!pricesLoaded) {
+                  return (
+                    <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6 mb-6 max-w-md mx-auto">
+                      <div className="flex items-center justify-center space-x-3">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-600"></div>
+                        <span className="text-yellow-800 font-medium">💰 Fiyatlar yükleniyor...</span>
+                      </div>
+                    </div>
+                  );
+                }
+                
                 const priceInfo = getCurrentPrice();
                 if (!priceInfo) return null;
                 

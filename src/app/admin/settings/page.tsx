@@ -311,26 +311,34 @@ export default function SettingsPage() {
   const saveTourTypes = async () => {
     setSaving(true);
     try {
+      const now = new Date();
+      const priceVersion = now.getTime(); // Timestamp as version
+      
       await setDoc(doc(db, 'settings', 'tourTypes'), {
         types: tourTypes,
-        updatedAt: new Date(),
-        updatedBy: 'admin'
+        updatedAt: now,
+        updatedBy: 'admin',
+        priceVersion: priceVersion,  // 🆕 Fiyat versiyonu - her güncelleme yeni version
+        lastPriceUpdate: now.toISOString()  // 📅 Son fiyat güncelleme tarihi
       });
       
       // Eski prices formatını da güncelle (geriye uyumluluk için)
       const systemTours = tourTypes.filter(t => t.isSystem);
       const updatedPrices = {
-        normalOwn: systemTours.find(t => t.id === 'normalOwn')?.price || 850,
-        normalWithEquipment: systemTours.find(t => t.id === 'normalWithEquipment')?.price || 1000,
-        privateTour: systemTours.find(t => t.id === 'privateTour')?.price || 12000,
-        fishingSwimming: systemTours.find(t => t.id === 'fishingSwimming')?.price || 15000
+        normalOwn: systemTours.find(t => t.id === 'normalOwn')?.price || 0,
+        normalWithEquipment: systemTours.find(t => t.id === 'normalWithEquipment')?.price || 0,
+        privateTour: systemTours.find(t => t.id === 'privateTour')?.price || 0,
+        fishingSwimming: systemTours.find(t => t.id === 'fishingSwimming')?.price || 0,
+        priceVersion: priceVersion,  // 🆕 Aynı version
+        lastPriceUpdate: now.toISOString()
       };
       
       await setDoc(doc(db, 'settings', 'prices'), updatedPrices);
       setPrices(updatedPrices);
       
+      console.log('✅ Fiyatlar kaydedildi - Yeni version:', priceVersion);
       setEditingTourTypes(false);
-      alert('Tur tipleri başarıyla kaydedildi!');
+      alert('✅ Tur tipleri başarıyla kaydedildi!\n\nTüm müşterilerin cache\u2019i otomatik temizlenecek.');
     } catch (error) {
       console.error('Tur tipleri kaydedilemedi:', error);
       alert('Tur tipleri kaydedilirken hata oluştu');
@@ -373,25 +381,32 @@ export default function SettingsPage() {
     
     // Otomatik kaydet
     try {
+      const now = new Date();
+      const priceVersion = now.getTime(); // Yeni version
+      
       await setDoc(doc(db, 'settings', 'tourTypes'), {
         types: updatedTourTypes,
-        updatedAt: new Date(),
-        updatedBy: 'admin'
+        updatedAt: now,
+        updatedBy: 'admin',
+        priceVersion: priceVersion,  // 🆕 Her güncelleme yeni version
+        lastPriceUpdate: now.toISOString()
       });
       
       // Eski prices formatını da güncelle (geriye uyumluluk için)
       const systemTours = updatedTourTypes.filter(t => t.isSystem);
       const updatedPrices = {
-        normalOwn: systemTours.find(t => t.id === 'normalOwn')?.price || 850,
-        normalWithEquipment: systemTours.find(t => t.id === 'normalWithEquipment')?.price || 1000,
-        privateTour: systemTours.find(t => t.id === 'privateTour')?.price || 12000,
-        fishingSwimming: systemTours.find(t => t.id === 'fishingSwimming')?.price || 15000
+        normalOwn: systemTours.find(t => t.id === 'normalOwn')?.price || 0,
+        normalWithEquipment: systemTours.find(t => t.id === 'normalWithEquipment')?.price || 0,
+        privateTour: systemTours.find(t => t.id === 'privateTour')?.price || 0,
+        fishingSwimming: systemTours.find(t => t.id === 'fishingSwimming')?.price || 0,
+        priceVersion: priceVersion,
+        lastPriceUpdate: now.toISOString()
       };
       
       await setDoc(doc(db, 'settings', 'prices'), updatedPrices);
       setPrices(updatedPrices);
       
-      console.log('✅ Tur tipi otomatik kaydedildi:', id, updates);
+      console.log('✅ Tur tipi otomatik kaydedildi - Version:', priceVersion, id, updates);
     } catch (error) {
       console.error('❌ Tur tipi kaydetme hatası:', error);
       alert('Tur tipi kaydedilirken hata oluştu');
@@ -626,13 +641,18 @@ export default function SettingsPage() {
     
     // Otomatik kaydet
     try {
+      const now = new Date();
+      const priceVersion = now.getTime(); // Yeni version
+      
       await setDoc(doc(db, 'settings', 'tourTypes'), {
         types: updatedTourTypes,
-        updatedAt: new Date(),
-        updatedBy: 'admin'
+        updatedAt: now,
+        updatedBy: 'admin',
+        priceVersion: priceVersion,  // 🆕 Ay bazında fiyat değişikliğinde de version güncelle
+        lastPriceUpdate: now.toISOString()
       });
       
-      console.log('✅ Aylık fiyat kaydedildi:', tourId, month, price);
+      console.log('✅ Aylık fiyat kaydedildi - Version:', priceVersion, tourId, month, price);
     } catch (error) {
       console.error('❌ Aylık fiyat kaydetme hatası:', error);
       alert('Aylık fiyat kaydedilirken hata oluştu');
