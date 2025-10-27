@@ -200,22 +200,76 @@ export default function AdminPanel() {
         if (!reservation.isPrivateTour && reservation.selectedTime) {
           const timeRange = reservation.selectedTime.split('-');
           if (timeRange.length === 2) {
+            const startTime = timeRange[0].trim();
             const endTime = timeRange[1].trim();
-            const [endHour, endMinute] = endTime.split(':').map(Number);
-            const endTimeInMinutes = endHour * 60 + endMinute;
             
-            // Tur bitiş saatinden 30 dakika sonra otomatik tamamla
-            if (currentTime >= endTimeInMinutes + 30) {
-              shouldComplete = true;
+            const [startHour, startMinute] = startTime.split(':').map(Number);
+            const [endHour, endMinute] = endTime.split(':').map(Number);
+            
+            const startTimeInMinutes = startHour * 60 + startMinute;
+            let endTimeInMinutes = endHour * 60 + endMinute;
+            
+            // 🔥 KRİTİK: Gece yarısını geçen turları tespit et (örn: 20:00-02:00)
+            // Eğer bitiş saati başlangıç saatinden küçükse, gece seansıdır
+            const isNightSession = endTimeInMinutes < startTimeInMinutes;
+            
+            if (isNightSession) {
+              // Gece seansı: Bitiş saati ertesi güne ait
+              // Eğer şu anki saat bitiş saatinden küçükse (örn: saat 01:00 ve bitiş 02:00)
+              // demek ki hala aynı gece seansındayız
+              if (currentTime < startTimeInMinutes) {
+                // Şu anki saat gecenin erken saatleri (00:00-06:00 arası genelde)
+                // ve başlangıç saatinden önce (örn: şimdi 01:00, başlangıç 20:00)
+                // Bitiş saatinden 30 dakika sonra mı kontrol et
+                if (currentTime >= endTimeInMinutes + 30) {
+                  shouldComplete = true;
+                }
+              }
+              // Eğer şu anki saat başlangıç saatinden büyükse (örn: saat 21:00 ve başlangıç 20:00)
+              // demek ki tur henüz devam ediyor, tamamlanmamalı
+            } else {
+              // Normal gündüz seansı: Bitiş saatinden 30 dakika sonra tamamla
+              if (currentTime >= endTimeInMinutes + 30) {
+                shouldComplete = true;
+              }
             }
           }
         }
         
         // Özel turlar için (6 saat olan turlar)
         if (reservation.isPrivateTour) {
-          // Gece 21:00'dan sonra tamamla (turlar max 20:00'da bitiyor)
-          if (currentTime >= 21 * 60) {
-            shouldComplete = true;
+          // Özel turlar için de gece seansı kontrolü yap
+          if (reservation.selectedTime) {
+            const timeRange = reservation.selectedTime.split('-');
+            if (timeRange.length === 2) {
+              const startTime = timeRange[0].trim();
+              const endTime = timeRange[1].trim();
+              
+              const [startHour, startMinute] = startTime.split(':').map(Number);
+              const [endHour, endMinute] = endTime.split(':').map(Number);
+              
+              const startTimeInMinutes = startHour * 60 + startMinute;
+              let endTimeInMinutes = endHour * 60 + endMinute;
+              
+              const isNightSession = endTimeInMinutes < startTimeInMinutes;
+              
+              if (isNightSession) {
+                // Gece seansı özel tur
+                if (currentTime < startTimeInMinutes && currentTime >= endTimeInMinutes + 30) {
+                  shouldComplete = true;
+                }
+              } else {
+                // Normal gündüz özel tur
+                if (currentTime >= endTimeInMinutes + 30) {
+                  shouldComplete = true;
+                }
+              }
+            }
+          } else {
+            // Saat bilgisi yoksa eski mantık: Gece 21:00'dan sonra tamamla
+            if (currentTime >= 21 * 60) {
+              shouldComplete = true;
+            }
           }
         }
         
@@ -226,9 +280,9 @@ export default function AdminPanel() {
               completedAt: new Date().toISOString(),
               autoCompleted: true
             });
-            console.log(`Rezervasyon otomatik tamamlandı: ${reservation.reservationNumber}`);
+            console.log(`✅ Rezervasyon otomatik tamamlandı: ${reservation.reservationNumber} (${reservation.selectedTime})`);
           } catch (error) {
-            console.error('Otomatik tamamlanma hatası:', error);
+            console.error('❌ Otomatik tamamlanma hatası:', error);
           }
         }
       }
