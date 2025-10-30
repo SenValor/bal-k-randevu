@@ -1,0 +1,138 @@
+/* Apple Dock Styles */
+
+.dock-container {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.dock-panel {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(27, 58, 92, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 2px solid rgba(107, 155, 195, 0.3);
+  border-radius: 20px;
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.3),
+    0 0 0 0.5px rgba(107, 155, 195, 0.2) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.1) inset;
+  pointer-events: auto;
+}
+
+.dock-icon-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.dock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(107, 155, 195, 0.2), rgba(91, 141, 184, 0.15));
+  border: 2px solid rgba(107, 155, 195, 0.3);
+  border-radius: 14px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.95);
+  transition: all 0.2s ease;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(107, 155, 195, 0.15) inset;
+  will-change: width, height;
+}
+
+.dock-icon:hover {
+  background: linear-gradient(135deg, rgba(107, 155, 195, 0.35), rgba(91, 141, 184, 0.3));
+  border-color: rgba(107, 155, 195, 0.6);
+  box-shadow: 
+    0 6px 20px rgba(107, 155, 195, 0.4),
+    0 0 0 1px rgba(107, 155, 195, 0.3) inset;
+}
+
+.dock-icon:active {
+  transform: scale(0.95);
+}
+
+.dock-tooltip {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: rgba(27, 58, 92, 0.95);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(107, 155, 195, 0.4);
+  border-radius: 8px;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    0 0 0 0.5px rgba(107, 155, 195, 0.2) inset;
+}
+
+.dock-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(27, 58, 92, 0.95);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .dock-container {
+    bottom: 8px;
+  }
+
+  .dock-panel {
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 16px;
+  }
+
+  .dock-icon {
+    border-radius: 12px;
+  }
+
+  .dock-tooltip {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+}
+
+/* Tablet */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .dock-panel {
+    gap: 7px;
+    padding: 7px 14px;
+  }
+}
+
+/* Accessibility */
+.dock-icon:focus {
+  outline: 2px solid rgba(107, 155, 195, 0.6);
+  outline-offset: 2px;
+}
+
+.dock-icon:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Smooth animations */
+* {
+  -webkit-tap-highlight-color: transparent;
+}

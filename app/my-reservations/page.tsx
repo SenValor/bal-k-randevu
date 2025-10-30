@@ -1,0 +1,275 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
+import { Loader2, Calendar, Clock, Ship, Compass, Users, MapPin, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebaseClient';
+import { Reservation } from '@/lib/reservationHelpers';
+
+export default function MyReservationsPage() {
+  const { user } = useAuth();
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchReservations = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        console.log('Rezervasyonlar çekiliyor, userId:', user.uid);
+
+        const q = query(
+          collection(db, 'reservations'),
+          where('userId', '==', user.uid)
+        );
+
+        const snapshot = await getDocs(q);
+        const reservationsList: Reservation[] = [];
+
+        console.log('Bulunan rezervasyon sayısı:', snapshot.size);
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log('Rezervasyon:', doc.id, data);
+          reservationsList.push({
+            id: doc.id,
+            ...data,
+          } as Reservation);
+        });
+
+        // Tarihe göre sırala (client-side)
+        reservationsList.sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.date);
+          const dateB = new Date(b.createdAt || b.date);
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        setReservations(reservationsList);
+      } catch (error) {
+        console.error('Rezervasyonlar alınamadı:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReservations();
+  }, [user]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return 'bg-green-500/10 border-green-500/50 text-green-400';
+      case 'pending':
+        return 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400';
+      case 'cancelled':
+        return 'bg-red-500/10 border-red-500/50 text-red-400';
+      default:
+        return 'bg-white/10 border-white/50 text-white';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return <CheckCircle className="w-4 h-4" />;
+      case 'pending':
+        return <AlertCircle className="w-4 h-4" />;
+      case 'cancelled':
+        return <XCircle className="w-4 h-4" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return 'Onaylandı';
+      case 'pending':
+        return 'Beklemede';
+      case 'cancelled':
+        return 'İptal Edildi';
+      default:
+        return status;
+    }
+  };
+
+  // Giriş yapmamış
+  if (!user) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-[#C5D9E8] via-[#B5C9D8] to-[#D5E9F0] pt-24 pb-32 px-4">
+        <div className="max-w-2xl mx-auto text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white/70 backdrop-blur-2xl rounded-3xl border-2 border-[#6B9BC3]/40 p-12 shadow-2xl"
+          >
+            <Calendar className="w-16 h-16 text-[#6B9BC3] mx-auto mb-4" />
+            <h1 className="text-3xl font-bold text-[#0D2847] mb-3">
+              Randevularınızı Görüntüleyin
+            </h1>
+            <p className="text-[#1B3A5C]/70 mb-6">
+              Randevularınızı görmek için giriş yapmanız gerekmektedir.
+            </p>
+            <button
+              onClick={() => window.location.href = '/profile'}
+              className="px-8 py-3 bg-gradient-to-r from-[#8B3A3A] to-[#722E2E] hover:from-[#A04848] hover:to-[#8B3A3A] text-white font-semibold rounded-xl transition-colors"
+            >
+              Giriş Yap
+            </button>
+          </motion.div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-[#C5D9E8] via-[#B5C9D8] to-[#D5E9F0] pt-24 pb-32 px-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-4xl md:text-5xl font-bold text-[#0D2847] mb-3">
+            Randevularım 📅
+          </h1>
+          <p className="text-[#1B3A5C]/70 text-lg">
+            Tüm rezervasyonlarınızı buradan takip edebilirsiniz
+          </p>
+        </motion.div>
+
+        {/* Loading */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-12 h-12 text-[#6B9BC3] animate-spin" />
+          </div>
+        ) : reservations.length === 0 ? (
+          /* Empty State */
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white/80 backdrop-blur-2xl rounded-3xl border-2 border-[#6B9BC3]/30 p-12 text-center shadow-xl"
+          >
+            <Calendar className="w-16 h-16 text-[#6B9BC3] mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-[#0D2847] mb-3">
+              Henüz Randevunuz Yok
+            </h2>
+            <p className="text-[#1B3A5C]/70 mb-6">
+              Hemen bir rezervasyon yaparak deniz keyfinize başlayın!
+            </p>
+            <button
+              onClick={() => window.location.href = '/rezervasyon'}
+              className="px-8 py-3 bg-gradient-to-r from-[#8B3A3A] to-[#722E2E] hover:from-[#A04848] hover:to-[#8B3A3A] text-white font-semibold rounded-xl transition-colors"
+            >
+              Rezervasyon Yap
+            </button>
+          </motion.div>
+        ) : (
+          /* Reservations List */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {reservations.map((reservation, index) => (
+              <motion.div
+                key={reservation.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-white/70 backdrop-blur-2xl rounded-2xl border-2 border-[#6B9BC3]/50 p-6 hover:bg-white/80 hover:border-[#6B9BC3]/70 hover:shadow-2xl transition-all shadow-xl"
+              >
+                {/* Status Badge */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${getStatusColor(reservation.status)}`}>
+                    {getStatusIcon(reservation.status)}
+                    <span className="text-sm font-medium">{getStatusText(reservation.status)}</span>
+                  </div>
+                  <span className="text-[#1B3A5C]/60 text-sm">
+                    {new Date(reservation.createdAt).toLocaleDateString('tr-TR')}
+                  </span>
+                </div>
+
+                {/* Boat & Tour Info */}
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <Ship className="w-5 h-5 text-[#6B9BC3]" />
+                    <div>
+                      <p className="text-[#0D2847] font-semibold">{reservation.boatName}</p>
+                      <p className="text-[#1B3A5C]/70 text-sm">{reservation.tourName}</p>
+                    </div>
+                  </div>
+
+                  {reservation.boatMapsLink && (
+                    <div className="bg-[#6B9BC3]/10 rounded-lg p-3 -mx-2">
+                      <a
+                        href={reservation.boatMapsLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-[#6B9BC3] hover:text-[#5B8DB8] font-medium transition-colors"
+                      >
+                        <MapPin className="w-4 h-4" />
+                        <span className="text-sm">Kalkış Noktasını Haritada Gör</span>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 text-[#1B3A5C]">
+                    <Calendar className="w-5 h-5 text-[#6B9BC3]" />
+                    <span>{new Date(reservation.date).toLocaleDateString('tr-TR', { 
+                      day: 'numeric', 
+                      month: 'long', 
+                      year: 'numeric' 
+                    })}</span>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-[#1B3A5C]">
+                    <Clock className="w-5 h-5 text-[#6B9BC3]" />
+                    <span>{reservation.timeSlotDisplay}</span>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-[#1B3A5C]">
+                    <Users className="w-5 h-5 text-[#6B9BC3]" />
+                    <span>{reservation.totalPeople} Kişi</span>
+                  </div>
+
+                  {/* Seat Codes */}
+                  {reservation.selectedSeats && reservation.selectedSeats.length > 0 && (
+                    <div className="flex items-start gap-3 text-white/80">
+                      <MapPin className="w-5 h-5 text-[#6B9BC3] mt-0.5" />
+                      <div>
+                        <p className="text-sm text-[#1B3A5C]/70 mb-1">Koltuk Numaraları:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {reservation.selectedSeats.map((seat) => (
+                            <span
+                              key={seat}
+                              className="px-2 py-1 bg-[#6B9BC3]/20 border border-[#6B9BC3]/50 text-[#6B9BC3] rounded text-xs font-mono"
+                            >
+                              {seat}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Price */}
+                <div className="pt-4 border-t border-[#6B9BC3]/20 flex items-center justify-between">
+                  <span className="text-[#1B3A5C]/70">Toplam Tutar:</span>
+                  <span className="text-[#8B3A3A] font-bold text-xl">₺{reservation.totalPrice}</span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
