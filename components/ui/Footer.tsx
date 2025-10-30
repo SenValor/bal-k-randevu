@@ -38,6 +38,7 @@ export default function Footer() {
       { label: 'Balık Avı Turu', href: '/rezervasyon' },
       { label: 'Grup Rezervasyon', href: '/rezervasyon' },
       { label: 'Özel Organizasyon', href: '/iletisim' },
+      { label: 'Rezervasyon Sorgula', href: '/rezervasyon-sorgula' },
     ],
     kurumsal: [
       { label: 'Hakkımızda', href: '/hakkimizda' },

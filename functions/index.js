@@ -107,6 +107,7 @@ exports.onReservationApproved = functions
       const date = after.date || "";
       const timeSlotDisplay = after.timeSlotDisplay || "Belirtilmemiş";
       const boatName = after.boatName || "BALIK SEFASI";
+      const reservationNumber = after.reservationNumber || "";
 
       // 📞 Telefon numarası kontrolü
       if (!userPhone) {
@@ -133,11 +134,14 @@ Merhaba ${userName},
 
 Rezervasyonunuz onaylandı! 🎉
 
+🎫 Rezervasyon No: ${reservationNumber}
 📅 Tarih: ${formattedDate}
 🕐 Saat: ${timeSlotDisplay}
 ⛵ Tekne: ${boatName}
 
 Teşekkürler, iyi avlar dileriz ⚓
+
+Bu numarayı kullanarak rezervasyonunuzu sorgulayabilir veya iptal edebilirsiniz.
 www.baliksefasi.com`;
 
       // 🔑 .env'den okunan API bilgilerini kullan (global değişkenler)
@@ -215,6 +219,167 @@ www.baliksefasi.com`;
           whatsappSent: false,
           whatsappError: error.message,
           whatsappSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (updateError) {
+        console.error("❌ Firestore güncelleme hatası:", updateError.message);
+      }
+
+      return null;
+    }
+  });
+
+/**
+ * 🎯 İptal Cloud Function: Rezervasyon İptal Edildiğinde WhatsApp Gönder
+ * Trigger: Firestore onUpdate
+ * Collection: reservations/{reservationId}
+ * Koşul: status === "cancelled" && whatsappCancelSent !== true
+ */
+exports.onReservationCancelled = functions
+  .region("us-central1")
+  .firestore
+  .document("reservations/{reservationId}")
+  .onUpdate(async (change, context) => {
+    try {
+      const before = change.before.data();
+      const after = change.after.data();
+      const reservationId = context.params.reservationId;
+
+      console.log(`🔔 Rezervasyon güncellendi: ${reservationId}`);
+      console.log(`📊 Status: ${before.status} → ${after.status}`);
+
+      // ✅ Kontrol 1: Status "cancelled" mi?
+      if (after.status !== "cancelled") {
+        console.log("ℹ️ Status 'cancelled' değil, işlem yapılmadı.");
+        return null;
+      }
+
+      // ✅ Kontrol 2: Daha önce iptal WhatsApp'ı gönderilmiş mi?
+      if (after.whatsappCancelSent === true) {
+        console.log("ℹ️ İptal WhatsApp mesajı zaten gönderilmiş.");
+        return null;
+      }
+
+      // ✅ Kontrol 3: Status değişti mi?
+      if (before.status === "cancelled" && after.status === "cancelled") {
+        console.log("ℹ️ Status zaten 'cancelled' idi, tekrar mesaj gönderilmedi.");
+        return null;
+      }
+
+      console.log("✨ Rezervasyon iptal edildi! WhatsApp mesajı hazırlanıyor...");
+
+      // 📝 Rezervasyon bilgilerini al
+      const userName = after.userName || "Değerli Müşterimiz";
+      const userPhone = after.userPhone || "";
+      const date = after.date || "";
+      const timeSlotDisplay = after.timeSlotDisplay || "Belirtilmemiş";
+      const boatName = after.boatName || "BALIK SEFASI";
+      const reservationNumber = after.reservationNumber || "";
+
+      // 📞 Telefon numarası kontrolü
+      if (!userPhone) {
+        console.error("❌ Telefon numarası bulunamadı!");
+        await change.after.ref.update({
+          whatsappCancelSent: false,
+          whatsappCancelError: "Telefon numarası eksik",
+          whatsappCancelSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return null;
+      }
+
+      // 📱 Telefon numarasını formatla
+      const formattedPhone = formatPhoneNumber(userPhone);
+      console.log(`📱 Formatlanmış telefon: +${formattedPhone}`);
+
+      // 📅 Tarihi Türkçe formatla
+      const formattedDate = formatDateTurkish(date);
+
+      // 💬 WhatsApp iptal mesajını oluştur
+      const message = `🐟 Balık Sefası
+
+Merhaba ${userName},
+
+Rezervasyonunuz iptal edildi.
+
+🎫 Rezervasyon No: ${reservationNumber}
+📅 Tarih: ${formattedDate}
+🕐 Saat: ${timeSlotDisplay}
+⛵ Tekne: ${boatName}
+
+Tekrar görüşmek dileğiyle 🙏
+www.baliksefasi.com`;
+
+      // 🔑 .env'den okunan API bilgilerini kullan
+      if (!accessToken || !phoneId) {
+        console.error("❌ META_ACCESS_TOKEN veya META_PHONE_ID bulunamadı!");
+        await change.after.ref.update({
+          whatsappCancelSent: false,
+          whatsappCancelError: "API credentials eksik",
+          whatsappCancelSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return null;
+      }
+
+      // 🚀 WhatsApp Cloud API'ye mesaj gönder
+      console.log("📤 WhatsApp API'ye iptal mesajı gönderiliyor...");
+      
+      const apiUrl = `https://graph.facebook.com/v22.0/${phoneId}/messages`;
+      
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: formattedPhone,
+          type: "text",
+          text: {
+            body: message,
+          },
+        }),
+      });
+
+      const responseData = await response.json();
+
+      // ✅ Başarılı mı kontrol et
+      if (response.ok && responseData.messages) {
+        console.log("✅ İptal WhatsApp mesajı başarıyla gönderildi!");
+        console.log("📊 Response:", JSON.stringify(responseData));
+
+        // Firestore'u güncelle (başarılı)
+        await change.after.ref.update({
+          whatsappCancelSent: true,
+          whatsappCancelSentAt: admin.firestore.FieldValue.serverTimestamp(),
+          whatsappCancelMessageId: responseData.messages[0]?.id || null,
+        });
+
+        console.log("✅ Firestore güncellendi: whatsappCancelSent = true");
+        return null;
+      } else {
+        // ❌ Hata durumu
+        console.error("❌ WhatsApp API hatası!");
+        console.error("Status:", response.status);
+        console.error("Response:", JSON.stringify(responseData));
+
+        await change.after.ref.update({
+          whatsappCancelSent: false,
+          whatsappCancelError: responseData.error?.message || "API hatası",
+          whatsappCancelSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return null;
+      }
+    } catch (error) {
+      console.error("❌ Cloud Function hatası:", error.message);
+      console.error("Stack:", error.stack);
+
+      // Hata durumunda Firestore'u güncelle
+      try {
+        await change.after.ref.update({
+          whatsappCancelSent: false,
+          whatsappCancelError: error.message,
+          whatsappCancelSentAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       } catch (updateError) {
         console.error("❌ Firestore güncelleme hatası:", updateError.message);

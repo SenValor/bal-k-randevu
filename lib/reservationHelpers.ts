@@ -6,17 +6,22 @@ import {
   getDocs,
   onSnapshot,
   Timestamp,
+  doc,
+  updateDoc,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from './firebaseClient';
 
 export interface Reservation {
   id: string;
+  reservationNumber: string; // Misafir için benzersiz rezervasyon numarası (örn: BS-2024-001234)
   boatId: string;
   boatName: string;
   boatMapsLink?: string; // Teknenin Google Maps konumu
   userId: string;
   userName: string;
   userEmail: string;
+  userPhone: string; // Telefon numarası (WhatsApp için)
   date: string; // YYYY-MM-DD formatında
   timeSlotId: string;
   timeSlotDisplay: string; // "09:00 - 12:00"
@@ -33,21 +38,34 @@ export interface Reservation {
   updatedAt?: string;
 }
 
-export type ReservationFormData = Omit<Reservation, 'id' | 'createdAt' | 'updatedAt'>;
+export type ReservationFormData = Omit<Reservation, 'id' | 'createdAt' | 'updatedAt' | 'reservationNumber'>;
 
 /**
- * Yeni rezervasyon ekler
+ * Benzersiz rezervasyon numarası oluşturur
+ * Format: BS-YYYY-XXXXXX (örn: BS-2024-001234)
+ */
+export function generateReservationNumber(): string {
+  const year = new Date().getFullYear();
+  const random = Math.floor(Math.random() * 900000) + 100000; // 6 haneli rastgele sayı
+  return `BS-${year}-${random}`;
+}
+
+/**
+ * Yeni rezervasyon ekler (rezervasyon numarası otomatik oluşturulur)
  */
 export async function addReservation(
   reservationData: ReservationFormData
-): Promise<{ success: boolean; id?: string; error?: string }> {
+): Promise<{ success: boolean; id?: string; reservationNumber?: string; error?: string }> {
   try {
+    const reservationNumber = generateReservationNumber();
+    
     const docRef = await addDoc(collection(db, 'reservations'), {
       ...reservationData,
+      reservationNumber,
       createdAt: new Date().toISOString(),
     });
 
-    return { success: true, id: docRef.id };
+    return { success: true, id: docRef.id, reservationNumber };
   } catch (error: any) {
     console.error('Rezervasyon ekleme hatası:', error);
     return { success: false, error: 'Rezervasyon eklenirken bir hata oluştu' };
@@ -549,4 +567,82 @@ export async function getCalendarFullness(
   });
 
   return fullnessMap;
+}
+
+/**
+ * Rezervasyon numarası ile rezervasyon sorgular
+ * @param reservationNumber - Rezervasyon numarası (örn: BS-2024-001234)
+ * @returns Rezervasyon bilgileri veya null
+ */
+export async function getReservationByNumber(
+  reservationNumber: string
+): Promise<{ success: boolean; reservation?: Reservation; error?: string }> {
+  try {
+    const q = query(
+      collection(db, 'reservations'),
+      where('reservationNumber', '==', reservationNumber.toUpperCase())
+    );
+
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      return { success: false, error: 'Rezervasyon bulunamadı' };
+    }
+
+    const docData = snapshot.docs[0];
+    const reservation = { id: docData.id, ...docData.data() } as Reservation;
+
+    return { success: true, reservation };
+  } catch (error: any) {
+    console.error('Rezervasyon sorgulama hatası:', error);
+    return { success: false, error: 'Rezervasyon sorgulanırken bir hata oluştu' };
+  }
+}
+
+/**
+ * Rezervasyon numarası ve telefon ile rezervasyon iptal eder
+ * @param reservationNumber - Rezervasyon numarası
+ * @param phone - Telefon numarası (doğrulama için)
+ * @returns Başarı durumu
+ */
+export async function cancelReservationByNumber(
+  reservationNumber: string,
+  phone: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Önce rezervasyonu bul
+    const result = await getReservationByNumber(reservationNumber);
+    
+    if (!result.success || !result.reservation) {
+      return { success: false, error: result.error || 'Rezervasyon bulunamadı' };
+    }
+
+    const reservation = result.reservation;
+
+    // Telefon numarasını doğrula (sadece rakamları karşılaştır)
+    const cleanInputPhone = phone.replace(/\D/g, '');
+    const cleanReservationPhone = reservation.userPhone.replace(/\D/g, '');
+
+    if (!cleanReservationPhone.includes(cleanInputPhone) && !cleanInputPhone.includes(cleanReservationPhone)) {
+      return { success: false, error: 'Telefon numarası eşleşmiyor' };
+    }
+
+    // Rezervasyon zaten iptal edilmiş mi?
+    if (reservation.status === 'cancelled') {
+      return { success: false, error: 'Bu rezervasyon zaten iptal edilmiş' };
+    }
+
+    // Rezervasyonu iptal et
+    const docRef = doc(db, 'reservations', reservation.id);
+    await updateDoc(docRef, {
+      status: 'cancelled',
+      updatedAt: new Date().toISOString(),
+      cancelledAt: new Date().toISOString(),
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Rezervasyon iptal hatası:', error);
+    return { success: false, error: 'Rezervasyon iptal edilirken bir hata oluştu' };
+  }
 }

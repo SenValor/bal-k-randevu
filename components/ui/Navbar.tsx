@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, Phone, Calendar, User, LogOut } from 'lucide-react';
+import { Menu, X, Phone, Calendar, User, LogOut, Search } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
@@ -99,6 +99,17 @@ export default function Navbar() {
 
             {/* Desktop Actions */}
             <div className="hidden lg:flex items-center gap-4">
+              {/* Rezervasyon Sorgula */}
+              <motion.button
+                onClick={() => router.push('/rezervasyon-sorgula')}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#00A9A5]/10 hover:bg-[#00A9A5]/20 border border-[#00A9A5]/30 hover:border-[#00A9A5]/50 text-[#00A9A5] transition-all"
+              >
+                <Search className="w-4 h-4" />
+                <span className="text-sm font-medium">Rezervasyon Sorgula</span>
+              </motion.button>
+
               {/* Phone */}
               <motion.a
                 href="tel:+905551234567"
@@ -207,6 +218,18 @@ export default function Navbar() {
 
               {/* Mobile Actions */}
               <div className="pt-4 border-t border-[#6B9BC3]/30 space-y-3">
+                {/* Rezervasyon Sorgula */}
+                <button
+                  onClick={() => {
+                    router.push('/rezervasyon-sorgula');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#00A9A5]/10 hover:bg-[#00A9A5]/20 border-2 border-[#00A9A5]/50 text-[#00A9A5] font-semibold transition-all"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Rezervasyon Sorgula</span>
+                </button>
+
                 <a
                   href="tel:+905551234567"
                   className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white hover:bg-[#6B9BC3]/10 border-2 border-[#6B9BC3]/30 text-[#0D2847] font-medium transition-all"

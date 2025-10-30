@@ -1,17 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2, Calendar, Clock, Ship, Compass, Users, MapPin, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Loader2, Calendar, Clock, Ship, Compass, Users, MapPin, CheckCircle, XCircle, AlertCircle, Phone, X } from 'lucide-react';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
-import { Reservation } from '@/lib/reservationHelpers';
+import { Reservation, cancelReservationByNumber } from '@/lib/reservationHelpers';
 
 export default function MyReservationsPage() {
   const { user } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [cancelError, setCancelError] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   useEffect(() => {
     const fetchReservations = async () => {
@@ -96,6 +100,42 @@ export default function MyReservationsPage() {
         return 'İptal Edildi';
       default:
         return status;
+    }
+  };
+
+  const handleCancelReservation = async () => {
+    const reservation = reservations.find(r => r.id === cancellingId);
+    if (!reservation) return;
+
+    if (!phoneNumber.trim()) {
+      setCancelError('Lütfen telefon numaranızı girin');
+      return;
+    }
+
+    setCancelLoading(true);
+    setCancelError('');
+
+    try {
+      const result = await cancelReservationByNumber(reservation.reservationNumber, phoneNumber);
+
+      if (result.success) {
+        // Listeyi güncelle
+        setReservations(prev =>
+          prev.map(r =>
+            r.id === cancellingId ? { ...r, status: 'cancelled' as const } : r
+          )
+        );
+        // Modal'ı kapat
+        setCancellingId(null);
+        setPhoneNumber('');
+        alert('Rezervasyonunuz başarıyla iptal edildi');
+      } else {
+        setCancelError(result.error || 'İptal işlemi başarısız oldu');
+      }
+    } catch (error) {
+      setCancelError('Bir hata oluştu. Lütfen tekrar deneyin.');
+    } finally {
+      setCancelLoading(false);
     }
   };
 
@@ -265,11 +305,125 @@ export default function MyReservationsPage() {
                   <span className="text-[#1B3A5C]/70">Toplam Tutar:</span>
                   <span className="text-[#8B3A3A] font-bold text-xl">₺{reservation.totalPrice}</span>
                 </div>
+
+                {/* Cancel Button */}
+                {reservation.status !== 'cancelled' && (
+                  <button
+                    onClick={() => setCancellingId(reservation.id)}
+                    className="w-full mt-4 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-600 rounded-lg font-medium transition-all"
+                  >
+                    Rezervasyonu İptal Et
+                  </button>
+                )}
               </motion.div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Cancel Modal */}
+      <AnimatePresence>
+        {cancellingId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setCancellingId(null);
+              setPhoneNumber('');
+              setCancelError('');
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-[#0D2847]">
+                  Rezervasyonu İptal Et
+                </h3>
+                <button
+                  onClick={() => {
+                    setCancellingId(null);
+                    setPhoneNumber('');
+                    setCancelError('');
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Warning */}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-red-800 text-sm">
+                  ⚠️ Bu işlem geri alınamaz. Rezervasyonunuzu iptal etmek istediğinizden emin misiniz?
+                </p>
+              </div>
+
+              {/* Phone Input */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Telefon Numaranız
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="05XX XXX XX XX"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00A9A5] focus:border-transparent"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Doğrulama için kayıtlı telefon numaranızı girin
+                </p>
+              </div>
+
+              {/* Error */}
+              {cancelError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <p className="text-red-800 text-sm">{cancelError}</p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setCancellingId(null);
+                    setPhoneNumber('');
+                    setCancelError('');
+                  }}
+                  className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition-colors"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  onClick={handleCancelReservation}
+                  disabled={cancelLoading || !phoneNumber.trim()}
+                  className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {cancelLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      İptal Ediliyor...
+                    </>
+                  ) : (
+                    'İptal Et'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

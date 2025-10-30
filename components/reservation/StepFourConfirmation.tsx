@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2, CheckCircle, User, Mail, Phone, Calendar, Clock, Users, Ship, Compass } from 'lucide-react';
+import { Loader2, CheckCircle, User, Mail, Phone, Calendar, Clock, Users, Ship, Compass, Copy } from 'lucide-react';
 import { addReservation, ReservationFormData } from '@/lib/reservationHelpers';
 import { Boat } from '@/lib/boatHelpers';
 import { Tour } from '@/lib/tourHelpers';
@@ -15,6 +15,7 @@ export default function StepFourConfirmation() {
   const [loading, setLoading] = useState(false);
   const [showGuestForm, setShowGuestForm] = useState(false);
   const [reservationComplete, setReservationComplete] = useState(false);
+  const [reservationNumber, setReservationNumber] = useState('');
   
   // Misafir bilgileri
   const [guestName, setGuestName] = useState('');
@@ -195,6 +196,7 @@ export default function StepFourConfirmation() {
 
       if (result.success) {
         setReservationComplete(true);
+        setReservationNumber(result.reservationNumber || '');
         // localStorage'ı temizle
         localStorage.removeItem('selectedBoat');
         localStorage.removeItem('selectedTourType');
@@ -239,6 +241,31 @@ export default function StepFourConfirmation() {
             <p className="text-[#1B3A5C]/70 text-lg mb-8">
               Rezervasyon detaylarınız e-posta adresinize gönderildi.
             </p>
+
+            {/* Rezervasyon Numarası */}
+            {reservationNumber && (
+              <div className="bg-gradient-to-r from-[#00A9A5]/10 to-[#6B9BC3]/10 rounded-2xl border-2 border-[#00A9A5]/30 p-6 mb-8">
+                <p className="text-sm text-[#1B3A5C]/70 mb-2">Rezervasyon Numaranız</p>
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-3xl font-bold text-[#00A9A5] tracking-wider">
+                    {reservationNumber}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(reservationNumber);
+                      alert('Rezervasyon numarası kopyalandı!');
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#00A9A5] text-white rounded-lg hover:bg-[#008985] transition-colors text-sm font-medium"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Kopyala
+                  </button>
+                </div>
+                <p className="text-xs text-[#1B3A5C]/60 mt-3">
+                  Bu numarayı kullanarak rezervasyonunuzu sorgulayabilir ve iptal edebilirsiniz
+                </p>
+              </div>
+            )}
 
             {/* Reservation Details */}
             <div className="bg-white/80 rounded-2xl border-2 border-[#6B9BC3]/30 p-6 mb-8 text-left">
