@@ -46,6 +46,8 @@ export default function Footer() {
       { label: 'İletişim', href: '/iletisim' },
       { label: 'Sıkça Sorulan Sorular', href: '/sss' },
       { label: 'Gizlilik Politikası', href: '/privacy-policy' },
+      { label: 'Kullanım Koşulları', href: '/terms-of-service' },
+      { label: 'Veri Silme', href: '/data-deletion' },
     ],
   };
 
