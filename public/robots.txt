@@ -1,0 +1,11 @@
+# *
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/*
+
+# Host
+Host: https://baliksefasi.com
+
+# Sitemaps
+Sitemap: https://baliksefasi.com/sitemap.xml
