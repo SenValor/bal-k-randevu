@@ -110,6 +110,7 @@ function AddReservationPage() {
   const [customTours, setCustomTours] = useState<CustomTour[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [tourTypes, setTourTypes] = useState<any[]>([]); // Tur tipleri
   
   // Dinamik saat sistemi
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
@@ -119,7 +120,7 @@ function AddReservationPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
   const [newReservation, setNewReservation] = useState<NewReservation>({
-    tourType: 'normal',
+    tourType: '', // Boş başlat - kullanıcı seçecek
     priceOption: 'own-equipment',
     guestCount: 1,
     selectedDate: '',
@@ -299,6 +300,22 @@ function AddReservationPage() {
     }
   };
 
+  const fetchTourTypes = async () => {
+    try {
+      const tourTypesDoc = await getDoc(doc(db, 'settings', 'tourTypes'));
+      if (tourTypesDoc.exists()) {
+        const data = tourTypesDoc.data();
+        if (data && data.types && Array.isArray(data.types)) {
+          const activeTours = data.types.filter((tour: any) => tour.isActive);
+          setTourTypes(activeTours);
+          console.log('✅ Tur tipleri yüklendi:', activeTours);
+        }
+      }
+    } catch (error) {
+      console.error('Tur tipleri çekilemedi:', error);
+    }
+  };
+
   // Seçilen teknenin çalışma saatlerinden uygun saatleri hesapla (günlük override destekli)
   const updateAvailableTimesFromBoat = async (boatId: string, date: string) => {
     if (!boatId || !date) {
@@ -344,6 +361,7 @@ function AddReservationPage() {
   useEffect(() => {
     fetchCustomTours();
     fetchBoats();
+    fetchTourTypes(); // Tur tiplerini çek
   }, []);
 
   useEffect(() => {
@@ -884,6 +902,11 @@ function AddReservationPage() {
       return;
     }
     
+    if (!newReservation.tourType) {
+      alert('Lütfen tur tipi seçin');
+      return;
+    }
+    
     if (!newReservation.selectedDate || !newReservation.selectedTime) {
       alert('Lütfen tarih ve saat seçin');
       return;
@@ -909,6 +932,10 @@ function AddReservationPage() {
     try {
       const selectedBoat = boats.find(b => b.id === newReservation.selectedBoat);
       
+      // Özel tur kontrolü
+      const isSpecial = isSpecialTour(newReservation.tourType);
+      const customTour = getSelectedCustomTour(newReservation.tourType);
+      
       const reservationData = {
         reservationNumber: generateReservationNumber(),
         guestCount: newReservation.guestCount,
@@ -917,8 +944,8 @@ function AddReservationPage() {
         selectedSeats: newReservation.selectedSeats,
         selectedBoat: newReservation.selectedBoat,
         boatName: selectedBoat?.name || '',
-        isPrivateTour: false,
-        tourType: newReservation.tourType,
+        isPrivateTour: isSpecial, // Özel tur ise true
+        tourType: newReservation.tourType, // 🐞 Tur tipi doğru kaydediliyor
         priceOption: newReservation.priceOption,
         guestInfos: [
           {
@@ -1010,6 +1037,95 @@ function AddReservationPage() {
 
           {newReservation.selectedBoat && (
             <>
+              {/* Tur Tipi Seçimi */}
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl shadow-lg p-6 border border-purple-200">
+                <h2 className="text-2xl font-bold text-slate-800 mb-4 text-center">
+                  🎣 Tur Tipi Seçimi
+                </h2>
+                <p className="text-slate-600 mb-6 text-center">
+                  Hangi tür tur yapmak istiyorsunuz?
+                </p>
+                
+                {tourTypes.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-4xl mb-2">⏳</div>
+                    <p className="text-gray-600">Tur tipleri yükleniyor...</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {tourTypes.map((tour) => {
+                      const isSelected = newReservation.tourType === tour.id;
+                      const isSpecial = tour.id === 'private' || tour.id === 'fishing-swimming' || customTours.some(ct => ct.id === tour.id);
+                      
+                      return (
+                        <button
+                          key={tour.id}
+                          onClick={() => {
+                            setNewReservation(prev => ({
+                              ...prev,
+                              tourType: tour.id,
+                              selectedSeats: isSpecial ? [] : prev.selectedSeats // Özel tur ise koltukları temizle
+                            }));
+                          }}
+                          className={`p-6 rounded-xl border-2 transition-all duration-300 text-left ${
+                            isSelected
+                              ? 'bg-gradient-to-br from-green-400 to-green-600 text-white border-green-500 scale-105 shadow-xl'
+                              : 'bg-white text-slate-800 border-purple-200 hover:border-purple-400 hover:shadow-lg'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <h3 className={`text-xl font-bold ${
+                              isSelected ? 'text-white' : 'text-slate-800'
+                            }`}>
+                              {tour.name}
+                            </h3>
+                            {isSelected && (
+                              <span className="text-2xl">✅</span>
+                            )}
+                          </div>
+                          
+                          {tour.description && (
+                            <p className={`text-sm mb-3 ${
+                              isSelected ? 'text-white/90' : 'text-slate-600'
+                            }`}>
+                              {tour.description}
+                            </p>
+                          )}
+                          
+                          <div className="flex items-center justify-between">
+                            <span className={`text-2xl font-bold ${
+                              isSelected ? 'text-white' : 'text-purple-600'
+                            }`}>
+                              {tour.price} ₺
+                            </span>
+                            {isSpecial && (
+                              <span className={`text-xs px-3 py-1 rounded-full ${
+                                isSelected 
+                                  ? 'bg-white/20 text-white' 
+                                  : 'bg-purple-100 text-purple-700'
+                              }`}>
+                                Özel Tur
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {newReservation.tourType && (
+                  <div className="mt-6 p-4 bg-white rounded-xl border-2 border-green-200 shadow-lg">
+                    <div className="flex items-center justify-center space-x-2">
+                      <span className="text-2xl">✅</span>
+                      <span className="text-green-800 font-bold text-lg">
+                        {tourTypes.find(t => t.id === newReservation.tourType)?.name || 'Seçili Tur'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Kişi Sayısı */}
               <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
                 <h3 className="text-xl font-bold text-slate-800 mb-4 text-center">

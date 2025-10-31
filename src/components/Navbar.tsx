@@ -9,11 +9,6 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
-  // Ana sayfada navbar'ı gizle
-  if (pathname === '/') {
-    return null;
-  }
-
   const navigation = [
     { name: 'Ana Sayfa', href: '/', icon: '🏠' },
     { name: 'Hakkımızda', href: '/hakkimizda', icon: '👥' },

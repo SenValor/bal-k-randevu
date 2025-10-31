@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, getDocs, doc, getDoc, runTransaction } from 'firebase/firestore';
 import { createResilientListener } from '@/lib/firestoreHelpers';
 import { detectBrowser, logBrowserComparison, forceFirestoreConnectionInChrome } from '@/lib/browserDetection';
 import { optimizeFirestoreForChrome, chromeSpecificRetry, detectChromePrivacySettings } from '@/lib/chromeFixes';
@@ -1888,14 +1888,15 @@ export default function RandevuPage() {
   // Tarih veya tekne değiştiğinde session occupancy'yi çek
   useEffect(() => {
     if (selectedDate && selectedBoat?.id) {
-      console.log(`🔄 Session occupancy çekiliyor - Tarih: ${selectedDate}, Tekne: ${selectedBoat.name}`);
+      console.log(`🔄 Session occupancy çekiliyor - Tarih: ${selectedDate}, Tekne: ${selectedBoat.name}, Tur: ${tourType}`);
       fetchSessionOccupancy(selectedDate).catch(error => {
         console.error('Session occupancy fetch error:', error);
       });
     } else {
+      console.log(`⚠️ Session occupancy temizleniyor - selectedDate: ${selectedDate}, selectedBoat: ${selectedBoat?.id}`);
       setSessionOccupancy({});
     }
-  }, [selectedDate, selectedBoat?.id]);
+  }, [selectedDate, selectedBoat?.id, tourType]); // tourType dependency eklendi
 
   // Tekne değiştiğinde seçili tarihin geçerliliğini kontrol et
   useEffect(() => {
@@ -1971,6 +1972,7 @@ export default function RandevuPage() {
           collection(db, 'reservations'),
           where('selectedDate', '==', selectedDate),
           where('selectedTime', '==', selectedTime),
+          where('selectedBoat', '==', selectedBoat.id), // ✅ TEKNE FİLTRESİ EKLENDİ
           where('status', 'in', ['pending', 'confirmed']) // Pending ve confirmed'ı kontrol et
         );
         
@@ -2093,7 +2095,50 @@ export default function RandevuPage() {
         })
       };
 
-      await addDoc(collection(db, 'reservations'), reservationData);
+      // 🔒 TRANSACTION ile ATOMIC rezervasyon kaydetme (Race Condition önleme)
+      await runTransaction(db, async (transaction) => {
+        // Transaction içinde son kez çakışma kontrolü yap
+        const finalConflictQuery = query(
+          collection(db, 'reservations'),
+          where('selectedDate', '==', selectedDate),
+          where('selectedTime', '==', selectedTime),
+          where('selectedBoat', '==', selectedBoat.id),
+          where('status', 'in', ['pending', 'confirmed'])
+        );
+        
+        const finalConflictSnapshot = await getDocs(finalConflictQuery);
+        const finalConflictingSeats: string[] = [];
+        
+        finalConflictSnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.selectedSeats && Array.isArray(data.selectedSeats)) {
+            finalConflictingSeats.push(...data.selectedSeats);
+          }
+          // Özel tur kontrolü
+          if (data.isPrivateTour) {
+            throw new Error('PRIVATE_TOUR_CONFLICT');
+          }
+        });
+        
+        // Normal tur için koltuk çakışması kontrolü
+        if (tourType === 'normal') {
+          const hasConflict = selectedSeats.some(seat => finalConflictingSeats.includes(seat));
+          if (hasConflict) {
+            throw new Error('SEAT_CONFLICT');
+          }
+        }
+        
+        // Özel tur için tarih/saat çakışması kontrolü
+        if (isSpecialTour(tourType) && !finalConflictSnapshot.empty) {
+          throw new Error('SPECIAL_TOUR_CONFLICT');
+        }
+        
+        // Çakışma yoksa kaydet
+        const newReservationRef = doc(collection(db, 'reservations'));
+        transaction.set(newReservationRef, reservationData);
+      });
+      
+      console.log('✅ Rezervasyon başarıyla kaydedildi (Transaction ile)');
       setCurrentStep(6); // Başarı sayfası
     } catch (error: any) {
       console.error('Rezervasyon kaydedilemedi:', error);
@@ -2119,7 +2164,22 @@ export default function RandevuPage() {
       // Daha kullanıcı dostu hata mesajı
       let errorMessage = 'Rezervasyon sırasında bir hata oluştu.';
       
-      if (error?.code === 'permission-denied') {
+      // Transaction çakışma hataları
+      if (error?.message === 'SEAT_CONFLICT') {
+        errorMessage = '❌ Koltuk Çakışması!\n\nSeçtiğiniz koltuklar başka bir müşteri tarafından rezerve edildi.\n\nLütfen sayfayı yenileyip farklı koltuklar seçin.';
+        setLoading(false);
+        alert(errorMessage);
+        // Sayfayı yenile
+        window.location.reload();
+        return;
+      } else if (error?.message === 'PRIVATE_TOUR_CONFLICT' || error?.message === 'SPECIAL_TOUR_CONFLICT') {
+        errorMessage = '❌ Tarih/Saat Çakışması!\n\nBu tarih ve saat başka bir müşteri tarafından rezerve edildi.\n\nLütfen sayfayı yenileyip farklı bir tarih/saat seçin.';
+        setLoading(false);
+        alert(errorMessage);
+        // Sayfayı yenile
+        window.location.reload();
+        return;
+      } else if (error?.code === 'permission-denied') {
         errorMessage = 'İzin hatası. Lütfen sayfayı yenileyip tekrar deneyin.';
       } else if (error?.code === 'unavailable') {
         errorMessage = 'Bağlantı sorunu. İnternet bağlantınızı kontrol edip tekrar deneyin.';
@@ -3821,6 +3881,18 @@ export default function RandevuPage() {
                         ) : (
                           availableTimes.map((time) => {
                           const timeOccupancy = selectedBoat?.id ? (sessionOccupancy[selectedBoat.id]?.[time] || 0) : 0;
+                          
+                          // 🐞 DEBUG: Doluluk bilgisi
+                          if (timeOccupancy > 0) {
+                            console.log(`📊 Saat doluluk - ${time}: ${timeOccupancy}/12`, {
+                              selectedBoat: selectedBoat?.name,
+                              selectedDate,
+                              tourType,
+                              sessionOccupancyKeys: Object.keys(sessionOccupancy),
+                              boatSessionData: sessionOccupancy[selectedBoat?.id || '']
+                            });
+                          }
+                          
                           const isFullyOccupied = timeOccupancy >= 12;
                           const isPartiallyOccupied = timeOccupancy > 0 && timeOccupancy < 12;
                           const canSelectPrivate = timeOccupancy === 0; // Özel tur için tamamen boş olmalı
