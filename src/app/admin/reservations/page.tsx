@@ -35,6 +35,8 @@ interface SeatSelectionEditorProps {
   reservations: Reservation[];
   editingReservationId?: string;
   boats: Boat[]; // Tekne bilgileri için eklendi
+  isReducingSeats?: boolean; // Kişi sayısı azaltılıyor mu?
+  seatsToRemove?: number; // Kaç koltuk kaldırılmalı?
 }
 
 function SeatSelectionEditor({
@@ -46,7 +48,9 @@ function SeatSelectionEditor({
   onSeatChange,
   reservations,
   editingReservationId,
-  boats
+  boats,
+  isReducingSeats = false,
+  seatsToRemove = 0
 }: SeatSelectionEditorProps) {
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   
@@ -169,6 +173,26 @@ function SeatSelectionEditor({
   
   return (
     <div className="space-y-4">
+      {/* Kişi Sayısı Azaltma Uyarısı */}
+      {isReducingSeats && seatsToRemove > 0 && (
+        <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4 animate-pulse">
+          <div className="flex items-start space-x-3">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <h4 className="text-orange-800 font-bold text-sm mb-1">
+                Kişi Sayısı Azaltıldı!
+              </h4>
+              <p className="text-orange-700 text-xs mb-2">
+                Lütfen iptal etmek istediğiniz <strong>{seatsToRemove} koltuğu</strong> seçin.
+              </p>
+              <p className="text-orange-600 text-xs">
+                👉 Mavi renkli (seçili) koltukları tıklayarak iptal edebilirsiniz.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Bilgi */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
         <p className="text-blue-700 text-sm font-medium mb-1">
@@ -176,6 +200,11 @@ function SeatSelectionEditor({
         </p>
         <p className="text-blue-600 text-xs">
           👤 {guestCount} kişi için {selectedSeats.length}/{guestCount} koltuk seçildi
+          {isReducingSeats && seatsToRemove > 0 && selectedSeats.length > guestCount && (
+            <span className="ml-2 text-orange-600 font-bold">
+              (⚠️ {selectedSeats.length - guestCount} fazla koltuk seçili!)
+            </span>
+          )}
         </p>
       </div>
       
@@ -352,6 +381,8 @@ function ReservationsContent() {
   // Koltuk seçimi için yeni state'ler
   const [editSeatSelection, setEditSeatSelection] = useState<boolean>(false);
   const [occupiedSeatsForEdit, setOccupiedSeatsForEdit] = useState<string[]>([]);
+  const [isReducingSeats, setIsReducingSeats] = useState<boolean>(false);
+  const [seatsToRemove, setSeatsToRemove] = useState<number>(0);
   
   // Toplu seçim için state'ler
   const [selectedReservations, setSelectedReservations] = useState<string[]>([]);
@@ -1882,7 +1913,30 @@ Anlayışınız için teşekkürler. 🙏`
                       min="1"
                       max="12"
                       value={editForm.guestCount || ''}
-                      onChange={(e) => setEditForm({ ...editForm, guestCount: parseInt(e.target.value) })}
+                      onChange={(e) => {
+                        const newCount = parseInt(e.target.value);
+                        const oldCount = editForm.guestCount || 0;
+                        const currentSeats = editForm.selectedSeats || [];
+                        
+                        // Kişi sayısı azaltıldıysa ve seçili koltuk varsa
+                        if (newCount < oldCount && currentSeats.length > 0) {
+                          // Koltuk seçim modalini aç
+                          setEditSeatSelection(true);
+                          setIsReducingSeats(true);
+                          setSeatsToRemove(oldCount - newCount);
+                          
+                          // Uyarı mesajı
+                          setTimeout(() => {
+                            alert(`⚠️ Kişi sayısı ${oldCount}'den ${newCount}'e düştü!\n\nLütfen iptal etmek istediğiniz ${oldCount - newCount} koltuğu seçin.\n\nSeçili koltuklar: ${currentSeats.join(', ')}`);
+                          }, 100);
+                        } else {
+                          // Kişi sayısı artırıldıysa veya azaltılmadıysa flag'i sıfırla
+                          setIsReducingSeats(false);
+                          setSeatsToRemove(0);
+                        }
+                        
+                        setEditForm({ ...editForm, guestCount: newCount });
+                      }}
                       className="w-full p-2 border border-gray-300 rounded-lg text-gray-900"
                     />
                   </div>
@@ -1905,7 +1959,14 @@ Anlayışınız için teşekkürler. 🙏`
                     <label className="block text-sm font-medium text-gray-700">Koltuk Seçimi</label>
                     <button
                       type="button"
-                      onClick={() => setEditSeatSelection(!editSeatSelection)}
+                      onClick={() => {
+                        setEditSeatSelection(!editSeatSelection);
+                        // Modal kapatılıyorsa flag'leri sıfırla
+                        if (editSeatSelection) {
+                          setIsReducingSeats(false);
+                          setSeatsToRemove(0);
+                        }
+                      }}
                       className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                     >
                       {editSeatSelection ? '📝 Manuel Giriş' : '🎯 Görsel Seçim'}
@@ -1919,10 +1980,19 @@ Anlayışınız için teşekkürler. 🙏`
                       selectedDate={editForm.selectedDate || ''}
                       selectedTime={editForm.selectedTime || ''}
                       selectedBoat={editForm.selectedBoat || ''}
-                      onSeatChange={(seats) => setEditForm({ ...editForm, selectedSeats: seats })}
+                      onSeatChange={(seats) => {
+                        setEditForm({ ...editForm, selectedSeats: seats });
+                        // Koltuk seçimi değiştiğinde flag'leri güncelle
+                        if (seats.length <= (editForm.guestCount || 1)) {
+                          setIsReducingSeats(false);
+                          setSeatsToRemove(0);
+                        }
+                      }}
                       reservations={reservations}
                       editingReservationId={editingReservation?.id}
                       boats={boats}
+                      isReducingSeats={isReducingSeats}
+                      seatsToRemove={seatsToRemove}
                     />
                   ) : (
                     <input

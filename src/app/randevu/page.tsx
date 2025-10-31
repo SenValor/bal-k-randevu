@@ -1348,9 +1348,20 @@ export default function RandevuPage() {
 
   // Yardımcı fonksiyonlar
   const isSpecialTour = (type: string) => {
-    // Sadece 'private' ve 'fishing-swimming' tüm tekneyi kapatır
-    // Custom turlar koltuk seçilebilir olmalı
-    return type === 'private' || type === 'fishing-swimming';
+    // 'private', 'fishing-swimming' ve custom turlar tüm tekneyi kapatır (12 kişi)
+    if (type === 'private' || type === 'fishing-swimming') {
+      return true;
+    }
+    
+    // tourTypes içinde 'privateTour' veya benzeri ID'ler olabilir
+    const tourTypeItem = tourTypes.find(t => t.id === type);
+    if (tourTypeItem && (tourTypeItem.id === 'privateTour' || tourTypeItem.id.includes('private') || tourTypeItem.id.includes('Private'))) {
+      return true;
+    }
+    
+    // Custom tur kontrolü (kapalı tur gibi - customTours koleksiyonundan)
+    const customTour = customTours.find(tour => tour.id === type);
+    return customTour !== undefined; // Custom tur varsa özel tur olarak işaretle
   };
 
   const getSelectedCustomTour = (type: string) => {
@@ -2019,6 +2030,15 @@ export default function RandevuPage() {
       const isSpecial = isSpecialTour(tourType);
       const customTour = getSelectedCustomTour(tourType);
       
+      console.log('🔍 Tur tipi kontrolü:', {
+        tourType,
+        isSpecial,
+        customTour: customTour?.name,
+        tourTypesList: tourTypes.map(t => ({ id: t.id, name: t.name })),
+        customToursList: customTours.map(t => ({ id: t.id, name: t.name })),
+        tourTypeItem: tourTypes.find(t => t.id === tourType)
+      });
+      
       // Rezervasyon numarası üretme
       const generateReservationNumber = () => {
         const today = new Date();
@@ -2066,7 +2086,7 @@ export default function RandevuPage() {
         guestCount: isSpecial ? capacity : getTotalGuestCount(),
         selectedDate,
         selectedTime: selectedTime, // Kullanıcının seçtiği saat dilimi her zaman korunur
-        isPrivateTour: isSpecial,
+        isPrivateTour: isSpecial, // ✅ Özel tur ise true (12 kişi doluluk)
         selectedSeats: selectedSeats,
         guestInfos: [guestInfo],
         status: 'pending',
@@ -2094,6 +2114,13 @@ export default function RandevuPage() {
           }
         })
       };
+
+      console.log('💾 Rezervasyon kaydedilecek:', {
+        tourType: reservationData.tourType,
+        isPrivateTour: reservationData.isPrivateTour,
+        guestCount: reservationData.guestCount,
+        selectedSeats: reservationData.selectedSeats
+      });
 
       // 🔒 TRANSACTION ile ATOMIC rezervasyon kaydetme (Race Condition önleme)
       await runTransaction(db, async (transaction) => {
