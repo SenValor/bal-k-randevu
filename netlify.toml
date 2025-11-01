@@ -1,0 +1,50 @@
+# Netlify Configuration
+# Cache ayarları - Kullanıcılar her zaman güncel sürümü görsün
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+# HTML dosyaları - Cache'leme, her zaman yeniden kontrol et
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+
+# Next.js static dosyaları - 1 yıl cache'le (hash değişince otomatik güncellenir)
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Public klasöründeki statik dosyalar - 1 yıl cache'le
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Resim dosyaları - 1 ay cache'le
+[[headers]]
+  for = "/*.jpg"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+[[headers]]
+  for = "/*.png"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+[[headers]]
+  for = "/*.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+# Redirect kuralları (gerekirse)
+[[redirects]]
+  from = "/admin"
+  to = "/admin-sefa3986"
+  status = 301
+  force = false
