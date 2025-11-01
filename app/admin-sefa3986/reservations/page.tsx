@@ -648,7 +648,6 @@ www.baliksefasi.com`;
         
         const phone = (reservation as any).userPhone || '-';
         const people = `${reservation.totalPeople} (${reservation.adultCount}Y, ${reservation.childCount || 0}C)`;
-        const price = `${reservation.totalPrice?.toLocaleString('tr-TR') || 0} TL`;
         const seats = reservation.selectedSeats && reservation.selectedSeats.length > 0 
           ? reservation.selectedSeats.join(', ') 
           : '-';
@@ -657,8 +656,6 @@ www.baliksefasi.com`;
         pdf.text(toAscii(`   Tel: ${phone}`), margin, yPos);
         yPos += 4;
         pdf.text(toAscii(`   Kisi: ${people}`), margin, yPos);
-        yPos += 4;
-        pdf.text(toAscii(`   Tutar: ${price}`), margin, yPos);
         yPos += 4;
         pdf.text(toAscii(`   Koltuklar: ${seats}`), margin, yPos);
         yPos += 4;
@@ -676,7 +673,6 @@ www.baliksefasi.com`;
 
     // Özet istatistikler
     const totalPeople = data.reduce((sum, r) => sum + r.totalPeople, 0);
-    const totalRevenue = data.reduce((sum, r) => sum + (r.totalPrice || 0), 0);
     const confirmedCount = data.filter(r => r.status === 'confirmed').length;
 
     if (yPos > pageHeight - 40) {
@@ -685,7 +681,7 @@ www.baliksefasi.com`;
     }
 
     pdf.setFillColor(248, 249, 250);
-    pdf.rect(margin, yPos, pageWidth - 2 * margin, 30, 'F');
+    pdf.rect(margin, yPos, pageWidth - 2 * margin, 25, 'F');
     yPos += 8;
 
     pdf.setFontSize(11);
@@ -700,7 +696,6 @@ www.baliksefasi.com`;
     pdf.text(toAscii(`Onaylanmis: ${confirmedCount}`), statsX + 50, yPos);
     yPos += 5;
     pdf.text(toAscii(`Toplam Kisi: ${totalPeople}`), statsX, yPos);
-    pdf.text(toAscii(`Toplam Gelir: ${totalRevenue.toLocaleString('tr-TR')} TL`), statsX + 50, yPos);
 
     // PDF'i blob olarak al
     const pdfBlob = pdf.output('blob');
