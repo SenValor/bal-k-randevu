@@ -14,9 +14,9 @@ export default function FeaturesSection() {
   const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.8, 1, 0.8]);
 
   const stats = [
-    { value: "10+", label: "Yıllık Deneyim" },
-    { value: "500+", label: "Mutlu Müşteri" },
-    { value: "15+", label: "Tekne Filosu" },
+    { value: "5+", label: "Yıllık Deneyim" },
+    { value: "10.000+", label: "Mutlu Müşteri" },
+    { value: "4+", label: "Tekne Filosu" },
   ];
 
   return (

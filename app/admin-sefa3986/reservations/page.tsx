@@ -51,6 +51,14 @@ export default function AdminReservationsPage() {
   const [exportBoat, setExportBoat] = useState<string>('all');
   const [exportTimeSlots, setExportTimeSlots] = useState<string[]>([]);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<any[]>([]);
+  
+  // Edit Modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
+  const [editPeopleCount, setEditPeopleCount] = useState(0);
+  const [editSelectedSeats, setEditSelectedSeats] = useState<number[]>([]);
+  const [editOccupiedSeats, setEditOccupiedSeats] = useState<number[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     fetchReservations();
@@ -282,6 +290,89 @@ export default function AdminReservationsPage() {
     } catch (error) {
       console.error('Silme hatası:', error);
       alert('❌ Rezervasyon silinirken bir hata oluştu.');
+    }
+  };
+
+  // Rezervasyon düzenleme modal'ını aç
+  const openEditModal = (reservation: Reservation) => {
+    setEditingReservation(reservation);
+    setEditPeopleCount(reservation.totalPeople || 0);
+    setEditSelectedSeats(reservation.selectedSeats || []);
+    
+    // Aynı tekne, tarih ve saat dilimindeki diğer rezervasyonların koltukları
+    const occupiedSeats: number[] = [];
+    reservations.forEach(r => {
+      // Kendisi hariç, aynı tekne/tarih/saat ve aktif rezervasyonlar
+      if (
+        r.id !== reservation.id &&
+        r.boatId === reservation.boatId &&
+        r.date === reservation.date &&
+        r.timeSlotId === reservation.timeSlotId &&
+        (r.status === 'confirmed' || r.status === 'pending')
+      ) {
+        if (r.selectedSeats && Array.isArray(r.selectedSeats)) {
+          occupiedSeats.push(...r.selectedSeats);
+        }
+      }
+    });
+    
+    setEditOccupiedSeats([...new Set(occupiedSeats)]); // Tekrarları kaldır
+    setShowEditModal(true);
+  };
+
+  // Koltuk seçimini toggle et
+  const toggleSeatSelection = (seatId: number) => {
+    // Dolu koltuk ise seçilemesin
+    if (editOccupiedSeats.includes(seatId)) {
+      alert('Bu koltuk başka bir rezervasyonda kullanılıyor!');
+      return;
+    }
+    
+    setEditSelectedSeats(prev => 
+      prev.includes(seatId) 
+        ? prev.filter(id => id !== seatId)
+        : [...prev, seatId]
+    );
+  };
+
+  // Düzenlemeyi kaydet
+  const handleSaveEdit = async () => {
+    if (!editingReservation) return;
+
+    // Kişi sayısı ve koltuk sayısı eşleşmeli
+    if (editSelectedSeats.length !== editPeopleCount) {
+      alert(`Lütfen ${editPeopleCount} kişi için ${editPeopleCount} koltuk seçin!`);
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      await updateDoc(doc(db, 'reservations', editingReservation.id), {
+        totalPeople: editPeopleCount,
+        selectedSeats: editSelectedSeats,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Yerel state'i güncelle
+      setReservations(prev => prev.map(r => 
+        r.id === editingReservation.id 
+          ? { ...r, totalPeople: editPeopleCount, selectedSeats: editSelectedSeats }
+          : r
+      ));
+      setFilteredReservations(prev => prev.map(r => 
+        r.id === editingReservation.id 
+          ? { ...r, totalPeople: editPeopleCount, selectedSeats: editSelectedSeats }
+          : r
+      ));
+
+      alert('✅ Rezervasyon başarıyla güncellendi!');
+      setShowEditModal(false);
+      setEditingReservation(null);
+    } catch (error) {
+      console.error('Güncelleme hatası:', error);
+      alert('❌ Rezervasyon güncellenirken bir hata oluştu.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -1146,6 +1237,18 @@ www.baliksefasi.com`;
                         WhatsApp
                       </button>
 
+                      {/* Düzenle Butonu */}
+                      <button
+                        onClick={() => openEditModal(reservation)}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-400"
+                        title="Rezervasyonu Düzenle"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Düzenle
+                      </button>
+
                       {/* Sil Butonu */}
                       <button
                         onClick={() => handleDeleteReservation(reservation.id, reservation.reservationNumber || 'N/A')}
@@ -1332,6 +1435,172 @@ www.baliksefasi.com`;
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-[#00A9A5] to-[#008B87] hover:from-[#008B87] hover:to-[#00A9A5] text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 İndir {exportTimeSlots.length > 0 && `(${exportTimeSlots.length} Saat)`}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && editingReservation && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          >
+            <div className="mb-6">
+              <h3 className="text-2xl font-bold text-white mb-2">Rezervasyon Düzenle</h3>
+              {editOccupiedSeats.length > 0 && (
+                <p className="text-red-400 text-sm">
+                  ⚠️ Bu saat diliminde {editOccupiedSeats.length} koltuk başka rezervasyonlarda kullanılıyor
+                </p>
+              )}
+            </div>
+            
+            {/* Rezervasyon Bilgileri */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-white/40">Müşteri</p>
+                  <p className="text-white font-medium">{editingReservation.userName}</p>
+                </div>
+                <div>
+                  <p className="text-white/40">Tekne</p>
+                  <p className="text-white font-medium">{editingReservation.boatName}</p>
+                </div>
+                <div>
+                  <p className="text-white/40">Tarih</p>
+                  <p className="text-white font-medium">{editingReservation.date}</p>
+                </div>
+                <div>
+                  <p className="text-white/40">Saat</p>
+                  <p className="text-white font-medium">{editingReservation.timeSlotDisplay}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Kişi Sayısı */}
+            <div className="mb-6">
+              <label className="block text-white/80 text-sm font-medium mb-3">
+                Kişi Sayısı
+              </label>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setEditPeopleCount(Math.max(1, editPeopleCount - 1))}
+                  className="w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors flex items-center justify-center"
+                >
+                  -
+                </button>
+                <div className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-center font-bold text-xl">
+                  {editPeopleCount} Kişi
+                </div>
+                <button
+                  onClick={() => setEditPeopleCount(Math.min(12, editPeopleCount + 1))}
+                  className="w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors flex items-center justify-center"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Koltuk Seçimi */}
+            <div className="mb-6">
+              <label className="block text-white/80 text-sm font-medium mb-3">
+                Koltuk Seçimi ({editSelectedSeats.length}/{editPeopleCount} seçildi)
+              </label>
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <div className="grid grid-cols-6 gap-2">
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((seatId) => {
+                    const isSelected = editSelectedSeats.includes(seatId);
+                    const isOriginal = (editingReservation.selectedSeats || []).includes(seatId);
+                    const isOccupied = editOccupiedSeats.includes(seatId);
+                    const side = seatId <= 6 ? 'IS' : 'SA';
+                    const position = seatId <= 6 ? seatId : seatId - 6;
+                    
+                    return (
+                      <button
+                        key={seatId}
+                        onClick={() => toggleSeatSelection(seatId)}
+                        disabled={isOccupied}
+                        className={`
+                          aspect-square rounded-lg border-2 transition-all text-xs font-bold
+                          ${isOccupied
+                            ? 'bg-red-500/20 border-red-500 text-red-400 cursor-not-allowed opacity-70'
+                            : isSelected 
+                            ? 'bg-[#00A9A5]/30 border-[#00A9A5] text-[#00A9A5]' 
+                            : 'bg-white/5 border-white/20 text-white/60 hover:border-white/40'
+                          }
+                          ${isOriginal && !isSelected && !isOccupied ? 'ring-2 ring-orange-500' : ''}
+                        `}
+                        title={
+                          isOccupied 
+                            ? 'Dolu - Başka rezervasyonda kullanılıyor' 
+                            : isOriginal && !isSelected 
+                            ? 'Orijinal koltuk - Kaldırılacak' 
+                            : ''
+                        }
+                      >
+                        <div className="text-[10px]">T1_{side}{position}</div>
+                        <div>{seatId}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-4 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-[#00A9A5]/30 border-2 border-[#00A9A5] rounded"></div>
+                    <span className="text-white/60">Seçili</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-red-500/20 border-2 border-red-500 rounded"></div>
+                    <span className="text-white/60">Dolu (Başka Rez.)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-white/5 border-2 border-white/20 ring-2 ring-orange-500 rounded"></div>
+                    <span className="text-white/60">Kaldırılacak</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-white/5 border-2 border-white/20 rounded"></div>
+                    <span className="text-white/60">Boş</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Uyarı */}
+            {editSelectedSeats.length !== editPeopleCount && (
+              <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                <p className="text-yellow-400 text-sm">
+                  ⚠️ Lütfen {editPeopleCount} kişi için {editPeopleCount} koltuk seçin!
+                </p>
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingReservation(null);
+                }}
+                className="flex-1 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={editSaving || editSelectedSeats.length !== editPeopleCount}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-[#00A9A5] to-[#008B87] hover:from-[#008B87] hover:to-[#00A9A5] text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {editSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Kaydediliyor...
+                  </>
+                ) : (
+                  'Kaydet'
+                )}
               </button>
             </div>
           </motion.div>

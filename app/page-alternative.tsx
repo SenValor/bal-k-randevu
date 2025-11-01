@@ -100,21 +100,21 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
             <SlideUp delay={0.3}>
               <div className="text-white">
-                <div className="text-5xl font-bold text-teal mb-2">10+</div>
+                <div className="text-5xl font-bold text-teal mb-2">5</div>
                 <p className="text-lg">Yıllık Deneyim</p>
               </div>
             </SlideUp>
 
             <SlideUp delay={0.4}>
               <div className="text-white">
-                <div className="text-5xl font-bold text-teal mb-2">500+</div>
+                <div className="text-5xl font-bold text-teal mb-2">10.000+</div>
                 <p className="text-lg">Mutlu Müşteri</p>
               </div>
             </SlideUp>
 
             <SlideUp delay={0.5}>
               <div className="text-white">
-                <div className="text-5xl font-bold text-teal mb-2">15+</div>
+                <div className="text-5xl font-bold text-teal mb-2">4+</div>
                 <p className="text-lg">Tekne Filosu</p>
               </div>
             </SlideUp>
