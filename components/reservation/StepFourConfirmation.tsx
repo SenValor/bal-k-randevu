@@ -254,12 +254,9 @@ export default function StepFourConfirmation() {
             </motion.div>
 
             {/* Title */}
-            <h1 className="text-3xl md:text-4xl font-bold text-[#0D2847] mb-4">
+            <h1 className="text-3xl md:text-4xl font-bold text-[#0D2847] mb-8">
               Rezervasyonunuz Başarıyla Oluşturuldu! 🎉
             </h1>
-            <p className="text-[#1B3A5C]/70 text-lg mb-8">
-              Rezervasyon detaylarınız e-posta adresinize gönderildi.
-            </p>
 
             {/* Rezervasyon Numarası */}
             {reservationNumber && (

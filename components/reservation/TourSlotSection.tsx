@@ -249,8 +249,8 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
             {timeSlots.map((slot, index) => {
               const isSelected = selectedTour?.id === parseInt(slot.id);
               // Özel tur ise: herhangi bir rezervasyon varsa disabled
-              // Normal tur ise: %90 dolu ise disabled
-              const isDisabled = isPrivateTour ? slot.fullness > 0 : slot.fullness >= 0.9;
+              // Normal tur ise: %100 dolu ise disabled
+              const isDisabled = isPrivateTour ? slot.fullness > 0 : slot.fullness >= 1.0;
 
               return (
                 <motion.button

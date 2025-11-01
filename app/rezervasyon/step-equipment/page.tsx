@@ -7,10 +7,10 @@ import PriceSummaryBox from '@/components/reservation/PriceSummaryBox';
 import StepNavigation from '@/components/reservation/StepNavigation';
 
 const PRICES = {
-  adultWithGear: 1250,
-  adultOwnGear: 1000,
-  childWithGear: 625, // %50 indirim
-  childOwnGear: 500,
+  adultWithGear: 1500,
+  adultOwnGear: 1250,
+  childWithGear: 750, // %50 indirim
+  childOwnGear: 625,
 };
 
 export default function StepEquipment() {
