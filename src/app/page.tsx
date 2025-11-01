@@ -13,9 +13,64 @@ interface BoatPhoto {
   type?: 'image' | 'video';
 }
 
+// 🔄 APP VERSION - Her deploy'da bu değeri artırın!
+const APP_VERSION = '2.0.0'; // Yeni sistem versiyonu
+const VERSION_KEY = 'app_version';
+
 export default function Home() {
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
   const [boatPhotos, setBoatPhotos] = useState<BoatPhoto[]>([]);
+  const [showUpdateBanner, setShowUpdateBanner] = useState<boolean>(false);
+
+  // 🔄 Version kontrolü ve otomatik cache temizleme
+  useEffect(() => {
+    try {
+      const storedVersion = localStorage.getItem(VERSION_KEY);
+      
+      if (!storedVersion || storedVersion !== APP_VERSION) {
+        console.log('🔄 Yeni versiyon tespit edildi! Eski:', storedVersion, 'Yeni:', APP_VERSION);
+        
+        // Cache temizle
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            names.forEach(name => caches.delete(name));
+          });
+        }
+        
+        // localStorage'ı temizle (Firebase auth hariç)
+        const authKeys = ['firebase:authUser', 'firebase:host'];
+        const keysToKeep: { [key: string]: string | null } = {};
+        authKeys.forEach(key => {
+          for (let i = 0; i < localStorage.length; i++) {
+            const storageKey = localStorage.key(i);
+            if (storageKey && storageKey.includes(key)) {
+              keysToKeep[storageKey] = localStorage.getItem(storageKey);
+            }
+          }
+        });
+        
+        localStorage.clear();
+        
+        // Auth bilgilerini geri yükle
+        Object.entries(keysToKeep).forEach(([key, value]) => {
+          if (value) localStorage.setItem(key, value);
+        });
+        
+        // Yeni versiyonu kaydet
+        localStorage.setItem(VERSION_KEY, APP_VERSION);
+        
+        // Banner göster
+        setShowUpdateBanner(true);
+        
+        // 3 saniye sonra sayfayı yenile
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Version kontrolü hatası:', error);
+    }
+  }, []);
 
   // Fotoğrafları Firebase'den çek
   useEffect(() => {
@@ -49,6 +104,21 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
+      {/* 🔄 Güncelleme Banner'ı */}
+      {showUpdateBanner && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-4 px-6 shadow-lg animate-pulse">
+          <div className="max-w-4xl mx-auto flex items-center justify-center space-x-3">
+            <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="text-lg font-semibold">
+              🎉 Yeni versiyon yükleniyor! Sayfa otomatik yenilenecek...
+            </span>
+          </div>
+        </div>
+      )}
+      
       {/* Ana İçerik */}
       <div className="max-w-4xl mx-auto px-4 py-16">
         

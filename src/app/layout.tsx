@@ -220,6 +220,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#3B82F6" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <script src="/clear-cache.js" defer></script>
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

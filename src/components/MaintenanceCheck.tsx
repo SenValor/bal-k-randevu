@@ -79,6 +79,7 @@ export default function MaintenanceCheck({ children }: MaintenanceCheckProps) {
             <li>• Sistem güvenlik güncellemeleri</li>
             <li>• Rezervasyon sistemi iyileştirmeleri</li>
             <li>• Performans optimizasyonları</li>
+            <li className="text-orange-700 font-semibold">• Tarayıcınızı yenileyin</li>
           </ul>
         </div>
         
