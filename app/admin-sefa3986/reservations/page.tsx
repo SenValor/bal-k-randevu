@@ -1074,11 +1074,54 @@ www.baliksefasi.com`;
                             className="w-5 h-5 rounded border-2 border-[#00A9A5] text-[#00A9A5] focus:ring-[#00A9A5] cursor-pointer"
                           />
                         )}
-                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${getStatusColor(reservation.status)}`}>
-                          {reservation.status === 'confirmed' && <CheckCircle className="w-4 h-4" />}
-                          {reservation.status === 'pending' && <Clock className="w-4 h-4" />}
-                          {reservation.status === 'cancelled' && <XCircle className="w-4 h-4" />}
-                          <span className="text-sm font-medium">{getStatusText(reservation.status)}</span>
+                        <div className="flex items-center gap-2">
+                          <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${getStatusColor(reservation.status)}`}>
+                            {reservation.status === 'confirmed' && <CheckCircle className="w-4 h-4" />}
+                            {reservation.status === 'pending' && <Clock className="w-4 h-4" />}
+                            {reservation.status === 'cancelled' && <XCircle className="w-4 h-4" />}
+                            <span className="text-sm font-medium">{getStatusText(reservation.status)}</span>
+                          </div>
+                          
+                          {/* WhatsApp Durum Badges */}
+                          <div className="flex items-center gap-1">
+                            {/* Hoş Geldiniz Mesajı Badge (Opt-in) */}
+                            {(reservation as any).whatsappConsent && (
+                              <div 
+                                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                  (reservation as any).welcomeMessageSent 
+                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
+                                    : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                }`}
+                                title={
+                                  (reservation as any).welcomeMessageSent 
+                                    ? `Hoş geldiniz mesajı gönderildi (Opt-in)` 
+                                    : 'Hoş geldiniz mesajı bekliyor'
+                                }
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                                {(reservation as any).welcomeMessageSent ? '👋' : '⏳'}
+                              </div>
+                            )}
+                            
+                            {/* Onay Mesajı Badge */}
+                            {reservation.status === 'confirmed' && (
+                              <div 
+                                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                  (reservation as any).whatsappSent 
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                    : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
+                                }`}
+                                title={
+                                  (reservation as any).whatsappSent 
+                                    ? `Onay mesajı gönderildi: ${(reservation as any).whatsappSentAt ? new Date((reservation as any).whatsappSentAt).toLocaleString('tr-TR') : ''}` 
+                                    : 'Onay mesajı henüz gönderilmedi'
+                                }
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                                {(reservation as any).whatsappSent ? '✓' : '⏳'}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="text-right">

@@ -7,6 +7,7 @@ import { Loader2, CheckCircle, User, Mail, Phone, Calendar, Clock, Users, Ship, 
 import { addReservation, ReservationFormData } from '@/lib/reservationHelpers';
 import { Boat } from '@/lib/boatHelpers';
 import { Tour } from '@/lib/tourHelpers';
+import { isPhoneBlacklisted, getBlacklistInfo } from '@/lib/blacklistHelpers';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 
@@ -26,6 +27,9 @@ export default function StepFourConfirmation() {
   
   // Üye telefon numarası
   const [memberPhone, setMemberPhone] = useState('');
+  
+  // WhatsApp Onayı
+  const [whatsappConsent, setWhatsappConsent] = useState(false);
 
   // Rezervasyon verileri
   const [boat, setBoat] = useState<Boat | null>(null);
@@ -102,6 +106,29 @@ export default function StepFourConfirmation() {
     setLoading(true);
 
     try {
+      // ⚠️ KARA LİSTE KONTROLÜ
+      const phoneToCheck = user ? memberPhone : guestPhone;
+      
+      console.log('🔍 Kara liste kontrolü başlıyor...');
+      console.log('📞 Kontrol edilecek telefon:', phoneToCheck);
+      
+      const isBlacklisted = await isPhoneBlacklisted(phoneToCheck);
+      
+      if (isBlacklisted) {
+        const blacklistInfo = await getBlacklistInfo(phoneToCheck);
+        console.log('❌ KARA LİSTEDE BULUNDU!', blacklistInfo);
+        
+        setError(
+          `⛔ Bu telefon numarası ile rezervasyon yapamazsınız!\n\n` +
+          `Sebep: ${blacklistInfo?.reason || 'Belirtilmemiş'}\n\n` +
+          `Lütfen bizimle iletişime geçin.`
+        );
+        setLoading(false);
+        return;
+      }
+      
+      console.log('✅ Kara listede değil, rezervasyon devam ediyor...');
+
       // Tarihi düzgün formata çevir - SADECE "YYYY-MM-DD" formatında
       let reservationDate = '';
       if (reservationData.date) {
@@ -205,6 +232,8 @@ export default function StepFourConfirmation() {
         equipmentSelection: equipmentSelection || null,
         baitWarning: hasBaitWarning, // Yem uyarısı
         status: 'pending',
+        whatsappConsent: whatsappConsent, // WhatsApp onayı
+        whatsappConsentDate: whatsappConsent ? new Date().toISOString() : null, // Onay tarihi
       };
 
       console.log('Firestore\'a kaydedilecek rezervasyon:', reservation);
@@ -282,38 +311,6 @@ export default function StepFourConfirmation() {
                     Bu numarayı kullanarak rezervasyonunuzu sorgulayabilir ve iptal edebilirsiniz
                   </p>
                 </div>
-
-                {/* WhatsApp Onay Butonu - Kompakt */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="mb-6"
-                >
-                  {/* Uyarı Mesajı */}
-                  <div className="bg-gradient-to-r from-[#FFA500]/10 to-[#FF8C00]/10 border-l-4 border-[#FFA500] rounded-lg p-4 mb-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-lg">⚠️</span>
-                      <h3 className="text-[#0D2847] font-bold text-sm">Rezervasyon Onayı Gerekli</h3>
-                    </div>
-                    <p className="text-[#1B3A5C] text-xs leading-relaxed">
-                      Rezervasyonunuzun onaylanması için aşağıdaki butona tıklayın
-                    </p>
-                  </div>
-
-                  {/* WhatsApp Butonu - Kompakt */}
-                  <button
-                    onClick={() => {
-                      const message = `REZERVASYONUNUZ GÜVENLİ BİR ŞEKİLDE ONAYLANMASI İÇİN YANDAKİ YEŞİL GÖNDERME BUTONUNA TIKLAYIN`;
-                      const whatsappUrl = `https://wa.me/905333798589?text=${encodeURIComponent(message)}`;
-                      window.open(whatsappUrl, '_blank');
-                    }}
-                    className="w-full py-4 bg-gradient-to-r from-[#25D366] to-[#128C7E] hover:from-[#20BA5A] hover:to-[#0F7A6B] text-white font-bold text-base rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 group"
-                  >
-                    <MessageCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    <span>Rezervasyonumu Onaylıyorum</span>
-                  </button>
-                </motion.div>
               </>
             )}
 
@@ -466,6 +463,28 @@ export default function StepFourConfirmation() {
                 </div>
               )}
 
+              {/* WhatsApp Onay Checkbox */}
+              <label className="flex items-start gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl cursor-pointer hover:bg-green-500/20 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={whatsappConsent}
+                  onChange={(e) => setWhatsappConsent(e.target.checked)}
+                  className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <MessageCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-semibold text-[#003366]">
+                      WhatsApp Bildirimleri
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    Rezervasyon onayı ve bilgilendirme mesajlarını WhatsApp üzerinden almak istiyorum. 
+                    <span className="text-green-600 font-medium"> (Önerilir - Hızlı bildirim için)</span>
+                  </p>
+                </div>
+              </label>
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -596,6 +615,28 @@ export default function StepFourConfirmation() {
               <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
+
+          {/* WhatsApp Onay Checkbox */}
+          <label className="flex items-start gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl cursor-pointer hover:bg-green-500/20 transition-colors mb-6">
+            <input
+              type="checkbox"
+              checked={whatsappConsent}
+              onChange={(e) => setWhatsappConsent(e.target.checked)}
+              className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 cursor-pointer"
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <MessageCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-semibold text-[#003366]">
+                  WhatsApp Bildirimleri
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Rezervasyon onayı ve bilgilendirme mesajlarını WhatsApp üzerinden almak istiyorum. 
+                <span className="text-green-600 font-medium"> (Önerilir - Hızlı bildirim için)</span>
+              </p>
+            </div>
+          </label>
 
           {/* Confirm Button */}
           <button

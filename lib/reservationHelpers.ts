@@ -600,6 +600,71 @@ export async function getReservationByNumber(
 }
 
 /**
+ * Telefon numarası ile rezervasyonları sorgular
+ * @param phone - Telefon numarası
+ * @returns Rezervasyon listesi
+ */
+export async function getReservationsByPhone(
+  phone: string
+): Promise<{ success: boolean; reservations?: Reservation[]; error?: string }> {
+  try {
+    // Telefon numarasını temizle
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    if (!cleanPhone || cleanPhone.length < 10) {
+      return { success: false, error: 'Geçerli bir telefon numarası girin' };
+    }
+
+    console.log('🔍 Telefon ile rezervasyon aranıyor:', cleanPhone);
+
+    // Hem 0'lı hem 0'sız versiyonları oluştur
+    let phoneWithZero = cleanPhone;
+    let phoneWithoutZero = cleanPhone;
+    
+    if (cleanPhone.startsWith('0')) {
+      phoneWithoutZero = cleanPhone.substring(1);
+    } else {
+      phoneWithZero = '0' + cleanPhone;
+    }
+
+    console.log('🔍 Aranacak telefon versiyonları:', {
+      withZero: phoneWithZero,
+      withoutZero: phoneWithoutZero
+    });
+
+    // Her iki versiyonu da ara
+    const q = query(
+      collection(db, 'reservations'),
+      where('userPhone', 'in', [phoneWithZero, phoneWithoutZero])
+    );
+
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      console.log('❌ Rezervasyon bulunamadı');
+      return { success: false, error: 'Bu telefon numarası ile kayıtlı rezervasyon bulunamadı' };
+    }
+
+    const reservations: Reservation[] = [];
+    snapshot.forEach((doc) => {
+      reservations.push({ id: doc.id, ...doc.data() } as Reservation);
+    });
+
+    // Tarihe göre sırala (en yeni önce)
+    reservations.sort((a, b) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    console.log('✅ Bulunan rezervasyon sayısı:', reservations.length);
+
+    return { success: true, reservations };
+  } catch (error: any) {
+    console.error('Telefon ile rezervasyon sorgulama hatası:', error);
+    return { success: false, error: 'Rezervasyon sorgulanırken bir hata oluştu' };
+  }
+}
+
+/**
  * Rezervasyon numarası ve telefon ile rezervasyon iptal eder
  * @param reservationNumber - Rezervasyon numarası
  * @param phone - Telefon numarası (doğrulama için)

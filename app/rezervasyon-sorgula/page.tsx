@@ -3,12 +3,15 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, X, Calendar, Clock, Ship, Users, Phone, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { getReservationByNumber, cancelReservationByNumber, Reservation } from '@/lib/reservationHelpers';
+import { getReservationByNumber, getReservationsByPhone, cancelReservationByNumber, Reservation } from '@/lib/reservationHelpers';
 
 export default function ReservationQueryPage() {
+  const [searchType, setSearchType] = useState<'number' | 'phone'>('number');
   const [reservationNumber, setReservationNumber] = useState('');
   const [phone, setPhone] = useState('');
+  const [searchPhone, setSearchPhone] = useState('');
   const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -20,21 +23,39 @@ export default function ReservationQueryPage() {
     setError('');
     setSuccess('');
     setReservation(null);
+    setReservations([]);
 
-    if (!reservationNumber.trim()) {
-      setError('Lütfen rezervasyon numaranızı girin');
-      return;
+    if (searchType === 'number') {
+      if (!reservationNumber.trim()) {
+        setError('Lütfen rezervasyon numaranızı girin');
+        return;
+      }
+    } else {
+      if (!searchPhone.trim()) {
+        setError('Lütfen telefon numaranızı girin');
+        return;
+      }
     }
 
     setLoading(true);
 
     try {
-      const result = await getReservationByNumber(reservationNumber.trim());
+      if (searchType === 'number') {
+        const result = await getReservationByNumber(reservationNumber.trim());
 
-      if (result.success && result.reservation) {
-        setReservation(result.reservation);
+        if (result.success && result.reservation) {
+          setReservation(result.reservation);
+        } else {
+          setError(result.error || 'Rezervasyon bulunamadı');
+        }
       } else {
-        setError(result.error || 'Rezervasyon bulunamadı');
+        const result = await getReservationsByPhone(searchPhone.trim());
+
+        if (result.success && result.reservations && result.reservations.length > 0) {
+          setReservations(result.reservations);
+        } else {
+          setError(result.error || 'Rezervasyon bulunamadı');
+        }
       }
     } catch (err) {
       setError('Bir hata oluştu. Lütfen tekrar deneyin.');
@@ -76,7 +97,9 @@ export default function ReservationQueryPage() {
   const handleReset = () => {
     setReservationNumber('');
     setPhone('');
+    setSearchPhone('');
     setReservation(null);
+    setReservations([]);
     setError('');
     setSuccess('');
     setShowCancelConfirm(false);
@@ -122,36 +145,89 @@ export default function ReservationQueryPage() {
             Rezervasyon Sorgula
           </h1>
           <p className="text-gray-600">
-            Rezervasyon numaranız ile rezervasyonunuzu sorgulayabilir ve iptal edebilirsiniz
+            Rezervasyon numaranız veya telefon numaranız ile rezervasyonunuzu sorgulayabilir ve iptal edebilirsiniz
           </p>
         </motion.div>
 
         {/* Search Form */}
-        {!reservation && (
+        {!reservation && reservations.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white rounded-2xl shadow-lg p-8 mb-6"
           >
+            {/* Search Type Tabs */}
+            <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchType('number');
+                  setError('');
+                }}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+                  searchType === 'number'
+                    ? 'bg-white text-[#003366] shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Rezervasyon Numarası
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchType('phone');
+                  setError('');
+                }}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+                  searchType === 'phone'
+                    ? 'bg-white text-[#003366] shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Telefon Numarası
+              </button>
+            </div>
+
             <form onSubmit={handleSearch} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rezervasyon Numarası
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={reservationNumber}
-                    onChange={(e) => setReservationNumber(e.target.value.toUpperCase())}
-                    placeholder="BS-2024-001234"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00A9A5] focus:border-transparent"
-                  />
-                  <Search className="absolute right-3 top-3.5 w-5 h-5 text-gray-400" />
+              {searchType === 'number' ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rezervasyon Numarası
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={reservationNumber}
+                      onChange={(e) => setReservationNumber(e.target.value.toUpperCase())}
+                      placeholder="BS-2024-001234"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00A9A5] focus:border-transparent"
+                    />
+                    <Search className="absolute right-3 top-3.5 w-5 h-5 text-gray-400" />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Rezervasyon numaranız WhatsApp mesajınızda veya e-postanızda bulunmaktadır
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Rezervasyon numaranız WhatsApp mesajınızda veya e-postanızda bulunmaktadır
-                </p>
-              </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Telefon Numarası
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="tel"
+                      value={searchPhone}
+                      onChange={(e) => setSearchPhone(e.target.value)}
+                      placeholder="05551234567 veya 5551234567"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00A9A5] focus:border-transparent"
+                    />
+                    <Phone className="absolute right-3 top-3.5 w-5 h-5 text-gray-400" />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Rezervasyon yaparken kullandığınız telefon numarasını girin
+                  </p>
+                </div>
+              )}
 
               <button
                 type="submit"
@@ -186,6 +262,100 @@ export default function ReservationQueryPage() {
             <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
             <p className="text-green-800">{success}</p>
           </motion.div>
+        )}
+
+        {/* Multiple Reservations List (Phone Search) */}
+        {reservations.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-[#003366]">
+                Bulunan Rezervasyonlar ({reservations.length})
+              </h2>
+              <button
+                onClick={handleReset}
+                className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
+              >
+                <X className="w-5 h-5" />
+                Yeni Arama
+              </button>
+            </div>
+
+            {reservations.map((res, index) => (
+              <motion.div
+                key={res.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                onClick={() => {
+                  setReservation(res);
+                  setReservations([]);
+                }}
+                className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow border-2 border-transparent hover:border-[#00A9A5]"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Rezervasyon No</p>
+                    <p className="font-bold text-[#003366]">#{res.reservationNumber}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(res.status)}`}>
+                    {getStatusText(res.status)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <Ship className="w-4 h-4 text-[#00A9A5]" />
+                    <div>
+                      <p className="text-xs text-gray-500">Tekne</p>
+                      <p className="text-sm font-semibold">{res.boatName}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-[#00A9A5]" />
+                    <div>
+                      <p className="text-xs text-gray-500">Tarih</p>
+                      <p className="text-sm font-semibold">
+                        {new Date(res.date).toLocaleDateString('tr-TR', {
+                          day: 'numeric',
+                          month: 'short'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-[#00A9A5]" />
+                    <div>
+                      <p className="text-xs text-gray-500">Saat</p>
+                      <p className="text-sm font-semibold">{res.timeSlotDisplay}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-[#00A9A5]" />
+                    <div>
+                      <p className="text-xs text-gray-500">Kişi</p>
+                      <p className="text-sm font-semibold">{res.totalPeople} kişi</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t flex justify-between items-center">
+                  <span className="text-gray-600 text-sm">Toplam Tutar</span>
+                  <span className="text-lg font-bold text-[#003366]">
+                    ₺{res.totalPrice.toLocaleString('tr-TR')}
+                  </span>
+                </div>
+
+                <div className="mt-3 text-center">
+                  <span className="text-xs text-[#00A9A5] font-medium">
+                    Detayları görmek için tıklayın →
+                  </span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         )}
 
         {/* Reservation Details */}

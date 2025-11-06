@@ -90,13 +90,13 @@ export default function AdminDashboard() {
       available: true,
     },
     {
-      id: 'analytics',
+      id: 'blacklist',
       title: 'Kara Liste',
       description: 'Gelmeyen müşterileri yönet',
       icon: BarChart3,
       color: 'from-red-500 to-red-600',
-      path: '/admin-sefa3986/analytics',
-      available: false,
+      path: '/admin-sefa3986/blacklist',
+      available: true,
     },
     {
       id: 'settings',
