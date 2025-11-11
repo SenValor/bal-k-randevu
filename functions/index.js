@@ -39,23 +39,6 @@ function formatDateTurkish(dateString) {
   }
 }
 
-// 🌙 Gece turu kontrol
-function isOvernightTour(startTime, endTime) {
-  if (!startTime || !endTime) return false;
-  const [startHour] = startTime.split(":").map(Number);
-  const [endHour] = endTime.split(":").map(Number);
-  return endHour < startHour;
-}
-
-function getDayName(dateString) {
-  return new Date(dateString).toLocaleDateString("tr-TR", { weekday: "long" });
-}
-function getNextDayName(dateString) {
-  const date = new Date(dateString);
-  date.setDate(date.getDate() + 1);
-  return date.toLocaleDateString("tr-TR", { weekday: "long" });
-}
-
 /**
  * ✅ Rezervasyon Onaylandığında Şablonlu Mesaj Gönder
  */
@@ -105,7 +88,7 @@ exports.onReservationApproved = functions
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -113,7 +96,7 @@ exports.onReservationApproved = functions
           to: formattedPhone,
           type: "template",
           template: {
-            name: "reservation_confirmation",
+            name: "reservation_confirmation", // ✅ Onay şablonu adı
             language: { code: "tr" },
             components: [
               {
@@ -124,7 +107,7 @@ exports.onReservationApproved = functions
                   { type: "text", text: timeSlotDisplay },
                   { type: "text", text: boatName },
                   { type: "text", text: reservationNumber },
-                  { type: "text", text: boatMapsLink || "Konum bilgisi bulunamadı" }, // 📍 6. değişken
+                  { type: "text", text: boatMapsLink || "Konum bilgisi bulunamadı" },
                 ],
               },
             ],
@@ -161,52 +144,94 @@ exports.onReservationApproved = functions
   });
 
 /**
- * ❌ İptal Mesajı (Aynı format, text olarak)
+ * ❌ Rezervasyon İptal Edildiğinde ŞABLONLU Mesaj Gönder
  */
 exports.onReservationCancelled = functions
   .region("us-central1")
   .firestore.document("reservations/{reservationId}")
   .onUpdate(async (change, context) => {
-    const before = change.before.data();
-    const after = change.after.data();
+    try {
+      const before = change.before.data();
+      const after = change.after.data();
+      const id = context.params.reservationId;
 
-    if (after.status !== "cancelled") return;
-    if (after.whatsappCancelSent) return;
+      console.log(`🛑 Rezervasyon iptal edildi: ${id}`);
+      console.log(`📊 Status: ${before.status} → ${after.status}`);
 
-    const { userName, userPhone, date, timeSlotDisplay, boatName, reservationNumber } = after;
-    const formattedPhone = formatPhoneNumber(userPhone);
-    const formattedDate = formatDateTurkish(date);
+      if (after.status !== "cancelled") return;
+      if (after.whatsappCancelSent === true) return;
+      if (before.status === "cancelled" && after.status === "cancelled") return;
 
-    const apiUrl = `https://graph.facebook.com/v22.0/${phoneId}/messages`;
+      const {
+        userName = "Değerli Müşterimiz",
+        userPhone,
+        date,
+        timeSlotDisplay = "Belirtilmemiş",
+        boatName = "BALIK SEFASI",
+        reservationNumber = "BS-XXXX",
+        boatMapsLink = "",
+      } = after;
 
-    const res = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: formattedPhone,
-        type: "text",
-        text: {
-          body: `🐟 Balık Sefası\n\nMerhaba ${userName},\nRezervasyonunuz iptal edildi.\n🎫 No: ${reservationNumber}\n📅 ${formattedDate}\n🕐 ${timeSlotDisplay}\n⛵ ${boatName}\n\nGörüşmek dileğiyle ⚓`,
+      if (!userPhone) {
+        await change.after.ref.update({
+          whatsappCancelSent: false,
+          whatsappCancelError: "Telefon numarası eksik",
+        });
+        return;
+      }
+
+      const formattedPhone = formatPhoneNumber(userPhone);
+      const formattedDate = formatDateTurkish(date);
+      const apiUrl = `https://graph.facebook.com/v22.0/${phoneId}/messages`;
+
+      // 🚀 TEMPLATE mesajı gönder
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
-      }),
-    });
-
-    const data = await res.json();
-
-    if (res.ok && data.messages) {
-      await change.after.ref.update({
-        whatsappCancelSent: true,
-        whatsappCancelSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: formattedPhone,
+          type: "template",
+          template: {
+            name: "reservation_cancellation", // ✅ Meta’daki iptal şablon adı
+            language: { code: "tr" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: userName },
+                  { type: "text", text: formattedDate },
+                  { type: "text", text: timeSlotDisplay },
+                  { type: "text", text: boatName },
+                  { type: "text", text: reservationNumber },
+                  { type: "text", text: boatMapsLink || "Konum bilgisi bulunamadı" },
+                ],
+              },
+            ],
+          },
+        }),
       });
-    } else {
-      await change.after.ref.update({
-        whatsappCancelSent: false,
-        whatsappCancelError: data.error?.message || "API hatası",
-        whatsappCancelSentAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+
+      const data = await response.json();
+
+      if (response.ok && data.messages) {
+        console.log("✅ WhatsApp İPTAL TEMPLATE mesajı gönderildi!");
+        await change.after.ref.update({
+          whatsappCancelSent: true,
+          whatsappCancelSentAt: admin.firestore.FieldValue.serverTimestamp(),
+          whatsappCancelMessageId: data.messages[0]?.id || null,
+        });
+      } else {
+        console.error("❌ WhatsApp API hatası:", data);
+        await change.after.ref.update({
+          whatsappCancelSent: false,
+          whatsappCancelError: data.error?.message || "API hatası",
+        });
+      }
+    } catch (err) {
+      console.error("❌ İptal function hatası:", err);
     }
   });

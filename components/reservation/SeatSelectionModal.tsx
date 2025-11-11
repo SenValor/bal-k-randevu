@@ -232,6 +232,13 @@ export default function SeatSelectionModal({
                   </div>
                 </div>
 
+                {/* Uyarı Mesajı */}
+                <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <p className="text-amber-800 text-sm leading-relaxed">
+                    <span className="font-semibold">Not:</span> Koltuk seçimi ön rezervasyon içindir; oturma düzeninde yapılacak olası değişiklikler Balık Sefası ekibinin takdirindedir ve konforunuz gözetilerek uygulanır.
+                  </p>
+                </div>
+
                 {/* Confirm Button */}
                 <motion.button
                   ref={confirmButtonRef}

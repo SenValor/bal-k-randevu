@@ -58,6 +58,7 @@ export default function AdminReservationsPage() {
   const [editPeopleCount, setEditPeopleCount] = useState(0);
   const [editSelectedSeats, setEditSelectedSeats] = useState<number[]>([]);
   const [editOccupiedSeats, setEditOccupiedSeats] = useState<number[]>([]);
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
@@ -298,6 +299,7 @@ export default function AdminReservationsPage() {
     setEditingReservation(reservation);
     setEditPeopleCount(reservation.totalPeople || 0);
     setEditSelectedSeats(reservation.selectedSeats || []);
+    setEditPhoneNumber((reservation as any).userPhone || '');
     
     // Aynı tekne, tarih ve saat dilimindeki diğer rezervasyonların koltukları
     const occupiedSeats: number[] = [];
@@ -345,23 +347,30 @@ export default function AdminReservationsPage() {
       return;
     }
 
+    // Telefon numarası kontrolü
+    if (!editPhoneNumber.trim()) {
+      alert('Lütfen telefon numarası girin!');
+      return;
+    }
+
     setEditSaving(true);
     try {
       await updateDoc(doc(db, 'reservations', editingReservation.id), {
         totalPeople: editPeopleCount,
         selectedSeats: editSelectedSeats,
+        userPhone: editPhoneNumber.trim(),
         updatedAt: new Date().toISOString(),
       });
 
       // Yerel state'i güncelle
       setReservations(prev => prev.map(r => 
         r.id === editingReservation.id 
-          ? { ...r, totalPeople: editPeopleCount, selectedSeats: editSelectedSeats }
+          ? { ...r, totalPeople: editPeopleCount, selectedSeats: editSelectedSeats, userPhone: editPhoneNumber.trim() } as any
           : r
       ));
       setFilteredReservations(prev => prev.map(r => 
         r.id === editingReservation.id 
-          ? { ...r, totalPeople: editPeopleCount, selectedSeats: editSelectedSeats }
+          ? { ...r, totalPeople: editPeopleCount, selectedSeats: editSelectedSeats, userPhone: editPhoneNumber.trim() } as any
           : r
       ));
 
@@ -1515,6 +1524,23 @@ www.baliksefasi.com`;
                   <p className="text-white/40">Saat</p>
                   <p className="text-white font-medium">{editingReservation.timeSlotDisplay}</p>
                 </div>
+              </div>
+            </div>
+
+            {/* Telefon Numarası */}
+            <div className="mb-6">
+              <label className="block text-white/80 text-sm font-medium mb-3">
+                Telefon Numarası
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+                <input
+                  type="tel"
+                  value={editPhoneNumber}
+                  onChange={(e) => setEditPhoneNumber(e.target.value)}
+                  placeholder="0555 123 4567"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all"
+                />
               </div>
             </div>
 

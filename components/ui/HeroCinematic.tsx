@@ -163,7 +163,7 @@ export default function HeroCinematic() {
               <div className="absolute -inset-[1px] bg-gradient-to-r from-[#00A9A5] via-[#008B87] to-[#00A9A5] rounded-[2rem] opacity-50 blur-sm" />
               
               {/* Glass Card */}
-              <div className="relative bg-white/80 backdrop-blur-2xl rounded-[2rem] border border-[#6B9BC3]/30 shadow-2xl p-8 md:p-12 lg:p-16">
+              <div className="relative bg-white/80 backdrop-blur-2xl rounded-[2rem] border border-[#6B9BC3]/30 shadow-2xl p-6 md:p-8 lg:p-10">
                 {/* Decorative Corner Elements */}
                 <div className="absolute top-4 left-4 w-12 h-12 border-t-2 border-l-2 border-[#6B9BC3] rounded-tl-2xl opacity-50" />
                 <div className="absolute bottom-4 right-4 w-12 h-12 border-b-2 border-r-2 border-[#6B9BC3] rounded-br-2xl opacity-50" />
@@ -177,7 +177,7 @@ export default function HeroCinematic() {
                     ease: [0.22, 1, 0.36, 1],
                     delay: 0.5 
                   }}
-                  className="text-5xl md:text-6xl lg:text-7xl font-bold text-[#0D2847] leading-tight tracking-tight"
+                  className="text-4xl md:text-5xl lg:text-6xl font-bold text-[#0D2847] leading-tight tracking-tight"
                   style={{
                     textShadow: '0 2px 10px rgba(107, 155, 195, 0.2)'
                   }}
@@ -195,7 +195,7 @@ export default function HeroCinematic() {
                       ease: [0.22, 1, 0.36, 1],
                       delay: 0.7 
                     }}
-                    className="text-base md:text-lg lg:text-xl text-[#1B3A5C]/80 mt-4 mb-8 font-light leading-relaxed"
+                    className="text-sm md:text-base lg:text-lg text-[#1B3A5C]/80 mt-3 mb-6 font-light leading-relaxed"
                   >
                     İstanbul Boğazı'nda yeni nesil balık avı deneyimi
                   </motion.p>
@@ -203,7 +203,7 @@ export default function HeroCinematic() {
 
                 {/* Butonlar */}
                 <motion.div
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 max-w-6xl mx-auto"
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 max-w-6xl mx-auto"
                 >
                   {/* SSS Butonu */}
                   <motion.button
@@ -220,10 +220,10 @@ export default function HeroCinematic() {
                     className="group relative px-4 py-3 text-sm font-semibold rounded-xl bg-[#6B9BC3]/10 backdrop-blur-md border-2 border-[#6B9BC3]/30 text-[#1B3A5C] hover:bg-[#6B9BC3]/20 transition-all duration-500 overflow-hidden"
                   >
                     <span className="relative z-10 flex flex-col items-center justify-center gap-1">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-xs text-center leading-tight">Sıkça Sorulan Sorular</span>
+                      <span className="text-[11px] text-center leading-tight">Sıkça Sorulan Sorular</span>
                     </span>
                   </motion.button>
 
@@ -242,10 +242,10 @@ export default function HeroCinematic() {
                     className="group relative px-4 py-3 text-sm font-semibold rounded-xl bg-[#6B9BC3]/10 backdrop-blur-md border-2 border-[#6B9BC3]/30 text-[#1B3A5C] hover:bg-[#6B9BC3]/20 transition-all duration-500 overflow-hidden"
                   >
                     <span className="relative z-10 flex flex-col items-center justify-center gap-1">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                       </svg>
-                      <span className="text-xs">Basında Biz</span>
+                      <span className="text-[11px]">Basında Biz</span>
                     </span>
                   </motion.button>
 
@@ -261,7 +261,7 @@ export default function HeroCinematic() {
                       ease: [0.22, 1, 0.36, 1],
                       delay: 1.0 
                     }}
-                    className="group relative col-span-1 sm:col-span-2 lg:col-span-6 px-10 py-5 text-xl font-bold rounded-2xl bg-gradient-to-r from-[#6B9BC3] via-[#7FADD1] to-[#6B9BC3] text-white shadow-2xl shadow-[#6B9BC3]/50 hover:shadow-[#6B9BC3]/70 transition-all duration-500 overflow-hidden"
+                    className="group relative col-span-1 sm:col-span-2 lg:col-span-6 px-8 py-4 text-lg font-bold rounded-2xl bg-gradient-to-r from-[#6B9BC3] via-[#7FADD1] to-[#6B9BC3] text-white shadow-2xl shadow-[#6B9BC3]/50 hover:shadow-[#6B9BC3]/70 transition-all duration-500 overflow-hidden"
                   >
                     {/* Animated Background */}
                     <motion.div
@@ -279,8 +279,8 @@ export default function HeroCinematic() {
                     />
                     
                     {/* Content */}
-                    <span className="relative z-10 flex items-center justify-center gap-3">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <span className="relative z-10 flex items-center justify-center gap-2.5">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       <span className="tracking-wide">Rezervasyon Yap</span>
@@ -312,13 +312,13 @@ export default function HeroCinematic() {
                       ease: [0.22, 1, 0.36, 1],
                       delay: 0.9 
                     }}
-                    className="group relative px-4 py-3 text-sm font-semibold rounded-xl bg-[#6B9BC3]/10 backdrop-blur-md border-2 border-[#6B9BC3]/30 text-[#1B3A5C] hover:bg-[#6B9BC3]/20 transition-all duration-500 overflow-hidden"
+                    className="group relative px-3 py-2.5 text-sm font-semibold rounded-xl bg-[#6B9BC3]/10 backdrop-blur-md border-2 border-[#6B9BC3]/30 text-[#1B3A5C] hover:bg-[#6B9BC3]/20 transition-all duration-500 overflow-hidden"
                   >
                     <span className="relative z-10 flex flex-col items-center justify-center gap-1">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <span className="text-xs">Galeri</span>
+                      <span className="text-[11px]">Galeri</span>
                     </span>
                   </motion.button>
 
@@ -334,13 +334,13 @@ export default function HeroCinematic() {
                       ease: [0.22, 1, 0.36, 1],
                       delay: 1.15 
                     }}
-                    className="group relative px-4 py-3 text-sm font-semibold rounded-xl bg-[#6B9BC3]/10 backdrop-blur-md border-2 border-[#6B9BC3]/30 text-[#1B3A5C] hover:bg-[#6B9BC3]/20 transition-all duration-500 overflow-hidden"
+                    className="group relative px-3 py-2.5 text-sm font-semibold rounded-xl bg-[#6B9BC3]/10 backdrop-blur-md border-2 border-[#6B9BC3]/30 text-[#1B3A5C] hover:bg-[#6B9BC3]/20 transition-all duration-500 overflow-hidden"
                   >
                     <span className="relative z-10 flex flex-col items-center justify-center gap-1">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-xs">Hakkımızda</span>
+                      <span className="text-[11px]">Hakkımızda</span>
                     </span>
                   </motion.button>
 
@@ -356,13 +356,13 @@ export default function HeroCinematic() {
                       ease: [0.22, 1, 0.36, 1],
                       delay: 1.2 
                     }}
-                    className="group relative px-4 py-3 text-sm font-semibold rounded-xl bg-[#6B9BC3]/10 backdrop-blur-md border-2 border-[#6B9BC3]/30 text-[#1B3A5C] hover:bg-[#6B9BC3]/20 transition-all duration-500 overflow-hidden"
+                    className="group relative px-3 py-2.5 text-sm font-semibold rounded-xl bg-[#6B9BC3]/10 backdrop-blur-md border-2 border-[#6B9BC3]/30 text-[#1B3A5C] hover:bg-[#6B9BC3]/20 transition-all duration-500 overflow-hidden"
                   >
                     <span className="relative z-10 flex flex-col items-center justify-center gap-1">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
-                      <span className="text-xs">İletişim</span>
+                      <span className="text-[11px]">İletişim</span>
                     </span>
                   </motion.button>
                 </motion.div>
