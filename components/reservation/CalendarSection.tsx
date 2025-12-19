@@ -33,7 +33,9 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
+    // Pazartesi'den başlasın: Pazar=0 -> 6, Pazartesi=1 -> 0, Salı=2 -> 1, ...
+    const dayOfWeek = firstDay.getDay();
+    const startingDayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
     return { daysInMonth, startingDayOfWeek };
   };
@@ -200,7 +202,7 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
     'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
   ];
 
-  const dayNames = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+  const dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
   const goToPreviousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
