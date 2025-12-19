@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Anchor, Loader2, Moon, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { Boat } from '@/lib/boatHelpers';
+import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { getAllTimeSlotsFullness } from '@/lib/reservationHelpers';
 
 interface TimeSlotWithFullness {
@@ -42,49 +42,59 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
     }
   }, []);
 
+  // Tekne verisini state'e al (tarih değiştiğinde kullanmak için)
+  const [currentBoat, setCurrentBoat] = useState<Boat | null>(null);
+
+  // Tekne verilerini yükle
   useEffect(() => {
-    // localStorage'dan seçili tekneyi al
     const selectedBoatData = localStorage.getItem('selectedBoat');
     if (selectedBoatData) {
       try {
         const boat: Boat = JSON.parse(selectedBoatData);
+        console.log('🚢 Tekne yüklendi:', {
+          name: boat.name,
+          id: boat.id,
+          capacity: boat.capacity,
+          timeSlotsCount: boat.timeSlots?.length || 0,
+          scheduledTimeSlotsCount: boat.scheduledTimeSlots?.length || 0
+        });
         setBoatName(boat.name);
         setBoatId(boat.id);
         setBoatCapacity(boat.capacity);
-        
-        // TimeSlots kontrolü - boş veya undefined ise boş array kullan
-        if (boat.timeSlots && Array.isArray(boat.timeSlots) && boat.timeSlots.length > 0) {
-          // TimeSlots'ları başlangıçta 0 fullness ile hazırla
-          const slotsWithFullness = boat.timeSlots.map((slot, index) => ({
-            id: `${index}`,
-            start: slot.start,
-            end: slot.end,
-            displayName: slot.displayName,
-            fullness: 0, // Başlangıçta 0
-            baitWarning: slot.baitWarning || false,
-          }));
-          
-          setTimeSlots(slotsWithFullness);
-        } else {
-          // TimeSlots yoksa boş array
-          setTimeSlots([]);
-        }
+        setCurrentBoat(boat);
       } catch (error) {
         console.error('Tekne verisi parse edilemedi:', error);
-        setTimeSlots([]);
       }
-      setLoading(false);
-    } else {
-      setLoading(false);
     }
+    setLoading(false);
   }, []);
 
-  // Seçili tarih değiştiğinde doluluk oranlarını hesapla
+  // Tekne veya tarih değiştiğinde saat dilimlerini ve doluluk oranlarını güncelle
   useEffect(() => {
-    if (!selectedDate || !boatId || timeSlots.length === 0 || boatCapacity === 0) {
+    // Tekne yoksa çık
+    if (!currentBoat) {
+      console.log('⏳ Tekne henüz yüklenmedi');
       return;
     }
 
+    // Tarih yoksa varsayılan saat dilimlerini göster (doluluk 0)
+    if (!selectedDate) {
+      console.log('📅 Tarih seçilmedi, varsayılan saatler gösteriliyor');
+      if (currentBoat.timeSlots && currentBoat.timeSlots.length > 0) {
+        const slotsWithFullness = currentBoat.timeSlots.map((slot, index) => ({
+          id: `${index}`,
+          start: slot.start,
+          end: slot.end,
+          displayName: slot.displayName,
+          fullness: 0,
+          baitWarning: slot.baitWarning || false,
+        }));
+        setTimeSlots(slotsWithFullness);
+      }
+      return;
+    }
+
+    // Tarih ve tekne var, doluluk hesapla
     const fetchFullness = async () => {
       try {
         // Tarihi YYYY-MM-DD formatına çevir (UTC değil, yerel zaman!)
@@ -95,31 +105,74 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
         
         console.log('📅 TourSlot tarih:', {
           selectedDate: dateStr,
-          localDate: selectedDate.toLocaleDateString('tr-TR')
+          localDate: selectedDate.toLocaleDateString('tr-TR'),
+          boatId: currentBoat.id
         });
         
-        // Tüm saat dilimlerinin doluluk oranlarını hesapla
-        const fullnessMap = await getAllTimeSlotsFullness(
-          boatId,
-          dateStr,
-          timeSlots.map(slot => ({ id: slot.id })),
-          boatCapacity
+        // Tarih bazlı saat dilimlerini al
+        const effectiveTimeSlots = getTimeSlotsForDate(
+          currentBoat.scheduledTimeSlots,
+          currentBoat.timeSlots,
+          dateStr
         );
 
+        console.log('🕐 Tarih için geçerli saat dilimleri:', {
+          date: dateStr,
+          scheduledCount: currentBoat.scheduledTimeSlots?.length || 0,
+          effectiveSlots: effectiveTimeSlots.map(s => `${s.displayName} (${s.start}-${s.end})`)
+        });
+
+        // TimeSlots'ları hazırla
+        const slotsWithId = effectiveTimeSlots.map((slot, index) => ({
+          id: `${index}`,
+          start: slot.start,
+          end: slot.end,
+          displayName: slot.displayName,
+          fullness: 0,
+          baitWarning: slot.baitWarning || false,
+        }));
+
+        // Önce saat dilimlerini göster (doluluk 0 ile)
+        setTimeSlots(slotsWithId);
+
+        // Sonra doluluk oranlarını hesapla
+        console.log('📊 Doluluk hesaplanıyor...', {
+          boatId: currentBoat.id,
+          date: dateStr,
+          slots: slotsWithId.map(s => s.displayName)
+        });
+
+        const fullnessMap = await getAllTimeSlotsFullness(
+          currentBoat.id,
+          dateStr,
+          slotsWithId.map(slot => ({ 
+            id: slot.id, 
+            start: slot.start, 
+            end: slot.end,
+            displayName: slot.displayName 
+          })),
+          currentBoat.capacity
+        );
+
+        console.log('✅ Doluluk hesaplandı:', {
+          mapSize: fullnessMap.size,
+          values: Array.from(fullnessMap.entries())
+        });
+
         // TimeSlots'ları güncel doluluk oranlarıyla güncelle
-        setTimeSlots(prevSlots =>
-          prevSlots.map(slot => ({
+        setTimeSlots(
+          slotsWithId.map(slot => ({
             ...slot,
             fullness: fullnessMap.get(slot.id) || 0,
           }))
         );
       } catch (error) {
-        console.error('Doluluk hesaplanırken hata:', error);
+        console.error('❌ Doluluk hesaplanırken hata:', error);
       }
     };
 
     fetchFullness();
-  }, [selectedDate, boatId, boatCapacity]);
+  }, [selectedDate, currentBoat]);
   const getFullnessColor = (fullness: number) => {
     if (fullness >= 0.8) return 'from-red-500 to-red-600';
     if (fullness >= 0.5) return 'from-yellow-500 to-yellow-600';

@@ -235,3 +235,213 @@ exports.onReservationCancelled = functions
       console.error("❌ İptal function hatası:", err);
     }
   });
+
+// ============================================================
+// 📩 WHATSAPP WEBHOOK - Gelen Mesajları Yakala ve Otomatik Cevap Ver
+// ============================================================
+
+// Environment variables
+const WA_VERIFY_TOKEN = process.env.WA_VERIFY_TOKEN || "baliksefasi_webhook_2024";
+const WA_TOKEN = process.env.WA_TOKEN || accessToken; // Mevcut token'ı kullan
+const WA_PHONE_NUMBER_ID = process.env.WA_PHONE_NUMBER_ID || phoneId; // Mevcut phone ID'yi kullan
+
+// İptal/değişiklik anahtar kelimeleri
+const CANCEL_KEYWORDS = ["iptal", "cancel", "vazgeç", "vazgec", "değiş", "degis", "değişiklik", "degisiklik"];
+
+/**
+ * Mesaj içeriğinde iptal/değişiklik kelimesi var mı kontrol et
+ * Türkçe karakterler için özel lowercase işlemi
+ */
+function containsCancelKeyword(message) {
+  if (!message) return false;
+  // Türkçe İ -> i ve I -> ı dönüşümü için toLocaleLowerCase('tr-TR') kullan
+  const lowerMessage = message.toLocaleLowerCase('tr-TR').trim();
+  return CANCEL_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+}
+
+/**
+ * WhatsApp'a otomatik cevap gönder (text mesajı - 24 saat penceresi içinde)
+ */
+async function sendAutoReply(to, messageText) {
+  try {
+    const apiUrl = `https://graph.facebook.com/v22.0/${WA_PHONE_NUMBER_ID}/messages`;
+    
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${WA_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: to,
+        type: "text",
+        text: {
+          preview_url: false,
+          body: messageText,
+        },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.messages) {
+      console.log("✅ Otomatik cevap gönderildi:", to);
+      return true;
+    } else {
+      console.error("❌ Otomatik cevap gönderilemedi:", data);
+      return false;
+    }
+  } catch (err) {
+    console.error("❌ sendAutoReply hatası:", err.message);
+    return false;
+  }
+}
+
+/**
+ * 🔗 WhatsApp Webhook Endpoint
+ * GET  → Meta doğrulama (hub.challenge)
+ * POST → Gelen mesajları yakala ve otomatik cevap ver
+ */
+exports.whatsappWebhook = functions
+  .region("us-central1")
+  .https.onRequest(async (req, res) => {
+    // ============ GET: Meta Webhook Doğrulama ============
+    if (req.method === "GET") {
+      const mode = req.query["hub.mode"];
+      const token = req.query["hub.verify_token"];
+      const challenge = req.query["hub.challenge"];
+
+      console.log("🔐 Webhook doğrulama isteği alındı");
+
+      if (mode === "subscribe" && token === WA_VERIFY_TOKEN) {
+        console.log("✅ Webhook doğrulandı!");
+        res.status(200).send(challenge);
+      } else {
+        console.error("❌ Webhook doğrulama başarısız - Token eşleşmiyor");
+        res.status(403).send("Forbidden");
+      }
+      return;
+    }
+
+    // ============ POST: Gelen Mesajları İşle ============
+    if (req.method === "POST") {
+      try {
+        const body = req.body;
+
+        // Meta'nın beklediği 200 OK'u hemen dön (timeout önleme)
+        res.status(200).send("EVENT_RECEIVED");
+
+        // Webhook payload kontrolü
+        if (!body || !body.object || body.object !== "whatsapp_business_account") {
+          console.log("ℹ️ WhatsApp dışı webhook, atlanıyor");
+          return;
+        }
+
+        // Entry ve changes kontrolü
+        const entry = body.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const value = changes?.value;
+
+        if (!value) {
+          console.log("ℹ️ Value bulunamadı, atlanıyor");
+          return;
+        }
+
+        // Mesaj kontrolü
+        const messages = value.messages;
+        if (!messages || messages.length === 0) {
+          console.log("ℹ️ Mesaj yok (status update olabilir), atlanıyor");
+          return;
+        }
+
+        // Her mesajı işle
+        for (const message of messages) {
+          const from = message.from; // Gönderen telefon numarası
+          const messageType = message.type;
+          const timestamp = message.timestamp;
+
+          console.log(`📩 Gelen mesaj: ${from} | Tip: ${messageType} | Zaman: ${timestamp}`);
+
+          // Sadece text mesajlarını işle
+          if (messageType !== "text") {
+            console.log(`ℹ️ Text olmayan mesaj tipi: ${messageType}, genel cevap gönderiliyor`);
+            
+            // Text olmayan mesajlar için genel cevap
+            const generalReply = `⚠️ *Otomatik Bilgilendirme*
+
+Bu hat mesaj okumaz.
+
+📌 *Tüm işlemler için:*
+https://baliksefasi.com/rezervasyon-sorgula
+
+📞 *Destek:* +90 531 089 25 37`;
+
+            await sendAutoReply(from, generalReply);
+            continue;
+          }
+
+          // Text mesaj içeriği
+          const textBody = message.text?.body || "";
+          console.log(`💬 Mesaj içeriği: "${textBody}"`);
+
+          // İptal/değişiklik kelimesi var mı?
+          const isCancelRequest = containsCancelKeyword(textBody);
+
+          let replyMessage;
+
+          if (isCancelRequest) {
+            console.log("🚨 İptal/Değişiklik talebi tespit edildi!");
+            
+            replyMessage = `⚠️ *Otomatik Bilgilendirme*
+
+Bu hat mesaj okumaz.
+
+❌ *İptal / Değişiklik işlemleri sadece buradan yapılır:*
+https://baliksefasi.com/rezervasyon-sorgula
+
+📞 *Destek:* +90 531 089 25 37`;
+          } else {
+            console.log("ℹ️ Genel mesaj, standart cevap gönderiliyor");
+            
+            replyMessage = `⚠️ *Otomatik Bilgilendirme*
+
+Bu hat mesaj okumaz.
+
+📌 *Tüm işlemler için:*
+https://baliksefasi.com/rezervasyon-sorgula
+
+📞 *Destek:* +90 531 089 25 37`;
+          }
+
+          // Otomatik cevap gönder
+          await sendAutoReply(from, replyMessage);
+
+          // Gelen mesajı Firestore'a kaydet (opsiyonel - debug için)
+          try {
+            await admin.firestore().collection("whatsapp_incoming").add({
+              from: from,
+              message: textBody,
+              messageType: messageType,
+              isCancelRequest: isCancelRequest,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              rawTimestamp: timestamp,
+              replySent: true,
+            });
+            console.log("📝 Mesaj Firestore'a kaydedildi");
+          } catch (dbErr) {
+            console.error("⚠️ Firestore kayıt hatası (kritik değil):", dbErr.message);
+          }
+        }
+
+      } catch (err) {
+        console.error("❌ Webhook POST hatası:", err.message);
+        // Hata olsa bile 200 dönmüş olduk (timeout önleme)
+      }
+      return;
+    }
+
+    // Diğer HTTP metodları
+    res.status(405).send("Method Not Allowed");
+  });

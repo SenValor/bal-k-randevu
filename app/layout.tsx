@@ -1,15 +1,7 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/ui/Navbar";
 import { AuthProvider } from "@/context/AuthContext";
-
-const poppins = Poppins({
-  weight: ['300', '400', '500', '600', '700'],
-  subsets: ["latin"],
-  variable: "--font-poppins",
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: "Balık Sefası - Tekne Kiralama & Balık Avı Turları",
@@ -23,7 +15,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr" className="scroll-smooth">
-      <body className={`${poppins.variable} font-sans overflow-x-hidden`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+      </head>
+      <body className="font-sans overflow-x-hidden">
         <AuthProvider>
           <Navbar />
           {children}

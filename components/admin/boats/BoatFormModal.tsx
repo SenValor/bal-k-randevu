@@ -1,10 +1,10 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Loader2, Plus, Trash2, Anchor, Image as ImageIcon, Upload, Fish } from 'lucide-react';
+import { X, Loader2, Plus, Trash2, Anchor, Image as ImageIcon, Upload, Fish, Calendar, Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Boat, BoatFormData, addBoat, updateBoat, TimeSlot } from '@/lib/boatHelpers';
+import { Boat, BoatFormData, addBoat, updateBoat, TimeSlot, ScheduledTimeSlots } from '@/lib/boatHelpers';
 import { storage } from '@/lib/firebaseClient';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -43,6 +43,7 @@ export default function BoatFormModal({
     startDate: '',
     endDate: '',
     timeSlots: [],
+    scheduledTimeSlots: [],
     isActive: true,
   });
 
@@ -65,6 +66,7 @@ export default function BoatFormModal({
         startDate: boat.startDate,
         endDate: boat.endDate,
         timeSlots: boat.timeSlots,
+        scheduledTimeSlots: boat.scheduledTimeSlots || [],
         isActive: boat.isActive,
       });
     } else if (isOpen) {
@@ -85,6 +87,7 @@ export default function BoatFormModal({
         startDate: '',
         endDate: '',
         timeSlots: [],
+        scheduledTimeSlots: [],
         isActive: true,
       });
     }
@@ -207,6 +210,73 @@ export default function BoatFormModal({
     const newTimeSlots = [...formData.timeSlots];
     newTimeSlots[index] = { ...newTimeSlots[index], [field]: value };
     setFormData({ ...formData, timeSlots: newTimeSlots });
+  };
+
+  // Tarih bazlı saat dilimi ekleme
+  const handleAddScheduledTimeSlots = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    
+    setFormData({
+      ...formData,
+      scheduledTimeSlots: [
+        ...(formData.scheduledTimeSlots || []),
+        {
+          effectiveDate: tomorrowStr,
+          timeSlots: formData.timeSlots.length > 0 
+            ? JSON.parse(JSON.stringify(formData.timeSlots)) // Mevcut saatleri kopyala
+            : [{ start: '09:00', end: '12:00', displayName: 'Sabah Turu', baitWarning: false }],
+        },
+      ],
+    });
+  };
+
+  const handleRemoveScheduledTimeSlots = (index: number) => {
+    setFormData({
+      ...formData,
+      scheduledTimeSlots: (formData.scheduledTimeSlots || []).filter((_, i) => i !== index),
+    });
+  };
+
+  const handleScheduledDateChange = (index: number, newDate: string) => {
+    const newScheduled = [...(formData.scheduledTimeSlots || [])];
+    newScheduled[index] = { ...newScheduled[index], effectiveDate: newDate };
+    setFormData({ ...formData, scheduledTimeSlots: newScheduled });
+  };
+
+  const handleScheduledTimeSlotChange = (
+    scheduleIndex: number,
+    slotIndex: number,
+    field: keyof TimeSlot,
+    value: string | boolean
+  ) => {
+    const newScheduled = [...(formData.scheduledTimeSlots || [])];
+    const newTimeSlots = [...newScheduled[scheduleIndex].timeSlots];
+    newTimeSlots[slotIndex] = { ...newTimeSlots[slotIndex], [field]: value };
+    newScheduled[scheduleIndex] = { ...newScheduled[scheduleIndex], timeSlots: newTimeSlots };
+    setFormData({ ...formData, scheduledTimeSlots: newScheduled });
+  };
+
+  const handleAddScheduledTimeSlot = (scheduleIndex: number) => {
+    const newScheduled = [...(formData.scheduledTimeSlots || [])];
+    newScheduled[scheduleIndex] = {
+      ...newScheduled[scheduleIndex],
+      timeSlots: [
+        ...newScheduled[scheduleIndex].timeSlots,
+        { start: '09:00', end: '12:00', displayName: 'Yeni Tur', baitWarning: false },
+      ],
+    };
+    setFormData({ ...formData, scheduledTimeSlots: newScheduled });
+  };
+
+  const handleRemoveScheduledTimeSlot = (scheduleIndex: number, slotIndex: number) => {
+    const newScheduled = [...(formData.scheduledTimeSlots || [])];
+    newScheduled[scheduleIndex] = {
+      ...newScheduled[scheduleIndex],
+      timeSlots: newScheduled[scheduleIndex].timeSlots.filter((_, i) => i !== slotIndex),
+    };
+    setFormData({ ...formData, scheduledTimeSlots: newScheduled });
   };
 
   if (!mounted) return null;
@@ -619,6 +689,146 @@ export default function BoatFormModal({
                     <p className="text-white/40 text-sm text-center py-4">
                       Henüz zaman dilimi eklenmedi
                     </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Tarih Bazlı Saat Değişiklikleri */}
+              <div className="border-t border-white/10 pt-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <label className="block text-white/80 text-sm font-medium flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-purple-400" />
+                      Planlı Saat Değişiklikleri
+                    </label>
+                    <p className="text-white/40 text-xs mt-1">
+                      Belirli bir tarihten itibaren geçerli olacak yeni saatler ekleyin
+                    </p>
+                  </div>
+                  <motion.button
+                    type="button"
+                    onClick={handleAddScheduledTimeSlots}
+                    disabled={loading}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Yeni Plan Ekle
+                  </motion.button>
+                </div>
+
+                <div className="space-y-4">
+                  {(formData.scheduledTimeSlots || []).map((schedule, scheduleIndex) => (
+                    <div key={scheduleIndex} className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4">
+                      {/* Geçerlilik Tarihi */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <Clock className="w-5 h-5 text-purple-400" />
+                          <div>
+                            <label className="block text-white/60 text-xs mb-1">Geçerlilik Başlangıcı</label>
+                            <input
+                              type="date"
+                              value={schedule.effectiveDate}
+                              onChange={(e) => handleScheduledDateChange(scheduleIndex, e.target.value)}
+                              disabled={loading}
+                              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-400 outline-none transition-all disabled:opacity-50"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveScheduledTimeSlots(scheduleIndex)}
+                          disabled={loading}
+                          className="text-red-400 hover:text-red-300 p-2 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Bu plan için saat dilimleri */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/60 text-xs">Bu tarihten itibaren geçerli saatler:</span>
+                          <button
+                            type="button"
+                            onClick={() => handleAddScheduledTimeSlot(scheduleIndex)}
+                            disabled={loading}
+                            className="text-purple-400 hover:text-purple-300 text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Saat Ekle
+                          </button>
+                        </div>
+
+                        {schedule.timeSlots.map((slot, slotIndex) => (
+                          <div key={slotIndex} className="bg-white/5 border border-white/10 rounded-lg p-3">
+                            <div className="grid grid-cols-4 gap-2">
+                              <div>
+                                <label className="block text-white/40 text-xs mb-1">Başlangıç</label>
+                                <input
+                                  type="time"
+                                  value={slot.start}
+                                  onChange={(e) => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'start', e.target.value)}
+                                  disabled={loading}
+                                  className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:border-purple-400 outline-none transition-all disabled:opacity-50"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-white/40 text-xs mb-1">Bitiş</label>
+                                <input
+                                  type="time"
+                                  value={slot.end}
+                                  onChange={(e) => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'end', e.target.value)}
+                                  disabled={loading}
+                                  className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:border-purple-400 outline-none transition-all disabled:opacity-50"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-white/40 text-xs mb-1">Ad</label>
+                                <input
+                                  type="text"
+                                  value={slot.displayName}
+                                  onChange={(e) => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'displayName', e.target.value)}
+                                  disabled={loading}
+                                  placeholder="Sabah Turu"
+                                  className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs placeholder-white/30 focus:border-purple-400 outline-none transition-all disabled:opacity-50"
+                                />
+                              </div>
+                              <div className="flex items-end">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveScheduledTimeSlot(scheduleIndex, slotIndex)}
+                                  disabled={loading || schedule.timeSlots.length <= 1}
+                                  className="text-red-400 hover:text-red-300 p-1.5 hover:bg-red-500/10 rounded transition-colors disabled:opacity-30"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Özet bilgi */}
+                      <div className="mt-3 pt-3 border-t border-white/10">
+                        <p className="text-purple-300/60 text-xs">
+                          📅 {new Date(schedule.effectiveDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })} tarihinden itibaren {schedule.timeSlots.length} saat dilimi aktif olacak
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+
+                  {(!formData.scheduledTimeSlots || formData.scheduledTimeSlots.length === 0) && (
+                    <div className="text-center py-6 bg-white/5 border border-dashed border-white/10 rounded-xl">
+                      <Calendar className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                      <p className="text-white/40 text-sm">
+                        Henüz planlı saat değişikliği yok
+                      </p>
+                      <p className="text-white/30 text-xs mt-1">
+                        İleride geçerli olacak farklı saatler eklemek için "Yeni Plan Ekle" butonunu kullanın
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>

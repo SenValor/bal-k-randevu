@@ -18,6 +18,41 @@ export interface TimeSlot {
   baitWarning?: boolean; // Yem uyarısı aktif mi?
 }
 
+// Tarih bazlı saat dilimi planlaması
+export interface ScheduledTimeSlots {
+  effectiveDate: string; // YYYY-MM-DD formatında - bu tarihten itibaren geçerli
+  timeSlots: TimeSlot[];
+}
+
+/**
+ * Belirli bir tarih için geçerli saat dilimlerini döndürür
+ * En son geçerli olan schedule'ı bulur
+ */
+export function getTimeSlotsForDate(
+  scheduledTimeSlots: ScheduledTimeSlots[] | undefined,
+  fallbackTimeSlots: TimeSlot[],
+  targetDate: string
+): TimeSlot[] {
+  if (!scheduledTimeSlots || scheduledTimeSlots.length === 0) {
+    return fallbackTimeSlots;
+  }
+
+  // Tarihe göre sırala (en yeni önce)
+  const sortedSchedules = [...scheduledTimeSlots].sort(
+    (a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime()
+  );
+
+  // targetDate için geçerli olan en son schedule'ı bul
+  for (const schedule of sortedSchedules) {
+    if (schedule.effectiveDate <= targetDate) {
+      return schedule.timeSlots;
+    }
+  }
+
+  // Hiçbir schedule geçerli değilse fallback kullan
+  return fallbackTimeSlots;
+}
+
 export interface Boat {
   id: string;
   name: string;
@@ -34,7 +69,8 @@ export interface Boat {
     private: boolean;
     fishingSwimming: boolean;
   };
-  timeSlots: TimeSlot[];
+  timeSlots: TimeSlot[]; // Varsayılan saat dilimleri (geriye uyumluluk için)
+  scheduledTimeSlots?: ScheduledTimeSlots[]; // Tarih bazlı saat dilimleri
   isActive: boolean;
   createdAt: string;
   updatedAt?: string;

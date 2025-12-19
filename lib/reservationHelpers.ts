@@ -74,26 +74,33 @@ export async function addReservation(
 
 /**
  * Belirli bir tekne, tarih ve saat için rezervasyonları getirir
+ * timeSlotId: index numarası (geriye uyumluluk için)
+ * timeSlotStart ve timeSlotEnd: saat aralığı
+ * timeSlotDisplayName: tur adı (Sabah Turu, Öğle Turu vb.) - saat değişse bile eşleştirme için
  */
 export async function getReservationsByBoatDateSlot(
   boatId: string,
   date: string,
-  timeSlotId: string
+  timeSlotId: string,
+  timeSlotStart?: string,
+  timeSlotEnd?: string,
+  timeSlotDisplayName?: string
 ): Promise<Reservation[]> {
   try {
     console.log('🔍 Rezervasyonlar çekiliyor:', { 
       boatId, 
       date, 
       timeSlotId,
+      timeSlotStart,
+      timeSlotEnd,
       timeSlotIdType: typeof timeSlotId
     });
 
-    // Yeni format için query - sadece boatId ve timeSlotId'ye göre
-    // Çünkü date field'ı bazen "2025-10-09" bazen "2025-10-09T21:00:00.000Z" olabiliyor
+    // Yeni format için query - sadece boatId'ye göre çek, filtrelemeyi sonra yap
+    // Çünkü timeSlotId değişebilir, ama timeSlotDisplay içindeki saat aralığı sabit kalır
     const q = query(
       collection(db, 'reservations'),
       where('boatId', '==', boatId),
-      where('timeSlotId', '==', timeSlotId),
       where('status', 'in', ['pending', 'confirmed'])
     );
 
@@ -115,7 +122,37 @@ export async function getReservationsByBoatDateSlot(
     console.log(`✅ Yeni format rezervasyon: ${snapshot.size}`);
     console.log(`✅ Eski format rezervasyon: ${snapshotOld.size}`);
 
-    // Yeni format rezervasyonlar - tarih filtresi uygula
+    // Saat aralığı eşleştirme için yardımcı fonksiyon
+    const extractTimeRange = (timeSlotDisplay: string): string | null => {
+      if (!timeSlotDisplay) return null;
+      // "Sabah Turu (07:00 - 13:00)" -> "07:00-13:00"
+      const match = timeSlotDisplay.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      if (match) {
+        return `${match[1]}-${match[2]}`;
+      }
+      return null;
+    };
+
+    // Tur adı çıkarma fonksiyonu
+    const extractTourName = (timeSlotDisplay: string): string | null => {
+      if (!timeSlotDisplay) return null;
+      // "Sabah Turu (07:00 - 13:00)" -> "Sabah Turu"
+      const match = timeSlotDisplay.match(/^([^(]+)/);
+      if (match) {
+        return match[1].trim().toLowerCase();
+      }
+      return timeSlotDisplay.toLowerCase().trim();
+    };
+
+    // Aranan saat aralığı ve tur adı
+    const targetTimeRange = timeSlotStart && timeSlotEnd 
+      ? `${timeSlotStart}-${timeSlotEnd}` 
+      : null;
+    const targetTourName = timeSlotDisplayName 
+      ? timeSlotDisplayName.toLowerCase().trim()
+      : null;
+
+    // Yeni format rezervasyonlar - tarih ve saat filtresi uygula
     snapshot.forEach((doc) => {
       const data = doc.data();
       
@@ -129,26 +166,60 @@ export async function getReservationsByBoatDateSlot(
         
         // Tarih eşleşiyor mu kontrol et
         if (reservationDate === date) {
-          console.log('📋 Yeni rezervasyon:', {
-            id: doc.id,
-            boatId: data.boatId,
-            date: data.date,
-            normalizedDate: reservationDate,
-            timeSlotId: data.timeSlotId,
-            seats: data.selectedSeats,
-            status: data.status
-          });
+          // Saat/tur eşleştirme kontrolü - birden fazla yöntem dene
+          let timeMatches = false;
           
-          reservations.push({
-            id: doc.id,
-            ...data,
-          } as Reservation);
-        } else {
-          console.log('⏭️ Tarih eşleşmedi:', {
-            expected: date,
-            got: reservationDate,
-            original: data.date
-          });
+          const reservationTimeRange = extractTimeRange(data.timeSlotDisplay);
+          const reservationTourName = extractTourName(data.timeSlotDisplay);
+          
+          // Yöntem 1: Tur adı bazlı eşleştirme (saat değişse bile çalışır)
+          if (targetTourName && reservationTourName) {
+            timeMatches = reservationTourName === targetTourName;
+            console.log('🏷️ Tur adı eşleştirme:', {
+              targetTourName,
+              reservationTourName,
+              matches: timeMatches
+            });
+          }
+          
+          // Yöntem 2: Saat aralığı bazlı eşleştirme (tur adı eşleşmezse)
+          if (!timeMatches && targetTimeRange && reservationTimeRange) {
+            timeMatches = reservationTimeRange === targetTimeRange;
+            console.log('🕐 Saat eşleştirme:', {
+              target: targetTimeRange,
+              reservation: reservationTimeRange,
+              matches: timeMatches
+            });
+          }
+          
+          // Yöntem 3: timeSlotId bazlı eşleştirme (diğerleri eşleşmezse)
+          if (!timeMatches) {
+            timeMatches = data.timeSlotId === timeSlotId;
+            console.log('🔢 TimeSlotId eşleştirme:', {
+              target: timeSlotId,
+              reservation: data.timeSlotId,
+              matches: timeMatches
+            });
+          }
+          
+          if (timeMatches) {
+            console.log('📋 Yeni rezervasyon bulundu:', {
+              id: doc.id,
+              boatId: data.boatId,
+              date: data.date,
+              normalizedDate: reservationDate,
+              timeSlotId: data.timeSlotId,
+              timeSlotDisplay: data.timeSlotDisplay,
+              tourName: reservationTourName,
+              seats: data.selectedSeats,
+              status: data.status
+            });
+            
+            reservations.push({
+              id: doc.id,
+              ...data,
+            } as Reservation);
+          }
         }
       }
     });
@@ -423,17 +494,28 @@ export function calculateFullness(
 
 /**
  * Belirli bir saat dilimi için doluluk hesaplar
+ * timeSlotDisplayName ile tur adı bazlı eşleştirme yapılır (saat değişse bile çalışır)
  */
 export async function getTimeSlotFullness(
   boatId: string,
   date: string,
   timeSlotId: string,
-  boatCapacity: number
+  boatCapacity: number,
+  timeSlotStart?: string,
+  timeSlotEnd?: string,
+  timeSlotDisplayName?: string
 ): Promise<number> {
-  const reservations = await getReservationsByBoatDateSlot(boatId, date, timeSlotId);
+  const reservations = await getReservationsByBoatDateSlot(
+    boatId, 
+    date, 
+    timeSlotId, 
+    timeSlotStart, 
+    timeSlotEnd,
+    timeSlotDisplayName
+  );
   const fullness = calculateFullness(reservations, boatCapacity);
   
-  console.log(`Saat doluluk - ${date} ${timeSlotId}:`, {
+  console.log(`Saat doluluk - ${date} ${timeSlotDisplayName || timeSlotStart || timeSlotId}:`, {
     rezervasyonSayisi: reservations.length,
     doluKoltuklar: getOccupiedSeats(reservations),
     kapasite: boatCapacity,
@@ -445,17 +527,26 @@ export async function getTimeSlotFullness(
 
 /**
  * Bir tarih için tüm saat dilimlerinin doluluk oranlarını hesaplar
+ * TimeSlot objesi ile tur adı bazlı eşleştirme yapılır (saat değişse bile çalışır)
  */
 export async function getAllTimeSlotsFullness(
   boatId: string,
   date: string,
-  timeSlots: { id: string }[],
+  timeSlots: { id: string; start?: string; end?: string; displayName?: string }[],
   boatCapacity: number
 ): Promise<Map<string, number>> {
   const fullnessMap = new Map<string, number>();
 
   for (const slot of timeSlots) {
-    const fullness = await getTimeSlotFullness(boatId, date, slot.id, boatCapacity);
+    const fullness = await getTimeSlotFullness(
+      boatId, 
+      date, 
+      slot.id, 
+      boatCapacity,
+      slot.start,
+      slot.end,
+      slot.displayName
+    );
     fullnessMap.set(slot.id, fullness);
   }
 
