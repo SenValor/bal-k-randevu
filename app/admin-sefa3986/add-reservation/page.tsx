@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar as CalendarIcon, Clock, Users, Ship, User, Phone, Mail, Loader2, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
-import { Boat, subscribeToBoats } from '@/lib/boatHelpers';
+import { Boat, subscribeToBoats, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { Tour, subscribeToTours } from '@/lib/tourHelpers';
 import { getReservationsByBoatDateSlot, getCalendarFullness } from '@/lib/reservationHelpers';
 import SeatMap from '@/components/reservation/SeatMap';
@@ -52,10 +52,10 @@ export default function AdminAddReservationPage() {
   const [loadingTimeSlots, setLoadingTimeSlots] = useState(false);
 
   const defaultTimeSlots = [
-    { id: '09:00-12:00', label: '09:00 - 12:00' },
-    { id: '12:00-15:00', label: '12:00 - 15:00' },
-    { id: '15:00-18:00', label: '15:00 - 18:00' },
-    { id: '18:00-21:00', label: '18:00 - 21:00' },
+    { start: '09:00', end: '12:00', displayName: 'Sabah Turu' },
+    { start: '12:00', end: '15:00', displayName: 'Öğle Turu' },
+    { start: '15:00', end: '18:00', displayName: 'İkindi Turu' },
+    { start: '18:00', end: '21:00', displayName: 'Akşam Turu' },
   ];
 
   useEffect(() => {
@@ -140,12 +140,19 @@ export default function AdminAddReservationPage() {
     const startDate = new Date(year, month, 1);
     const endDate = new Date(year, month + 3, 0); // 3 ay sonrasının son günü
 
+    // Başlangıç tarihi için saat dilimi sayısını al (planlı saat değişikliği desteği)
+    const timeSlotsForDate = getTimeSlotsForDate(
+      boat.scheduledTimeSlots,
+      boat.timeSlots && boat.timeSlots.length > 0 ? boat.timeSlots : defaultTimeSlots,
+      startDate.toISOString().split('T')[0]
+    );
+
     console.log('📅 Doluluk verisi yükleniyor:', {
       boatId: selectedBoatId,
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
       capacity: boat.capacity,
-      timeSlots: defaultTimeSlots.length
+      timeSlots: timeSlotsForDate.length
     });
 
     const fullnessMap = await getCalendarFullness(
@@ -153,7 +160,7 @@ export default function AdminAddReservationPage() {
       startDate.toISOString().split('T')[0],
       endDate.toISOString().split('T')[0],
       boat.capacity,
-      defaultTimeSlots.length
+      timeSlotsForDate.length
     );
 
     console.log('✅ Doluluk verisi yüklendi:', {
@@ -174,10 +181,13 @@ export default function AdminAddReservationPage() {
     try {
       const slotsWithFullness: TimeSlot[] = [];
 
-      // Tekneden gelen timeSlots'u kullan, yoksa default'u kullan
-      const boatTimeSlots = selectedBoat.timeSlots && selectedBoat.timeSlots.length > 0
-        ? selectedBoat.timeSlots
-        : defaultTimeSlots;
+      // Planlı saat değişikliği sistemini kullan (scheduledTimeSlots)
+      // Seçilen tarihe göre doğru saat dilimlerini al
+      const boatTimeSlots = getTimeSlotsForDate(
+        selectedBoat.scheduledTimeSlots,
+        selectedBoat.timeSlots && selectedBoat.timeSlots.length > 0 ? selectedBoat.timeSlots : defaultTimeSlots,
+        selectedDate
+      );
 
       for (let index = 0; index < boatTimeSlots.length; index++) {
         const slot = boatTimeSlots[index];

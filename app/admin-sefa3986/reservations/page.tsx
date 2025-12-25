@@ -27,6 +27,7 @@ import { db } from '@/lib/firebaseClient';
 import { Reservation } from '@/lib/reservationHelpers';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
+import { getTimeSlotsForDate } from '@/lib/boatHelpers';
 
 export default function AdminReservationsPage() {
   const router = useRouter();
@@ -424,6 +425,46 @@ export default function AdminReservationsPage() {
     return "90" + cleaned;
   };
 
+  // Gerçek zamanlı saat bilgisini al (planlı saat değişikliği desteği)
+  const getRealTimeSlotDisplay = (reservation: Reservation): string => {
+    // Rezervasyonun teknesini bul
+    const boat = boats.find(b => b.id === reservation.boatId);
+    if (!boat) {
+      // Tekne bulunamazsa kayıtlı bilgiyi göster
+      return reservation.timeSlotDisplay || 'Belirtilmemiş';
+    }
+
+    // Rezervasyon tarihine göre doğru saat dilimlerini al
+    const timeSlots = getTimeSlotsForDate(
+      boat.scheduledTimeSlots,
+      boat.timeSlots || [],
+      reservation.date
+    );
+
+    // timeSlotId'yi parse et (index veya start-end formatı olabilir)
+    const slotIndex = parseInt(reservation.timeSlotId);
+    const slot = !isNaN(slotIndex) && slotIndex >= 0 && slotIndex < timeSlots.length
+      ? timeSlots[slotIndex]
+      : timeSlots.find((s: any) => 
+          s.id === reservation.timeSlotId || 
+          `${s.start}-${s.end}` === reservation.timeSlotId
+        );
+
+    if (!slot) {
+      // Slot bulunamazsa kayıtlı bilgiyi göster
+      return reservation.timeSlotDisplay || 'Belirtilmemiş';
+    }
+
+    // Güncel saat bilgisini formatla
+    const displayName = (slot as any).displayName || '';
+    const start = (slot as any).start || '';
+    const end = (slot as any).end || '';
+    
+    return displayName 
+      ? `${displayName} (${start} - ${end})`
+      : `${start} - ${end}`;
+  };
+
   // WhatsApp Onay Mesajı Gönder (Manuel - WhatsApp Web)
   const sendApprovalMessage = (reservation: Reservation) => {
     if (!reservation.userPhone) {
@@ -435,6 +476,7 @@ export default function AdminReservationsPage() {
     const formattedDate = formatDateTurkish(reservation.date);
     const seats = reservation.selectedSeats?.join(", ") || "";
     const locationLink = reservation.boatMapsLink || "";
+    const realTimeSlot = getRealTimeSlotDisplay(reservation);
 
     const message = `🐟 Balık Sefası
 
@@ -444,7 +486,7 @@ Rezervasyonunuz onaylandı! 🎉
 
 🎫 Rezervasyon No: ${reservation.reservationNumber || ""}
 📅 Tarih: ${formattedDate}
-🕐 Saat: ${reservation.timeSlotDisplay || "Belirtilmemiş"}
+🕐 Saat: ${realTimeSlot}
 ⛵ Tekne: ${reservation.boatName || "BALIK SEFASI"}
 💺 Koltuklar: ${seats}
 ${locationLink ? `📍 Konum: ${locationLink}` : ''}
@@ -469,6 +511,7 @@ www.baliksefasi.com`;
     const formattedPhone = formatPhoneForWhatsApp(reservation.userPhone);
     const formattedDate = formatDateTurkish(reservation.date);
     const locationLink = reservation.boatMapsLink || "";
+    const realTimeSlot = getRealTimeSlotDisplay(reservation);
 
     const message = `🐟 Balık Sefası
 
@@ -478,7 +521,7 @@ Rezervasyonunuz iptal edildi.
 
 🎫 Rezervasyon No: ${reservation.reservationNumber || ""}
 📅 Tarih: ${formattedDate}
-🕐 Saat: ${reservation.timeSlotDisplay || "Belirtilmemiş"}
+🕐 Saat: ${realTimeSlot}
 ⛵ Tekne: ${reservation.boatName || "BALIK SEFASI"}
 ${locationLink ? `📍 Konum: ${locationLink}` : ''}
 
@@ -547,7 +590,7 @@ www.baliksefasi.com`;
 
     // Saat dilimlerine göre grupla
     const groupedByTime = exportData.reduce((acc: any, reservation) => {
-      const timeSlot = reservation.timeSlotDisplay || 'Belirtilmemiş';
+      const timeSlot = getRealTimeSlotDisplay(reservation);
       if (!acc[timeSlot]) {
         acc[timeSlot] = [];
       }
@@ -1168,7 +1211,7 @@ www.baliksefasi.com`;
                       </div>
                       <div>
                         <p className="text-white/40 text-xs">⏰ Saat</p>
-                        <p className="text-white font-medium">{reservation.timeSlotDisplay}</p>
+                        <p className="text-white font-medium">{getRealTimeSlotDisplay(reservation)}</p>
                       </div>
                     </div>
 
@@ -1522,7 +1565,7 @@ www.baliksefasi.com`;
                 </div>
                 <div>
                   <p className="text-white/40">Saat</p>
-                  <p className="text-white font-medium">{editingReservation.timeSlotDisplay}</p>
+                  <p className="text-white font-medium">{getRealTimeSlotDisplay(editingReservation)}</p>
                 </div>
               </div>
             </div>
