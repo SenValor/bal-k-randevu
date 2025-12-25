@@ -22,13 +22,13 @@ export default function AdminLayout({
 
   useEffect(() => {
     if (!loading) {
-      // Sadece özel admin email'ine izin ver
-      const ADMIN_EMAIL = 'baliksefasi33@admin.com';
+      // İzin verilen admin email'leri
+      const ADMIN_EMAILS = ['baliksefasi33@admin.com', 'bukre@akturk.com'];
       
       if (!user) {
         // Kullanıcı giriş yapmamış - login'e yönlendir
         router.push('/login?redirect=/admin-sefa3986');
-      } else if (user.email !== ADMIN_EMAIL) {
+      } else if (!ADMIN_EMAILS.includes(user.email || '')) {
         // Yetkisiz kullanıcı - ana sayfaya yönlendir
         alert('Bu sayfaya erişim yetkiniz yok!');
         router.push('/');
@@ -37,7 +37,8 @@ export default function AdminLayout({
   }, [user, loading, router]);
 
   // Yükleniyor veya yetkisiz ise boş ekran göster
-  if (loading || !user || user.email !== 'baliksefasi33@admin.com') {
+  const ADMIN_EMAILS = ['baliksefasi33@admin.com', 'bukre@akturk.com'];
+  if (loading || !user || !ADMIN_EMAILS.includes(user.email || '')) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#001F3F] via-[#001529] to-black flex items-center justify-center">
         <div className="text-white text-xl">Yükleniyor...</div>
