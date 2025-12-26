@@ -1,6 +1,7 @@
 /**
  * 🐟 Balık Sefası - WhatsApp Bildirim Sistemi (ŞABLONLU)
  * Firebase Functions v3 + Node.js 22
+ * Updated: 2025-12-26 16:00 - Dynamic Token
  */
 
 require("dotenv").config();
@@ -9,11 +10,20 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-const accessToken = process.env.META_ACCESS_TOKEN;
-const phoneId = process.env.META_PHONE_ID;
+// Token - Doğrudan tanımlı (Firebase Functions v1 .env'i production'a yüklemez)
+const META_TOKEN = "EAAMfyFpCzHsBQXGU4hhiUZBTTN2bDaz0LTQJybYPHzYTTX00ZB9ZBCmgVciNoqS1rEeTc4LZCJMYa1yLZAuJzaGK59KT10NgLXRb6PZAp6Kw3vMEQdpqp42pkeJg98ZA4NUaNXBZCzU8yKG7sz8Pku2oaZB5rWI1M6yRZBKm5pQVGe9NVZBThUyg5fAZCTZBMOeBxcdSB09PHJE2ZB85qFBVGj3VS6GjCj8qgTo0MgRGlorUoRgipbWYgQvvniFauejdbJ282XucYJPkXJFZClfOQNHPJGKUAYlAy96h8quuDUZD";
+const META_PHONE = "797993213405372";
 
-console.log("🔥 ENV META_ACCESS_TOKEN:", accessToken ? "Var ✅" : "Yok ❌");
-console.log("🔥 ENV META_PHONE_ID:", phoneId ? "Var ✅" : "Yok ❌");
+function getAccessToken() {
+  return META_TOKEN;
+}
+
+function getPhoneId() {
+  return META_PHONE;
+}
+
+console.log("🔥 META_ACCESS_TOKEN:", getAccessToken() ? "Var ✅" : "Yok ❌");
+console.log("🔥 META_PHONE_ID:", getPhoneId() ? "Var ✅" : "Yok ❌");
 
 // 📱 Telefon formatlama
 function formatPhoneNumber(phone) {
@@ -82,13 +92,18 @@ exports.onReservationApproved = functions
 
       console.log(`📱 Formatlanmış telefon: +${formattedPhone}`);
 
-      // 🚀 TEMPLATE mesajı gönder
-      const apiUrl = `https://graph.facebook.com/v22.0/${phoneId}/messages`;
+      // 🚀 TEMPLATE mesajı gönder - Token'ı dinamik al
+      const currentToken = getAccessToken();
+      const currentPhoneId = getPhoneId();
+      
+      console.log("🔑 Token ilk 20 karakter:", currentToken?.substring(0, 20));
+      
+      const apiUrl = `https://graph.facebook.com/v22.0/${currentPhoneId}/messages`;
 
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${currentToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -182,13 +197,18 @@ exports.onReservationCancelled = functions
 
       const formattedPhone = formatPhoneNumber(userPhone);
       const formattedDate = formatDateTurkish(date);
-      const apiUrl = `https://graph.facebook.com/v22.0/${phoneId}/messages`;
+      
+      // Token'ı dinamik al
+      const currentToken = getAccessToken();
+      const currentPhoneId = getPhoneId();
+      
+      const apiUrl = `https://graph.facebook.com/v22.0/${currentPhoneId}/messages`;
 
       // 🚀 TEMPLATE mesajı gönder
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${currentToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -240,10 +260,14 @@ exports.onReservationCancelled = functions
 // 📩 WHATSAPP WEBHOOK - Gelen Mesajları Yakala ve Otomatik Cevap Ver
 // ============================================================
 
-// Environment variables
-const WA_VERIFY_TOKEN = process.env.WA_VERIFY_TOKEN || "baliksefasi_webhook_2024";
-const WA_TOKEN = process.env.WA_TOKEN || accessToken; // Mevcut token'ı kullan
-const WA_PHONE_NUMBER_ID = process.env.WA_PHONE_NUMBER_ID || phoneId; // Mevcut phone ID'yi kullan
+// Environment variables - Production'da functions.config() kullan
+const WA_VERIFY_TOKEN = functions.config().wa?.verify_token || process.env.WA_VERIFY_TOKEN || "baliksefasi_webhook_2024";
+function getWaToken() {
+  return functions.config().wa?.token || process.env.WA_TOKEN || getAccessToken();
+}
+function getWaPhoneNumberId() {
+  return functions.config().wa?.phone_number_id || process.env.WA_PHONE_NUMBER_ID || getPhoneId();
+}
 
 // İptal/değişiklik anahtar kelimeleri
 const CANCEL_KEYWORDS = ["iptal", "cancel", "vazgeç", "vazgec", "değiş", "degis", "değişiklik", "degisiklik"];
@@ -264,12 +288,12 @@ function containsCancelKeyword(message) {
  */
 async function sendAutoReply(to, messageText) {
   try {
-    const apiUrl = `https://graph.facebook.com/v22.0/${WA_PHONE_NUMBER_ID}/messages`;
+    const apiUrl = `https://graph.facebook.com/v22.0/${getWaPhoneNumberId()}/messages`;
     
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${WA_TOKEN}`,
+        Authorization: `Bearer ${getWaToken()}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

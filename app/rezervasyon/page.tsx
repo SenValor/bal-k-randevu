@@ -5,6 +5,7 @@ import { Users, Anchor, Loader2, ArrowRight } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Boat, subscribeToBoats } from '@/lib/boatHelpers';
 import { useRouter } from 'next/navigation';
+import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
 
 export default function RezervasyonPage() {
   const [boats, setBoats] = useState<Boat[]>([]);
@@ -28,6 +29,9 @@ export default function RezervasyonPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-16 px-4">
+      {/* Yılbaşı Teması */}
+      <ReservationNewYearDecor />
+      
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}

@@ -6,6 +6,7 @@ import CalendarSection from './CalendarSection';
 import TourSlotSection from './TourSlotSection';
 import PeopleSection from './PeopleSection';
 import SeatSelectionModal from './SeatSelectionModal';
+import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
 
 export default function StepTwoReservation() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -52,6 +53,9 @@ export default function StepTwoReservation() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-32 px-4">
+      {/* Yılbaşı Teması */}
+      <ReservationNewYearDecor />
+      
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <motion.div

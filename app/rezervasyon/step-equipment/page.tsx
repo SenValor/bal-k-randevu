@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import EquipmentOptionCard from '@/components/reservation/EquipmentOptionCard';
 import PriceSummaryBox from '@/components/reservation/PriceSummaryBox';
 import StepNavigation from '@/components/reservation/StepNavigation';
+import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
 
 const PRICES = {
   adultWithGear: 1500,
@@ -134,6 +135,9 @@ export default function StepEquipment() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-32 px-4">
+      {/* Yılbaşı Teması */}
+      <ReservationNewYearDecor />
+      
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <motion.div

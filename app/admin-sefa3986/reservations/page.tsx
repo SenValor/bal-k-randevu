@@ -643,11 +643,60 @@ www.baliksefasi.com`;
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
     pdf.text(toAscii('BALIK SEFASI - Randevu Listesi'), pageWidth / 2, yPos, { align: 'center' });
-    yPos += 10;
+    yPos += 12;
+
+    // Yılbaşı Mesajı - Başlığın hemen altında
+    // Dekoratif çerçeve - Dış
+    pdf.setDrawColor(0, 169, 165);
+    pdf.setLineWidth(0.5);
+    pdf.roundedRect(margin, yPos, pageWidth - 2 * margin, 30, 2, 2, 'S');
+    
+    // Dekoratif çerçeve - İç
+    pdf.setDrawColor(107, 155, 195);
+    pdf.setLineWidth(0.2);
+    pdf.roundedRect(margin + 1.5, yPos + 1.5, pageWidth - 2 * margin - 3, 27, 1.5, 1.5, 'S');
+
+    // Arka plan rengi
+    pdf.setFillColor(232, 244, 248);
+    pdf.roundedRect(margin + 2, yPos + 2, pageWidth - 2 * margin - 4, 26, 1.5, 1.5, 'F');
+
+    const msgYPos = yPos + 8;
+    let centerX = pageWidth / 2;
+
+    // Üst dekoratif çizgi
+    pdf.setDrawColor(0, 169, 165);
+    pdf.setLineWidth(0.3);
+    pdf.line(centerX - 25, msgYPos, centerX + 25, msgYPos);
+
+    // Yıldız sembolleri
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 169, 165);
+    pdf.text('*', centerX - 28, msgYPos + 5);
+    pdf.text('*', centerX + 28, msgYPos + 5);
+
+    // Ana mesaj
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(13, 40, 71);
+    pdf.text(toAscii('Yeni yilinizi aileniz ve sevdiklerinizle guzel gecirmenizi dileriz.'), centerX, msgYPos + 5, { align: 'center' });
+
+    // Alt dekoratif çizgi
+    pdf.setDrawColor(0, 169, 165);
+    pdf.setLineWidth(0.3);
+    pdf.line(centerX - 25, msgYPos + 10, centerX + 25, msgYPos + 10);
+
+    // İmza
+    pdf.setFontSize(7);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(107, 155, 195);
+    pdf.text(toAscii('Yazilim Danismani - Huseyin Demir'), centerX, msgYPos + 15, { align: 'center' });
+
+    yPos += 35;
 
     // Bilgiler
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(0, 0, 0);
     pdf.text(toAscii(`Tarih: ${formattedDate}`), margin, yPos);
     yPos += 6;
     pdf.text(toAscii(`Tekne: ${boatName}`), margin, yPos);

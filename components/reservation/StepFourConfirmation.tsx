@@ -10,6 +10,7 @@ import { Tour } from '@/lib/tourHelpers';
 import { isPhoneBlacklisted, getBlacklistInfo } from '@/lib/blacklistHelpers';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
+import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
 
 export default function StepFourConfirmation() {
   const { user } = useAuth();
@@ -265,6 +266,7 @@ export default function StepFourConfirmation() {
   if (reservationComplete) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-32 px-4">
+        <ReservationNewYearDecor />
         <div className="max-w-2xl mx-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -361,6 +363,7 @@ export default function StepFourConfirmation() {
   if (showGuestForm && !user) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-32 px-4">
+        <ReservationNewYearDecor />
         <div className="max-w-2xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -510,6 +513,7 @@ export default function StepFourConfirmation() {
   // Üye onay sayfası
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-32 px-4">
+      <ReservationNewYearDecor />
       <div className="max-w-2xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

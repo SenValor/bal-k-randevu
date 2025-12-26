@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Compass, ArrowRight } from 'lucide-react';
 import TourTypeCard from './TourTypeCard';
 import { Tour, subscribeToTours } from '@/lib/tourHelpers';
+import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
 
 export default function StepThreeTourType() {
   const [tours, setTours] = useState<Tour[]>([]);
@@ -39,6 +40,9 @@ export default function StepThreeTourType() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-32 px-4">
+      {/* Yılbaşı Teması */}
+      <ReservationNewYearDecor />
+      
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <motion.div
