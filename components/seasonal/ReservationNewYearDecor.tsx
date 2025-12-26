@@ -128,17 +128,17 @@ export default function ReservationNewYearDecor() {
         className="fixed top-48 right-1/4 w-32 h-32 md:w-48 md:h-48 bg-gradient-to-r from-[#00A9A5]/15 to-[#6B9BC3]/15 rounded-full blur-3xl pointer-events-none z-20"
       />
 
-      {/* Yılbaşı badge - Sağ üstte adımların yanında */}
+      {/* Yılbaşı badge - Sağ üstte kompakt */}
       <motion.div
-        initial={{ x: 100, opacity: 0 }}
+        initial={{ x: 50, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.8, delay: 0.5, type: 'spring', bounce: 0.3 }}
-        className="fixed top-24 md:top-28 right-4 md:right-8 z-40 pointer-events-none"
+        transition={{ duration: 0.6, delay: 0.5, type: 'spring', bounce: 0.3 }}
+        className="fixed top-3 md:top-4 right-16 md:right-20 z-40 pointer-events-none"
       >
         <motion.div
           animate={{ 
-            rotate: [0, -3, 3, 0],
-            scale: [1, 1.05, 1],
+            rotate: [0, -2, 2, 0],
+            scale: [1, 1.03, 1],
           }}
           transition={{ 
             duration: 4, 
@@ -148,21 +148,16 @@ export default function ReservationNewYearDecor() {
           className="relative"
         >
           {/* Glow efekti */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#00A9A5]/30 to-[#6B9BC3]/30 blur-xl rounded-2xl scale-110" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#00A9A5]/20 to-[#6B9BC3]/20 blur-lg rounded-xl scale-105" />
           
-          {/* Badge */}
-          <div className="relative bg-gradient-to-br from-white via-white/95 to-white/90 backdrop-blur-xl px-3 md:px-4 py-2 md:py-3 rounded-2xl shadow-xl border-2 border-[#6B9BC3]/30">
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 md:w-4 md:h-4 text-[#00A9A5]" fill="currentColor" />
-                <span className="text-xs md:text-sm font-black bg-gradient-to-r from-[#003366] via-[#00A9A5] to-[#6B9BC3] bg-clip-text text-transparent whitespace-nowrap">
-                  2026
-                </span>
-                <Star className="w-3 h-3 md:w-4 md:h-4 text-[#6B9BC3]" fill="currentColor" />
-              </div>
-              <span className="text-[10px] md:text-xs font-semibold text-[#003366]/70 whitespace-nowrap">
-                Yeni Yılınızı Kutlarız
+          {/* Badge - Daha kompakt */}
+          <div className="relative bg-gradient-to-br from-white via-white/95 to-white/90 backdrop-blur-xl px-2 py-1 md:px-2.5 md:py-1.5 rounded-xl shadow-lg border border-[#6B9BC3]/25">
+            <div className="flex items-center gap-1">
+              <Sparkles className="w-2.5 h-2.5 md:w-3 md:h-3 text-[#00A9A5]" fill="currentColor" />
+              <span className="text-[10px] md:text-xs font-bold bg-gradient-to-r from-[#003366] to-[#00A9A5] bg-clip-text text-transparent whitespace-nowrap">
+                Mutlu Yıllar 2026
               </span>
+              <Star className="w-2.5 h-2.5 md:w-3 md:h-3 text-[#6B9BC3]" fill="currentColor" />
             </div>
           </div>
         </motion.div>
