@@ -11,11 +11,7 @@ import Services from '@/components/ui/Services';
 import PressSection from '@/components/ui/PressSection';
 import FeaturesSection from '@/components/ui/FeaturesSection';
 import Footer from '@/components/ui/Footer';
-import AdvancedSnowEffect from '@/components/seasonal/AdvancedSnowEffect';
-import FireworksEffect from '@/components/seasonal/FireworksEffect';
-import ConfettiEffect from '@/components/seasonal/ConfettiEffect';
 import NewYear2026Banner from '@/components/seasonal/NewYear2026Banner';
-import ChristmasLights from '@/components/seasonal/ChristmasLights';
 
 export default function Home() {
   const [galleryItems, setGalleryItems] = useState<any[]>([]);
@@ -49,11 +45,7 @@ export default function Home() {
 
   return (
     <main className="overflow-x-hidden bg-[#E8F4F8] snap-y snap-mandatory h-screen overflow-y-scroll">
-      {/* 🎊 2026 YILBAŞI TEMASı - ULTRA HAVALII EFEKTLER 🎉 */}
-      <ChristmasLights />
-      <AdvancedSnowEffect />
-      <FireworksEffect />
-      <ConfettiEffect />
+      {/* 🎊 2026 YILBAŞI TEMASı - Hafif ve Performanslı */}
       <NewYear2026Banner />
 
       {/* Hero Section - Full Screen */}
