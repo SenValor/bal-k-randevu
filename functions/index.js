@@ -63,10 +63,26 @@ exports.onReservationApproved = functions
 
       console.log(`🔔 Rezervasyon güncellendi: ${id}`);
       console.log(`📊 Status: ${before.status} → ${after.status}`);
+      console.log(`📋 Rezervasyon detayları:`, {
+        status: after.status,
+        whatsappSent: after.whatsappSent,
+        userName: after.userName,
+        userPhone: after.userPhone,
+        reservationNumber: after.reservationNumber
+      });
 
-      if (after.status !== "confirmed") return;
-      if (after.whatsappSent === true) return;
-      if (before.status === "confirmed" && after.status === "confirmed") return;
+      if (after.status !== "confirmed") {
+        console.log(`⏭️ Atlandı: Status confirmed değil (${after.status})`);
+        return;
+      }
+      if (after.whatsappSent === true) {
+        console.log(`⏭️ Atlandı: WhatsApp zaten gönderilmiş`);
+        return;
+      }
+      if (before.status === "confirmed" && after.status === "confirmed") {
+        console.log(`⏭️ Atlandı: Status zaten confirmed'di`);
+        return;
+      }
 
       const {
         userName = "Değerli Müşterimiz",
@@ -132,8 +148,15 @@ exports.onReservationApproved = functions
 
       const data = await response.json();
 
+      console.log("📡 WhatsApp API Response:", {
+        status: response.status,
+        ok: response.ok,
+        data: JSON.stringify(data)
+      });
+
       if (response.ok && data.messages) {
         console.log("✅ WhatsApp TEMPLATE mesajı gönderildi!");
+        console.log("📨 Message ID:", data.messages[0]?.id);
         await change.after.ref.update({
           whatsappSent: true,
           whatsappSentAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -141,10 +164,14 @@ exports.onReservationApproved = functions
           whatsappPhone: formattedPhone,
         });
       } else {
-        console.error("❌ WhatsApp API hatası:", data);
+        console.error("❌ WhatsApp API hatası:", {
+          status: response.status,
+          error: data.error,
+          fullResponse: data
+        });
         await change.after.ref.update({
           whatsappSent: false,
-          whatsappError: data.error?.message || "API hatası",
+          whatsappError: JSON.stringify(data.error) || "API hatası",
           whatsappSentAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }

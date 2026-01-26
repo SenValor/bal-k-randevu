@@ -74,6 +74,9 @@ export interface Boat {
   isActive: boolean;
   createdAt: string;
   updatedAt?: string;
+  ribbonText?: string;
+  isRibbonActive?: boolean;
+  ribbonColor?: string; // 'red' | 'blue' | 'green' | 'yellow'
 }
 
 export type BoatFormData = Omit<Boat, 'id' | 'createdAt' | 'updatedAt'>;

@@ -1,17 +1,16 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
-import { motion } from 'framer-motion';
-import Image from 'next/image';
-import Link from 'next/link';
-import HeroCinematic from '@/components/ui/HeroCinematic';
+import { useState, useEffect } from "react";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebaseClient";
+import { motion } from "framer-motion";
+import Image from "next/image";
+import Link from "next/link";
+import HeroCinematic from "@/components/ui/HeroCinematic";
 import Services from '@/components/ui/Services';
 import PressSection from '@/components/ui/PressSection';
 import FeaturesSection from '@/components/ui/FeaturesSection';
 import Footer from '@/components/ui/Footer';
-import NewYear2026Banner from '@/components/seasonal/NewYear2026Banner';
 
 export default function Home() {
   const [galleryItems, setGalleryItems] = useState<any[]>([]);
@@ -19,47 +18,47 @@ export default function Home() {
   useEffect(() => {
     const fetchGallery = async () => {
       try {
-        console.log('🔍 Firebase\'den galeri çekiliyor...');
-        const querySnapshot = await getDocs(collection(db, 'gallery'));
-        console.log('📦 Döküman sayısı:', querySnapshot.size);
-        
+        console.log("🔍 Firebase'den galeri çekiliyor...");
+        const querySnapshot = await getDocs(collection(db, "gallery"));
+        console.log("📦 Döküman sayısı:", querySnapshot.size);
+
         if (!querySnapshot.empty) {
-          const items = querySnapshot.docs.map(doc => ({
+          const items = querySnapshot.docs.map((doc) => ({
             image: doc.data().image,
             text: doc.data().text,
-            order: doc.data().order
+            order: doc.data().order,
           }));
           items.sort((a: any, b: any) => a.order - b.order);
-          console.log('✅ Galeri yüklendi:', items);
+          console.log("✅ Galeri yüklendi:", items);
           setGalleryItems(items as any);
         } else {
-          console.log('⚠️ Firebase\'de görsel yok!');
+          console.log("⚠️ Firebase'de görsel yok!");
         }
       } catch (error) {
-        console.error('❌ Galeri yükleme hatası:', error);
+        console.error("❌ Galeri yükleme hatası:", error);
       }
     };
-    
+
     fetchGallery();
   }, []);
 
   return (
     <main className="overflow-x-hidden bg-[#E8F4F8] snap-y snap-mandatory h-screen overflow-y-scroll">
-      {/* 🎊 2026 YILBAŞI TEMASı - Hafif ve Performanslı */}
-      <NewYear2026Banner />
-
       {/* Hero Section - Full Screen */}
       <section className="snap-start h-screen">
         <HeroCinematic />
       </section>
-      
+
       {/* Press Section - Full Screen */}
       <section id="basinda-biz" className="snap-start min-h-screen">
         <PressSection />
       </section>
 
       {/* Gallery Section - Full Screen */}
-      <section id="galeri" className="snap-start min-h-screen relative overflow-hidden bg-gradient-to-b from-[#0D2847] via-[#1B3A5C] to-[#0D2847] py-20">
+      <section
+        id="galeri"
+        className="snap-start min-h-screen relative overflow-hidden bg-gradient-to-b from-[#0D2847] via-[#1B3A5C] to-[#0D2847] py-20"
+      >
         <div className="container mx-auto px-4 relative z-10">
           {/* Section Header */}
           <motion.div
@@ -69,7 +68,7 @@ export default function Home() {
             transition={{ duration: 0.8 }}
             className="text-center mb-16"
           >
-            <motion.span 
+            <motion.span
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
@@ -151,7 +150,9 @@ export default function Home() {
                               <h3 className="text-white font-bold text-base mb-1">
                                 {item.text}
                               </h3>
-                              <p className="text-white/60 text-xs">Detayları gör</p>
+                              <p className="text-white/60 text-xs">
+                                Detayları gör
+                              </p>
                             </div>
                           </div>
                         </motion.div>
@@ -162,8 +163,18 @@ export default function Home() {
                 {/* Mobile Scroll Indicator */}
                 <div className="flex justify-center">
                   <div className="flex items-center gap-2 text-white/60 text-sm">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                      />
                     </svg>
                     <span>Kaydırın</span>
                   </div>
@@ -183,13 +194,18 @@ export default function Home() {
                   className="inline-flex items-center gap-3 bg-gradient-to-r from-[#6B9BC3] to-[#5B8DB8] hover:from-[#7FADD1] hover:to-[#6B9BC3] text-white font-semibold px-8 py-4 rounded-full shadow-lg hover:shadow-xl hover:shadow-[#6B9BC3]/30 transition-all duration-300 group"
                 >
                   <span>Tüm Görselleri Gör</span>
-                  <svg 
-                    className="w-5 h-5 group-hover:translate-x-1 transition-transform" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
+                  <svg
+                    className="w-5 h-5 group-hover:translate-x-1 transition-transform"
+                    fill="none"
+                    viewBox="0 0 24 24"
                     stroke="currentColor"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 8l4 4m0 0l-4 4m4-4H3"
+                    />
                   </svg>
                 </Link>
               </motion.div>

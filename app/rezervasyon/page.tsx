@@ -5,7 +5,7 @@ import { Users, Anchor, Loader2, ArrowRight } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Boat, subscribeToBoats } from '@/lib/boatHelpers';
 import { useRouter } from 'next/navigation';
-import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
+
 
 export default function RezervasyonPage() {
   const [boats, setBoats] = useState<Boat[]>([]);
@@ -30,7 +30,7 @@ export default function RezervasyonPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-16 px-4">
       {/* Yılbaşı Teması */}
-      <ReservationNewYearDecor />
+
       
       {/* Header */}
       <motion.div
@@ -98,12 +98,45 @@ export default function RezervasyonPage() {
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  className="absolute top-4 left-4 bg-[#6B9BC3] rounded-full p-2 shadow-lg"
+                  className="absolute top-4 left-4 bg-[#6B9BC3] rounded-full p-2 shadow-lg z-10"
                 >
                   <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
                 </motion.div>
+              )}
+
+              {/* Ribbon (Çapraz Bant) */}
+              {boat.isRibbonActive && boat.ribbonText && (
+                <div className="absolute top-0 right-0 w-56 h-56 overflow-hidden z-20 pointer-events-none">
+                  <div className={`
+                    absolute top-10 -right-20 transform rotate-45 w-80 h-8 flex items-center shadow-lg
+                    ${boat.ribbonColor === 'red' ? 'bg-red-600' : 
+                      boat.ribbonColor === 'blue' ? 'bg-blue-600' : 
+                      boat.ribbonColor === 'green' ? 'bg-green-600' :
+                      boat.ribbonColor === 'yellow' ? 'bg-yellow-500 text-black' : 
+                      boat.ribbonColor === 'purple' ? 'bg-purple-600' :
+                      boat.ribbonColor === 'black' ? 'bg-black' : 'bg-red-600'}
+                  `}>
+                    <motion.div
+                      className="flex"
+                      animate={{ x: "-50%" }}
+                      transition={{ 
+                        repeat: Infinity, 
+                        duration: 12, 
+                        ease: "linear" 
+                      }}
+                      style={{ color: boat.ribbonColor === 'yellow' ? 'black' : 'white' }}
+                    >
+                      {/* Metni defalarca tekrarla ki boşluk kalmasın ve sonsuz döngü oluşsun */}
+                      {[1, 2, 3, 4].map((i) => (
+                        <span key={i} className="whitespace-nowrap font-bold text-xs uppercase px-4 inline-block">
+                          {boat.ribbonText}
+                        </span>
+                      ))}
+                    </motion.div>
+                  </div>
+                </div>
               )}
             </div>
 

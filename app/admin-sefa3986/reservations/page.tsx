@@ -22,7 +22,7 @@ import {
   Send,
   Trash2
 } from 'lucide-react';
-import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import { Reservation } from '@/lib/reservationHelpers';
 import { useRouter } from 'next/navigation';
@@ -41,6 +41,8 @@ export default function AdminReservationsPage() {
   const [timeSlotFilter, setTimeSlotFilter] = useState<string>('all');
   const [boats, setBoats] = useState<any[]>([]);
   const [availableTimeSlotsForFilter, setAvailableTimeSlotsForFilter] = useState<any[]>([]);
+  // Performans: Geçmiş rezervasyonları varsayılan olarak gösterme
+  const [showAllHistory, setShowAllHistory] = useState(false);
   
   // Toplu Onay
   const [selectedReservations, setSelectedReservations] = useState<string[]>([]);
@@ -65,7 +67,7 @@ export default function AdminReservationsPage() {
   useEffect(() => {
     fetchReservations();
     fetchBoats();
-  }, []);
+  }, [showAllHistory]);
 
   useEffect(() => {
     filterReservations();
@@ -113,8 +115,23 @@ export default function AdminReservationsPage() {
   };
 
   const fetchReservations = async () => {
+    setLoading(true);
     try {
-      const q = query(collection(db, 'reservations'));
+      let q;
+      
+      if (showAllHistory) {
+        // Tüm geçmişi getir (Yavaş olabilir)
+        q = query(collection(db, 'reservations'));
+      } else {
+        // Sadece son 30 günü ve geleceği getir (Hızlı)
+        const date = new Date();
+        date.setDate(date.getDate() - 30);
+        // Tarih formatı YYYY-MM-DD string olarak tutuluyor
+        const dateStr = date.toISOString().split('T')[0];
+        console.log('📅 Şundan sonraki rezervasyonlar getiriliyor:', dateStr);
+        q = query(collection(db, 'reservations'), where('date', '>=', dateStr));
+      }
+
       const snapshot = await getDocs(q);
       const reservationsList: Reservation[] = [];
 
@@ -126,17 +143,16 @@ export default function AdminReservationsPage() {
       });
 
       // Oluşturulma tarihine göre sırala (en yeni önce)
+      // Client-side sıralama devam edebilir çünkü veri seti artık daha küçük
       reservationsList.sort((a, b) => {
-        // createdAt varsa onu kullan, yoksa date'i kullan
         const dateA = a.createdAt ? new Date(a.createdAt) : new Date(a.date);
         const dateB = b.createdAt ? new Date(b.createdAt) : new Date(b.date);
         return dateB.getTime() - dateA.getTime();
       });
 
-      console.log('📋 Admin rezervasyonlar sıralandı:', {
+      console.log('📋 Admin rezervasyonlar yüklendi:', {
         total: reservationsList.length,
-        firstCreatedAt: reservationsList[0]?.createdAt,
-        lastCreatedAt: reservationsList[reservationsList.length - 1]?.createdAt
+        showingAll: showAllHistory
       });
 
       setReservations(reservationsList);
@@ -175,16 +191,70 @@ export default function AdminReservationsPage() {
 
     // Saat dilimi filtresi
     if (timeSlotFilter !== 'all') {
+      console.log('🔍 Saat dilimi filtresi aktif:', timeSlotFilter);
+      console.log('📋 Filtrelenecek rezervasyon sayısı:', filtered.length);
+      
       filtered = filtered.filter((res) => {
         const timeSlotDisplay = res.timeSlotDisplay || '';
-        const timeMatch = timeSlotDisplay.match(/\((\d{2}:\d{2}\s*-\s*\d{2}:\d{2})\)/);
-        if (timeMatch) {
-          const displayTime = timeMatch[1].replace(/\s/g, '');
-          const filterTime = timeSlotFilter.replace(/\s/g, '');
-          return displayTime === filterTime;
+        
+        // Filtredeki saat aralığını normalize et (13:00-19:00)
+        const filterTime = timeSlotFilter.replace(/\s/g, '');
+        
+        console.log('🔎 Rezervasyon kontrol ediliyor:', {
+          id: res.id,
+          date: res.date,
+          timeSlotId: res.timeSlotId,
+          timeSlotDisplay: res.timeSlotDisplay,
+          filterTime: filterTime
+        });
+        
+        // timeSlotDisplay'den saat aralığını çıkar - birden fazla format dene
+        // Format 1: "Öğle Turu (13:00 - 19:00)"
+        const match1 = timeSlotDisplay.match(/\((\d{2}:\d{2}\s*-\s*\d{2}:\d{2})\)/);
+        if (match1) {
+          const displayTime = match1[1].replace(/\s/g, '');
+          console.log('  ✓ Format 1 eşleşti:', displayTime, '==', filterTime, '?', displayTime === filterTime);
+          if (displayTime === filterTime) return true;
         }
+        
+        // Format 2: "13:00 - 19:00" (direkt saat)
+        const match2 = timeSlotDisplay.match(/^(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})$/);
+        if (match2) {
+          const displayTime = match2[1].replace(/\s/g, '');
+          console.log('  ✓ Format 2 eşleşti:', displayTime, '==', filterTime, '?', displayTime === filterTime);
+          if (displayTime === filterTime) return true;
+        }
+        
+        // Format 3: timeSlotDisplay içinde herhangi bir yerde saat aralığı
+        const match3 = timeSlotDisplay.match(/(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
+        if (match3) {
+          const displayTime = match3[1].replace(/\s/g, '');
+          console.log('  ✓ Format 3 eşleşti:', displayTime, '==', filterTime, '?', displayTime === filterTime);
+          if (displayTime === filterTime) return true;
+        }
+        
+        // timeSlotId ile de kontrol et (index bazlı eşleşme için)
+        // Seçilen saat diliminin index'ini bul
+        const selectedSlotIndex = availableTimeSlotsForFilter.findIndex(
+          slot => `${slot.start}-${slot.end}` === timeSlotFilter
+        );
+        
+        if (selectedSlotIndex >= 0) {
+          console.log('  ✓ Index kontrolü:', {
+            selectedSlotIndex,
+            resTimeSlotId: res.timeSlotId,
+            match: res.timeSlotId === selectedSlotIndex.toString() || res.timeSlotId === `${selectedSlotIndex}`
+          });
+          // timeSlotId string index olabilir ("0", "1", "2")
+          if (res.timeSlotId === selectedSlotIndex.toString()) return true;
+          if (res.timeSlotId === `${selectedSlotIndex}`) return true;
+        }
+        
+        console.log('  ❌ Hiçbir format eşleşmedi');
         return false;
       });
+      
+      console.log('✅ Filtreleme sonrası rezervasyon sayısı:', filtered.length);
     }
 
     // Spesifik tarih filtresi (date picker)
@@ -645,53 +715,8 @@ www.baliksefasi.com`;
     pdf.text(toAscii('BALIK SEFASI - Randevu Listesi'), pageWidth / 2, yPos, { align: 'center' });
     yPos += 12;
 
-    // Yılbaşı Mesajı - Başlığın hemen altında
-    // Dekoratif çerçeve - Dış
-    pdf.setDrawColor(0, 169, 165);
-    pdf.setLineWidth(0.5);
-    pdf.roundedRect(margin, yPos, pageWidth - 2 * margin, 30, 2, 2, 'S');
-    
-    // Dekoratif çerçeve - İç
-    pdf.setDrawColor(107, 155, 195);
-    pdf.setLineWidth(0.2);
-    pdf.roundedRect(margin + 1.5, yPos + 1.5, pageWidth - 2 * margin - 3, 27, 1.5, 1.5, 'S');
 
-    // Arka plan rengi
-    pdf.setFillColor(232, 244, 248);
-    pdf.roundedRect(margin + 2, yPos + 2, pageWidth - 2 * margin - 4, 26, 1.5, 1.5, 'F');
-
-    const msgYPos = yPos + 8;
-    let centerX = pageWidth / 2;
-
-    // Üst dekoratif çizgi
-    pdf.setDrawColor(0, 169, 165);
-    pdf.setLineWidth(0.3);
-    pdf.line(centerX - 25, msgYPos, centerX + 25, msgYPos);
-
-    // Yıldız sembolleri
-    pdf.setFontSize(10);
-    pdf.setTextColor(0, 169, 165);
-    pdf.text('*', centerX - 28, msgYPos + 5);
-    pdf.text('*', centerX + 28, msgYPos + 5);
-
-    // Ana mesaj
-    pdf.setFontSize(9);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(13, 40, 71);
-    pdf.text(toAscii('Yeni yilinizi aileniz ve sevdiklerinizle guzel gecirmenizi dileriz.'), centerX, msgYPos + 5, { align: 'center' });
-
-    // Alt dekoratif çizgi
-    pdf.setDrawColor(0, 169, 165);
-    pdf.setLineWidth(0.3);
-    pdf.line(centerX - 25, msgYPos + 10, centerX + 25, msgYPos + 10);
-
-    // İmza
-    pdf.setFontSize(7);
-    pdf.setFont('helvetica', 'italic');
-    pdf.setTextColor(107, 155, 195);
-    pdf.text(toAscii('Yazilim Danismani - Huseyin Demir'), centerX, msgYPos + 15, { align: 'center' });
-
-    yPos += 35;
+    yPos += 5;
 
     // Bilgiler
     pdf.setFontSize(10);
@@ -1066,8 +1091,22 @@ www.baliksefasi.com`;
           </div>
 
           {/* Clear Filters Button */}
-          {(searchTerm || statusFilter !== 'all' || specificDate || boatFilter !== 'all' || timeSlotFilter !== 'all') && (
-            <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex flex-wrap justify-between items-center gap-4">
+             {/* Geçmiş Verileri Getir Toggle */}
+             <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl">
+               <input 
+                 type="checkbox" 
+                 id="showHistory" 
+                 checked={showAllHistory} 
+                 onChange={(e) => setShowAllHistory(e.target.checked)}
+                 className="w-4 h-4 rounded border-gray-500 text-[#00A9A5] focus:ring-[#00A9A5] cursor-pointer"
+               />
+               <label htmlFor="showHistory" className="text-sm text-white/80 cursor-pointer select-none">
+                 Tüm Geçmiş Kayıtları Getir (Daha Yavaş)
+               </label>
+             </div>
+
+            {(searchTerm || statusFilter !== 'all' || specificDate || boatFilter !== 'all' || timeSlotFilter !== 'all') && (
               <button
                 onClick={() => {
                   setSearchTerm('');
@@ -1081,8 +1120,8 @@ www.baliksefasi.com`;
               >
                 Filtreleri Temizle
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Toplu Onay Butonları */}

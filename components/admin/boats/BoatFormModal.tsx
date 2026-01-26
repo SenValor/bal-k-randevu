@@ -45,6 +45,9 @@ export default function BoatFormModal({
     timeSlots: [],
     scheduledTimeSlots: [],
     isActive: true,
+    ribbonText: '',
+    isRibbonActive: false,
+    ribbonColor: 'red',
   });
 
   useEffect(() => {
@@ -68,6 +71,9 @@ export default function BoatFormModal({
         timeSlots: boat.timeSlots,
         scheduledTimeSlots: boat.scheduledTimeSlots || [],
         isActive: boat.isActive,
+        ribbonText: boat.ribbonText || '',
+        isRibbonActive: boat.isRibbonActive || false,
+        ribbonColor: boat.ribbonColor || 'red',
       });
     } else if (isOpen) {
       // Yeni ekleme modu - formu sıfırla
@@ -89,6 +95,9 @@ export default function BoatFormModal({
         timeSlots: [],
         scheduledTimeSlots: [],
         isActive: true,
+        ribbonText: '',
+        isRibbonActive: false,
+        ribbonColor: 'red',
       });
     }
     setError('');
@@ -562,6 +571,84 @@ export default function BoatFormModal({
                     <span className="text-white/80">Balık Avı & Yüzme</span>
                   </label>
                 </div>
+              </div>
+
+              {/* Bant (Ribbon) Ayarları */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-medium">Tekne Üzeri Bant (Ribbon)</span>
+                    <span className="px-2 py-0.5 bg-[#00A9A5]/20 text-[#00A9A5] text-xs rounded-full">Yeni</span>
+                  </div>
+                  
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isRibbonActive}
+                      onChange={(e) => setFormData({ ...formData, isRibbonActive: e.target.checked })}
+                      className="sr-only peer"
+                      disabled={loading}
+                    />
+                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#00A9A5]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00A9A5]"></div>
+                  </label>
+                </div>
+
+                {formData.isRibbonActive && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div>
+                      <label className="block text-white/80 text-sm font-medium mb-2">
+                        Bant Metni
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.ribbonText}
+                        onChange={(e) => setFormData({ ...formData, ribbonText: e.target.value })}
+                        disabled={loading}
+                        placeholder="Örn: DOLU, TADİLATTA"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-white/80 text-sm font-medium mb-2">
+                        Bant Rengi
+                      </label>
+                      <select
+                        value={formData.ribbonColor}
+                        onChange={(e) => setFormData({ ...formData, ribbonColor: e.target.value })}
+                        disabled={loading}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                      >
+                        <option value="red">Kırmızı</option>
+                        <option value="blue">Mavi</option>
+                        <option value="green">Yeşil</option>
+                        <option value="yellow">Sarı</option>
+                        <option value="purple">Mor</option>
+                        <option value="black">Siyah</option>
+                      </select>
+                    </div>
+
+                    {/* Önizleme */}
+                    <div className="col-span-2 mt-2">
+                      <p className="text-white/40 text-xs mb-2">Önizleme:</p>
+                      <div className="relative w-32 h-20 bg-gray-800 rounded-lg overflow-hidden border border-white/10">
+                         {/* Ribbon CSS Implementation Preview */}
+                         <div className={`absolute top-0 right-0 w-24 h-24 overflow-hidden pointer-events-none`}>
+                           <div className={`absolute top-0 right-0 transform translate-x-[30%] translate-y-[-20%] rotate-45 w-[150%] text-center text-[10px] font-bold text-white shadow-sm py-1
+                             ${formData.ribbonColor === 'red' ? 'bg-red-600' : 
+                               formData.ribbonColor === 'blue' ? 'bg-blue-600' : 
+                               formData.ribbonColor === 'green' ? 'bg-green-600' :
+                               formData.ribbonColor === 'yellow' ? 'bg-yellow-500 text-black' : 
+                               formData.ribbonColor === 'purple' ? 'bg-purple-600' :
+                               formData.ribbonColor === 'black' ? 'bg-black' : 'bg-red-600'}
+                           `}>
+                             {formData.ribbonText || 'METİN'}
+                           </div>
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Tarih Aralığı */}
