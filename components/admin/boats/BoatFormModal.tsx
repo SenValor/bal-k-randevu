@@ -203,7 +203,7 @@ export default function BoatFormModal({
       ...formData,
       timeSlots: [
         ...formData.timeSlots,
-        { start: '09:00', end: '12:00', displayName: 'Sabah Turu', baitWarning: false },
+        { start: '09:00', end: '12:00', displayName: 'Sabah Turu', baitWarning: false, mapsLink: '' },
       ],
     });
   };
@@ -273,7 +273,7 @@ export default function BoatFormModal({
       ...newScheduled[scheduleIndex],
       timeSlots: [
         ...newScheduled[scheduleIndex].timeSlots,
-        { start: '09:00', end: '12:00', displayName: 'Yeni Tur', baitWarning: false },
+        { start: '09:00', end: '12:00', displayName: 'Yeni Tur', baitWarning: false, mapsLink: '' },
       ],
     };
     setFormData({ ...formData, scheduledTimeSlots: newScheduled });
@@ -738,6 +738,20 @@ export default function BoatFormModal({
                         </div>
                       </div>
 
+                      {/* Konum (Maps Link) */}
+                      <div className="mb-3">
+                        <label className="block text-white/60 text-xs mb-1">📍 Konum (Google Maps)</label>
+                        <input
+                          type="url"
+                          value={slot.mapsLink || ''}
+                          onChange={(e) => handleTimeSlotChange(index, 'mapsLink', e.target.value)}
+                          disabled={loading}
+                          placeholder="https://maps.google.com/..."
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/30 focus:border-[#00A9A5] outline-none transition-all disabled:opacity-50"
+                        />
+                        <p className="text-white/30 text-xs mt-1">Bu saat dilimine özel kalkış noktası (boş bırakılırsa tekne konumu kullanılır)</p>
+                      </div>
+
                       {/* Yem Uyarısı Toggle */}
                       <div className="mb-3 flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2">
                         <div className="flex items-center gap-2">
@@ -850,7 +864,7 @@ export default function BoatFormModal({
 
                         {schedule.timeSlots.map((slot, slotIndex) => (
                           <div key={slotIndex} className="bg-white/5 border border-white/10 rounded-lg p-3">
-                            <div className="grid grid-cols-4 gap-2">
+                            <div className="grid grid-cols-4 gap-2 mb-2">
                               <div>
                                 <label className="block text-white/40 text-xs mb-1">Başlangıç</label>
                                 <input
@@ -892,6 +906,18 @@ export default function BoatFormModal({
                                   <Trash2 className="w-3 h-3" />
                                 </button>
                               </div>
+                            </div>
+                            {/* Konum alanı */}
+                            <div>
+                              <label className="block text-white/40 text-xs mb-1">📍 Konum</label>
+                              <input
+                                type="url"
+                                value={slot.mapsLink || ''}
+                                onChange={(e) => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'mapsLink', e.target.value)}
+                                disabled={loading}
+                                placeholder="https://maps.google.com/..."
+                                className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs placeholder-white/30 focus:border-purple-400 outline-none transition-all disabled:opacity-50"
+                              />
                             </div>
                           </div>
                         ))}

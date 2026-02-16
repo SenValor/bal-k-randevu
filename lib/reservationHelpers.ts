@@ -18,6 +18,7 @@ export interface Reservation {
   boatId: string;
   boatName: string;
   boatMapsLink?: string; // Teknenin Google Maps konumu
+  timeSlotMapsLink?: string; // Saat dilimine özel Google Maps konumu
   userId: string;
   userName: string;
   userEmail: string;

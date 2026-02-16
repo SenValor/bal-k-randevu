@@ -11,7 +11,7 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 
 // Token - Doğrudan tanımlı (Firebase Functions v1 .env'i production'a yüklemez)
-const META_TOKEN = "EAAMfyFpCzHsBQYZB3kxthaXS4ZARIiTAUPUAstdb4Tq9L9QxqdhB7XZCtOgZBcDXd9q9GUZBJExwRHVbWAATTUgaJ9lkyauGkMAk5ALaqjGNqfGbCELUP33FJKdZBhZCadmZAjrJt91jcXAKOM1RMClMkUPAUoVQuJjUs2P9eP10BS7JWbTgVWNfkW0vRdtzkdkQyL5VcfZAZC1aZAgLZClpQN2OA82JhQH93QXBeP6fGPgSGDyOqmpcJBZAZBzQDPK6tfLis28AhgkUkQvktb3YRklQaxZAwoG2ECt2cU0CAZDZD";
+const META_TOKEN = "EAAMfyFpCzHsBQh9d2YYf5CvqmWyIxJqfZCa1e85dHDKB6jvUSx1MVYxOfQ5sY4jvWDGfcuFyJQOeri48aNGZClsGFpFEx4m9TPIQ8NkdPnNir2fG8eWuSjCXPbgXBvar6RIxQnDF81ZByTy3TdwSV0NOI6AjVHCSQacLA1mXeVEQdMT5Vws9g1wV1LEMKDMa4ZBTwZAnwZCkwPf3N3uPQ3XoedcMpYVEF1X2Eg";
 const META_PHONE = "797993213405372";
 
 function getAccessToken() {
@@ -92,7 +92,11 @@ exports.onReservationApproved = functions
         boatName = "BALIK SEFASI",
         reservationNumber = "BS-XXXX",
         boatMapsLink = "",
+        timeSlotMapsLink = "", // Saat dilimine özel konum
       } = after;
+      
+      // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
+      const locationLink = timeSlotMapsLink || boatMapsLink;
 
       if (!userPhone) {
         await change.after.ref.update({
@@ -138,7 +142,7 @@ exports.onReservationApproved = functions
                   { type: "text", text: timeSlotDisplay },
                   { type: "text", text: boatName },
                   { type: "text", text: reservationNumber },
-                  { type: "text", text: boatMapsLink || "Konum bilgisi bulunamadı" },
+                  { type: "text", text: locationLink || "Konum bilgisi bulunamadı" },
                 ],
               },
             ],
@@ -212,7 +216,11 @@ exports.onReservationCancelled = functions
         boatName = "BALIK SEFASI",
         reservationNumber = "BS-XXXX",
         boatMapsLink = "",
+        timeSlotMapsLink = "", // Saat dilimine özel konum
       } = after;
+      
+      // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
+      const locationLink = timeSlotMapsLink || boatMapsLink;
 
       if (!userPhone) {
         await change.after.ref.update({
@@ -254,7 +262,7 @@ exports.onReservationCancelled = functions
                   { type: "text", text: timeSlotDisplay },
                   { type: "text", text: boatName },
                   { type: "text", text: reservationNumber },
-                  { type: "text", text: boatMapsLink || "Konum bilgisi bulunamadı" },
+                  { type: "text", text: locationLink || "Konum bilgisi bulunamadı" },
                 ],
               },
             ],

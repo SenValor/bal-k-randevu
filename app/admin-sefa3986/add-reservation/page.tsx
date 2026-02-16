@@ -324,6 +324,10 @@ export default function AdminAddReservationPage() {
         }
       }
 
+      // Seçili saat diliminin mapsLink'ini al
+      const currentTimeSlot = timeSlots.find(ts => ts.id === selectedTimeSlot);
+      const timeSlotMapsLink = (currentTimeSlot as any)?.mapsLink || selectedBoat.mapsLink || '';
+
       const newReservation = {
         userId: 'admin-manual',
         userName: customerName || 'Admin Ekledi',
@@ -332,6 +336,7 @@ export default function AdminAddReservationPage() {
         boatId: selectedBoat.id,
         boatName: selectedBoat.name,
         boatMapsLink: selectedBoat.mapsLink || '',
+        timeSlotMapsLink: timeSlotMapsLink, // Saat dilimine özel konum
         tourId: selectedTourId || '',
         tourName: selectedTour?.name || 'Özel Tur',
         date: selectedDate,

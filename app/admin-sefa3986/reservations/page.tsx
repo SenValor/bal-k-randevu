@@ -545,8 +545,16 @@ export default function AdminReservationsPage() {
     const formattedPhone = formatPhoneForWhatsApp(reservation.userPhone);
     const formattedDate = formatDateTurkish(reservation.date);
     const seats = reservation.selectedSeats?.join(", ") || "";
-    const locationLink = reservation.boatMapsLink || "";
+    // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
+    const locationLink = (reservation as any).timeSlotMapsLink || reservation.boatMapsLink || "";
     const realTimeSlot = getRealTimeSlotDisplay(reservation);
+    
+    console.log('📍 WhatsApp Mesaj Konum Debug:', {
+      timeSlotMapsLink: (reservation as any).timeSlotMapsLink,
+      boatMapsLink: reservation.boatMapsLink,
+      finalLocationLink: locationLink,
+      reservationId: reservation.id
+    });
 
     const message = `🐟 Balık Sefası
 
@@ -580,7 +588,8 @@ www.baliksefasi.com`;
 
     const formattedPhone = formatPhoneForWhatsApp(reservation.userPhone);
     const formattedDate = formatDateTurkish(reservation.date);
-    const locationLink = reservation.boatMapsLink || "";
+    // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
+    const locationLink = (reservation as any).timeSlotMapsLink || reservation.boatMapsLink || "";
     const realTimeSlot = getRealTimeSlotDisplay(reservation);
 
     const message = `🐟 Balık Sefası

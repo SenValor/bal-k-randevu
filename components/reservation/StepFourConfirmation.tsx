@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, CheckCircle, User, Mail, Phone, Calendar, Clock, Users, Ship, Compass, Copy, MessageCircle } from 'lucide-react';
 import { addReservation, ReservationFormData } from '@/lib/reservationHelpers';
-import { Boat } from '@/lib/boatHelpers';
+import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { Tour } from '@/lib/tourHelpers';
 import { isPhoneBlacklisted, getBlacklistInfo } from '@/lib/blacklistHelpers';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -182,14 +182,50 @@ export default function StepFourConfirmation() {
       const equipmentData = localStorage.getItem('equipmentSelection');
       const equipmentSelection = equipmentData ? JSON.parse(equipmentData) : null;
 
-      // Seçili turun baitWarning bilgisini al
-      const selectedTourId = reservationData.tour?.id.toString() || '0';
-      const selectedTimeSlot = boat.timeSlots?.find((ts: any) => 
-        (ts.id || `${ts.start}-${ts.end}`) === selectedTourId
+      // Seçili turun baitWarning ve mapsLink bilgisini al
+      // Rezervasyon tarihine göre doğru saat dilimlerini al (scheduledTimeSlots varsa onları kullan)
+      const activeTimeSlots = getTimeSlotsForDate(
+        boat.scheduledTimeSlots,
+        boat.timeSlots || [],
+        reservationDate
       );
+      
+      const selectedTourId = reservationData.tour?.id.toString() || '0';
+      const tourTitle = reservationData.tour?.title || '';
+      
+      // Saat dilimini bul - önce index bazlı dene (en güvenilir)
+      let selectedTimeSlot: any = null;
+      const slotIndex = parseInt(selectedTourId);
+      
+      if (activeTimeSlots && activeTimeSlots.length > 0) {
+        // Yöntem 1: Index bazlı eşleştirme (tour.id = 0, 1, 2, 3 gibi index)
+        if (!isNaN(slotIndex) && slotIndex < activeTimeSlots.length) {
+          selectedTimeSlot = activeTimeSlots[slotIndex];
+        }
+        
+        // Yöntem 2: Eğer index ile bulunamadıysa, displayName ile dene
+        if (!selectedTimeSlot && tourTitle) {
+          selectedTimeSlot = activeTimeSlots.find((ts: any) => 
+            ts.displayName === tourTitle
+          );
+        }
+      }
+      
       const hasBaitWarning = selectedTimeSlot?.baitWarning === true;
+      // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
+      const timeSlotMapsLink = selectedTimeSlot?.mapsLink || boat.mapsLink || '';
+      
+      console.log('🗓️ Rezervasyon tarihi:', reservationDate);
+      console.log('📅 Boat scheduledTimeSlots:', boat.scheduledTimeSlots);
+      console.log('📅 Boat timeSlots:', boat.timeSlots);
+      console.log('⏰ Aktif saat dilimleri (getTimeSlotsForDate sonucu):', activeTimeSlots);
+      console.log('🔢 Seçili tour ID:', selectedTourId, 'Tour title:', tourTitle);
+      console.log('🎯 Seçili saat dilimi:', selectedTimeSlot);
+      console.log('📍 Seçili saat dilimi mapsLink:', selectedTimeSlot?.mapsLink);
+      console.log('📍 Boat mapsLink:', boat.mapsLink);
+      console.log('� Final timeSlotMapsLink:', timeSlotMapsLink);
 
-      console.log('📦 Raw reservationData:', reservationData);
+      console.log('�📦 Raw reservationData:', reservationData);
       console.log('🚢 Boat data:', boat);
       console.log('🎫 Tour type:', tourType);
       console.log('🎣 Equipment data:', equipmentSelection);
@@ -215,6 +251,7 @@ export default function StepFourConfirmation() {
         boatId: boat.id,
         boatName: boat.name,
         boatMapsLink: boat.mapsLink || '',
+        timeSlotMapsLink: timeSlotMapsLink, // Saat dilimine özel konum (varsa)
         userId: user?.uid || 'guest',
         userName: user ? user.displayName || user.email || 'Üye' : `${guestName} ${guestSurname}`,
         userEmail: user ? user.email || '' : guestEmail,
