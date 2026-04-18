@@ -14,12 +14,9 @@
   },
   "main": "index.js",
   "dependencies": {
-    "@types/markdown-it": "^14.1.2",
     "dotenv": "^17.2.3",
     "firebase-admin": "^11.11.1",
-    "firebase-functions": "^3.24.1",
-    "markdown-it": "^14.1.1",
-    "protobufjs": "^7.5.4"
+    "firebase-functions": "^3.24.1"
   },
   "devDependencies": {
     "eslint": "^8.15.0",

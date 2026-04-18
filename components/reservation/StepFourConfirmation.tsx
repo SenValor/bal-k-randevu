@@ -11,7 +11,6 @@ import { isPhoneBlacklisted, getBlacklistInfo } from '@/lib/blacklistHelpers';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
-import PhoneVerificationModal from './PhoneVerificationModal';
 
 export default function StepFourConfirmation() {
   const { user } = useAuth();
@@ -32,10 +31,6 @@ export default function StepFourConfirmation() {
   
   // WhatsApp Onayı
   const [whatsappConsent, setWhatsappConsent] = useState(false);
-
-  // Telefon Doğrulama
-  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
-  const [phoneVerified, setPhoneVerified] = useState(false);
 
   // Rezervasyon verileri
   const [boat, setBoat] = useState<Boat | null>(null);
@@ -103,15 +98,9 @@ export default function StepFourConfirmation() {
     await createReservation();
   };
 
-  const createReservation = async (skipVerificationCheck = false) => {
+  const createReservation = async () => {
     if (!boat || !tourType || !reservationData) {
       setError('Rezervasyon bilgileri eksik');
-      return;
-    }
-
-    // Telefon doğrulanmamışsa modal aç (skipVerificationCheck true ise atla)
-    if (!phoneVerified && !skipVerificationCheck) {
-      setShowPhoneVerification(true);
       return;
     }
 
@@ -554,22 +543,6 @@ export default function StepFourConfirmation() {
             </form>
           </motion.div>
         </div>
-
-        {/* Telefon Doğrulama Modal */}
-        <PhoneVerificationModal
-          isOpen={showPhoneVerification}
-          phoneNumber={guestPhone}
-          onVerified={() => {
-            setPhoneVerified(true);
-            setShowPhoneVerification(false);
-            // Doğrulandıktan sonra rezervasyonu oluştur (doğrulama kontrolünü atla)
-            createReservation(true);
-          }}
-          onCancel={() => {
-            setShowPhoneVerification(false);
-            setLoading(false);
-          }}
-        />
       </main>
     );
   }
@@ -723,22 +696,6 @@ export default function StepFourConfirmation() {
           </button>
         </motion.div>
       </div>
-
-      {/* Telefon Doğrulama Modal */}
-      <PhoneVerificationModal
-        isOpen={showPhoneVerification}
-        phoneNumber={user ? memberPhone : guestPhone}
-        onVerified={() => {
-          setPhoneVerified(true);
-          setShowPhoneVerification(false);
-          // Doğrulandıktan sonra rezervasyonu oluştur (doğrulama kontrolünü atla)
-          createReservation(true);
-        }}
-        onCancel={() => {
-          setShowPhoneVerification(false);
-          setLoading(false);
-        }}
-      />
     </main>
   );
 }
