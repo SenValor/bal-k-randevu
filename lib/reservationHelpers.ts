@@ -9,6 +9,7 @@ import {
   doc,
   updateDoc,
   getDoc,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from './firebaseClient';
 
@@ -83,44 +84,84 @@ export async function checkSeatsAvailable(
 }
 
 /**
- * Yeni rezervasyon ekler (rezervasyon numarası otomatik oluşturulur).
- * Çağırmadan önce checkSeatsAvailable() ile koltukların boş olduğunu doğrulayın.
- * addReservation içinde de son bir kontrol yapılır; çakışma varsa hata döner.
+ * Yeni rezervasyon ekler — atomik transaction ile koltuk çakışmasını önler.
+ * Okuma + kontrol + yazma tek bir işlemde gerçekleşir; eş zamanlı istekler çakışamaz.
  */
 export async function addReservation(
   reservationData: ReservationFormData
 ): Promise<{ success: boolean; id?: string; reservationNumber?: string; error?: string }> {
   try {
     const reservationNumber = generateReservationNumber();
+    const newDocRef = doc(collection(db, 'reservations'));
 
-    // Son güvenlik katmanı: yazma öncesi aynı koltuklar alındı mı?
-    const existing = await getReservationsByBoatDateSlot(
-      reservationData.boatId,
-      reservationData.date,
-      reservationData.timeSlotId,
-      undefined,
-      undefined,
-      reservationData.timeSlotDisplay
-    );
-    const occupied = getOccupiedSeats(existing);
-    const conflicting = reservationData.selectedSeats.filter(s => occupied.includes(s));
+    await runTransaction(db, async (transaction) => {
+      // Transaction içinde aynı tekne+tarih+durum kayıtlarını oku
+      const q = query(
+        collection(db, 'reservations'),
+        where('boatId', '==', reservationData.boatId),
+        where('date', '==', reservationData.date),
+        where('status', 'in', ['pending', 'confirmed'])
+      );
+      const snapshot = await getDocs(q);
 
-    if (conflicting.length > 0) {
-      console.warn('⚠️ addReservation: Koltuk çakışması tespit edildi:', conflicting);
-      return {
-        success: false,
-        error: `Seçtiğiniz koltuklar (${conflicting.join(', ')}) az önce başkası tarafından alındı. Lütfen geri dönüp farklı koltuk seçin.`,
+      // timeSlotDisplay eşleştirme yardımcıları
+      const extractTourName = (s: string) => {
+        if (!s) return '';
+        const m = s.match(/^([^(]+)/);
+        return m ? m[1].trim().toLowerCase() : s.toLowerCase().trim();
       };
-    }
+      const extractTimeRange = (s: string) => {
+        if (!s) return null;
+        const m = s.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+        return m ? `${m[1]}-${m[2]}` : null;
+      };
 
-    const docRef = await addDoc(collection(db, 'reservations'), {
-      ...reservationData,
-      reservationNumber,
-      createdAt: new Date().toISOString(),
+      const targetTourName = extractTourName(reservationData.timeSlotDisplay);
+      const targetRange    = extractTimeRange(reservationData.timeSlotDisplay);
+
+      // Bu slot'a ait dolu koltukları topla
+      const occupiedSeats: number[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data();
+        if (!data.timeSlotDisplay) return;
+
+        const resTourName = extractTourName(data.timeSlotDisplay);
+        const resRange    = extractTimeRange(data.timeSlotDisplay);
+
+        const slotMatches =
+          (targetTourName && resTourName && targetTourName === resTourName) ||
+          (targetRange && resRange && targetRange === resRange) ||
+          data.timeSlotId === reservationData.timeSlotId;
+
+        if (slotMatches && Array.isArray(data.selectedSeats)) {
+          occupiedSeats.push(...data.selectedSeats);
+        }
+      });
+
+      // Çakışma kontrolü
+      const conflicting = reservationData.selectedSeats.filter(s => occupiedSeats.includes(s));
+      if (conflicting.length > 0) {
+        throw new Error(`SEAT_CONFLICT:${conflicting.join(',')}`);
+      }
+
+      // Çakışma yok — transaction içinde yaz
+      transaction.set(newDocRef, {
+        ...reservationData,
+        reservationNumber,
+        createdAt: new Date().toISOString(),
+      });
     });
 
-    return { success: true, id: docRef.id, reservationNumber };
+    return { success: true, id: newDocRef.id, reservationNumber };
   } catch (error: any) {
+    if (error?.message?.startsWith('SEAT_CONFLICT:')) {
+      const seats = error.message.replace('SEAT_CONFLICT:', '');
+      console.warn('⚠️ addReservation: Transaction koltuk çakışması:', seats);
+      return {
+        success: false,
+        error: `Seçtiğiniz koltuklar (${seats}) az önce başkası tarafından alındı. Lütfen geri dönüp farklı koltuk seçin.`,
+      };
+    }
     console.error('Rezervasyon ekleme hatası:', error);
     return { success: false, error: 'Rezervasyon eklenirken bir hata oluştu' };
   }
