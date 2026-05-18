@@ -52,14 +52,67 @@ export function generateReservationNumber(): string {
 }
 
 /**
- * Yeni rezervasyon ekler (rezervasyon numarası otomatik oluşturulur)
+ * Belirli bir tekne, tarih, saat dilimi ve koltuk listesinin hâlâ boş olup olmadığını kontrol eder.
+ * Bu fonksiyon StepFourConfirmation'dan yazma öncesinde çağrılır.
+ */
+export async function checkSeatsAvailable(
+  boatId: string,
+  date: string,
+  timeSlotId: string,
+  timeSlotStart: string,
+  timeSlotEnd: string,
+  timeSlotDisplayName: string,
+  requestedSeats: number[]
+): Promise<{ available: boolean; conflictingSeats: number[] }> {
+  const existingReservations = await getReservationsByBoatDateSlot(
+    boatId,
+    date,
+    timeSlotId,
+    timeSlotStart,
+    timeSlotEnd,
+    timeSlotDisplayName
+  );
+
+  const occupiedSeats = getOccupiedSeats(existingReservations);
+  const conflictingSeats = requestedSeats.filter(seat => occupiedSeats.includes(seat));
+
+  return {
+    available: conflictingSeats.length === 0,
+    conflictingSeats,
+  };
+}
+
+/**
+ * Yeni rezervasyon ekler (rezervasyon numarası otomatik oluşturulur).
+ * Çağırmadan önce checkSeatsAvailable() ile koltukların boş olduğunu doğrulayın.
+ * addReservation içinde de son bir kontrol yapılır; çakışma varsa hata döner.
  */
 export async function addReservation(
   reservationData: ReservationFormData
 ): Promise<{ success: boolean; id?: string; reservationNumber?: string; error?: string }> {
   try {
     const reservationNumber = generateReservationNumber();
-    
+
+    // Son güvenlik katmanı: yazma öncesi aynı koltuklar alındı mı?
+    const existing = await getReservationsByBoatDateSlot(
+      reservationData.boatId,
+      reservationData.date,
+      reservationData.timeSlotId,
+      undefined,
+      undefined,
+      reservationData.timeSlotDisplay
+    );
+    const occupied = getOccupiedSeats(existing);
+    const conflicting = reservationData.selectedSeats.filter(s => occupied.includes(s));
+
+    if (conflicting.length > 0) {
+      console.warn('⚠️ addReservation: Koltuk çakışması tespit edildi:', conflicting);
+      return {
+        success: false,
+        error: `Seçtiğiniz koltuklar (${conflicting.join(', ')}) az önce başkası tarafından alındı. Lütfen geri dönüp farklı koltuk seçin.`,
+      };
+    }
+
     const docRef = await addDoc(collection(db, 'reservations'), {
       ...reservationData,
       reservationNumber,

@@ -2,8 +2,10 @@
 
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { Boat } from '@/lib/boatHelpers';
-import { getReservationsByBoatDateSlot, getOccupiedSeats } from '@/lib/reservationHelpers';
+import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
+// reservationHelpers — getOccupiedSeats artık doğrudan burada hesaplanıyor
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebaseClient';
 
 interface SeatMapProps {
   selectedSeats: number[];
@@ -22,43 +24,100 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
   const [boatCode, setBoatCode] = useState('T1');
 
   useEffect(() => {
-    const fetchOccupiedSeats = async () => {
-      if (!selectedDate) {
-        setLoading(false);
-        return;
-      }
-
-      const selectedBoatData = localStorage.getItem('selectedBoat');
-      if (selectedBoatData) {
-        try {
-          const boat: Boat = JSON.parse(selectedBoatData);
-          // Yerel tarih formatı (UTC değil!)
-          const year = selectedDate.getFullYear();
-          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-          const day = String(selectedDate.getDate()).padStart(2, '0');
-          const dateStr = `${year}-${month}-${day}`;
-          
-          // Tekne kodunu set et
-          setBoatCode(boat.code || 'T1');
-          
-          // Bu tekne, tarih ve saat için rezervasyonları al
-          const reservations = await getReservationsByBoatDateSlot(
-            boat.id,
-            dateStr,
-            timeSlotId
-          );
-          
-          // Dolu koltukları hesapla
-          const occupied = getOccupiedSeats(reservations);
-          setOccupiedSeats(occupied);
-        } catch (error) {
-          console.error('Dolu koltuklar alınamadı:', error);
-        }
-      }
+    if (!selectedDate) {
       setLoading(false);
+      return;
+    }
+
+    const selectedBoatData = localStorage.getItem('selectedBoat');
+    const tourTypeData = localStorage.getItem('selectedTourType');
+    if (!selectedBoatData) {
+      setLoading(false);
+      return;
+    }
+
+    let boat: Boat;
+    try {
+      boat = JSON.parse(selectedBoatData);
+    } catch {
+      setLoading(false);
+      return;
+    }
+
+    // Yerel tarih formatı (UTC değil!)
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    setBoatCode(boat.code || 'T1');
+
+    // Saat dilimi bilgilerini al (timeSlotStart, timeSlotEnd, displayName)
+    const effectiveSlots = getTimeSlotsForDate(
+      boat.scheduledTimeSlots,
+      boat.timeSlots || [],
+      dateStr
+    );
+    const slotIndex = parseInt(timeSlotId);
+    const currentSlot = !isNaN(slotIndex) && effectiveSlots[slotIndex]
+      ? effectiveSlots[slotIndex]
+      : null;
+
+    // timeSlotDisplay formatını oluştur (eşleştirme için)
+    const slotDisplayName = currentSlot?.displayName || '';
+    const slotStart = currentSlot?.start || '';
+    const slotEnd = currentSlot?.end || '';
+
+    // Gerçek zamanlı dinleyici — aynı tekne + tarih + aktif rezervasyonlar
+    const q = query(
+      collection(db, 'reservations'),
+      where('boatId', '==', boat.id),
+      where('date', '==', dateStr),
+      where('status', 'in', ['pending', 'confirmed'])
+    );
+
+    const extractTourName = (s: string) => {
+      if (!s) return '';
+      const m = s.match(/^([^(]+)/);
+      return m ? m[1].trim().toLowerCase() : s.toLowerCase().trim();
+    };
+    const extractTimeRange = (s: string) => {
+      if (!s) return null;
+      const m = s.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      return m ? `${m[1]}-${m[2]}` : null;
     };
 
-    fetchOccupiedSeats();
+    const targetTourName = extractTourName(slotDisplayName);
+    const targetRange = slotStart && slotEnd ? `${slotStart}-${slotEnd}` : null;
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const allOccupied: number[] = [];
+
+      snapshot.forEach((d) => {
+        const data = d.data();
+        if (!data.timeSlotDisplay) return;
+
+        const resTourName = extractTourName(data.timeSlotDisplay);
+        const resRange = extractTimeRange(data.timeSlotDisplay);
+
+        const slotMatches =
+          (targetTourName && resTourName && targetTourName === resTourName) ||
+          (targetRange && resRange && targetRange === resRange) ||
+          data.timeSlotId === timeSlotId;
+
+        if (slotMatches && Array.isArray(data.selectedSeats)) {
+          allOccupied.push(...data.selectedSeats);
+        }
+      });
+
+      setOccupiedSeats([...new Set(allOccupied)]);
+      setLoading(false);
+    }, (error) => {
+      console.error('Dolu koltuklar dinlenirken hata:', error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [selectedDate, timeSlotId]);
 
   const isOccupied = (seatId: number) => occupiedSeats.includes(seatId);

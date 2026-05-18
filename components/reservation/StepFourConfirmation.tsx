@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, CheckCircle, User, Mail, Phone, Calendar, Clock, Users, Ship, Compass, Copy, MessageCircle } from 'lucide-react';
-import { addReservation, ReservationFormData } from '@/lib/reservationHelpers';
+import { addReservation, checkSeatsAvailable, ReservationFormData } from '@/lib/reservationHelpers';
 import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { Tour } from '@/lib/tourHelpers';
 import { isPhoneBlacklisted, getBlacklistInfo } from '@/lib/blacklistHelpers';
@@ -286,6 +286,29 @@ export default function StepFourConfirmation() {
       };
 
       console.log('Firestore\'a kaydedilecek rezervasyon:', reservation);
+
+      // ⚠️ SERVER-SIDE KOLTUK KONTROLÜ — yazma öncesi son doğrulama
+      const timeSlotStart  = selectedTimeSlot?.start  || '';
+      const timeSlotEnd    = selectedTimeSlot?.end    || '';
+      const timeSlotDisplay = reservation.timeSlotDisplay || '';
+      const seatCheck = await checkSeatsAvailable(
+        boat.id,
+        reservationDate,
+        reservation.timeSlotId,
+        timeSlotStart,
+        timeSlotEnd,
+        timeSlotDisplay,
+        reservationData.seats || []
+      );
+
+      if (!seatCheck.available) {
+        setError(
+          `Seçtiğiniz koltuklar (${seatCheck.conflictingSeats.join(', ')}) az önce başkası tarafından alındı.\n` +
+          `Lütfen geri dönüp farklı koltuk seçin.`
+        );
+        setLoading(false);
+        return;
+      }
 
       const result = await addReservation(reservation);
       
