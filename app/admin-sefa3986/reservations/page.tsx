@@ -1358,7 +1358,8 @@ www.baliksefasi.com`;
                             {reservation.selectedSeats.slice(0, 4).map((seatId: number) => {
                               const side = seatId <= 6 ? 'IS' : 'SA';
                               const position = seatId <= 6 ? seatId : seatId - 6;
-                              return `T1_${side}${position}`;
+                              const boatCode = boats.find((b: any) => b.id === reservation.boatId)?.code || 'T?';
+                              return `${boatCode}_${side}${position}`;
                             }).join(', ')}
                             {reservation.selectedSeats.length > 4 && ` +${reservation.selectedSeats.length - 4}`}
                           </span>
@@ -1721,6 +1722,7 @@ www.baliksefasi.com`;
                     const isOccupied = editOccupiedSeats.includes(seatId);
                     const side = seatId <= 6 ? 'IS' : 'SA';
                     const position = seatId <= 6 ? seatId : seatId - 6;
+                    const boatCode = boats.find((b: any) => b.id === editingReservation.boatId)?.code || 'T?';
                     
                     return (
                       <button
@@ -1745,7 +1747,7 @@ www.baliksefasi.com`;
                             : ''
                         }
                       >
-                        <div className="text-[10px]">T1_{side}{position}</div>
+                        <div className="text-[10px]">{boatCode}_{side}{position}</div>
                         <div>{seatId}</div>
                       </button>
                     );
