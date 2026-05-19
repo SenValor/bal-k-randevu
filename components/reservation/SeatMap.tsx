@@ -100,10 +100,12 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
         const resTourName = extractTourName(data.timeSlotDisplay);
         const resRange = extractTimeRange(data.timeSlotDisplay);
 
-        const slotMatches =
-          (targetTourName && resTourName && targetTourName === resTourName) ||
-          (targetRange && resRange && targetRange === resRange) ||
-          data.timeSlotId === timeSlotId;
+        // Saat aralığı varsa öncelikli olarak ona bak — tur adı aynı olsa bile
+        // farklı saatler farklı slot demektir (örn. sabah turu vs öğle turu)
+        const slotMatches = targetRange && resRange
+          ? targetRange === resRange
+          : (targetTourName && resTourName && targetTourName === resTourName) ||
+            data.timeSlotId === timeSlotId;
 
         if (slotMatches && Array.isArray(data.selectedSeats)) {
           allOccupied.push(...data.selectedSeats);
