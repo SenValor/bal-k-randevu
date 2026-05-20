@@ -62,14 +62,32 @@ export default function DoubleSeatLayout({
       boat.timeSlots || [],
       dateStr
     );
+    // timeSlotId index ("0","1") veya zaman aralığı ("13:30-18:30") olabilir
     const slotIndex = parseInt(timeSlotId);
-    const currentSlot = !isNaN(slotIndex) && effectiveSlots[slotIndex]
+    let currentSlot = !isNaN(slotIndex) && effectiveSlots[slotIndex]
       ? effectiveSlots[slotIndex]
       : null;
+
+    // Index ile bulunamadıysa, start-end formatı ile dene
+    if (!currentSlot && timeSlotId) {
+      const timeMatch = timeSlotId.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      if (timeMatch) {
+        currentSlot = effectiveSlots.find((s: any) =>
+          s.start === timeMatch[1] && s.end === timeMatch[2]
+        ) || null;
+      }
+    }
 
     const slotDisplayName = currentSlot?.displayName || '';
     const slotStart = currentSlot?.start || '';
     const slotEnd = currentSlot?.end || '';
+
+    // timeSlotId'den de zaman aralığı çıkarmayı dene (fallback)
+    let fallbackRange: string | null = null;
+    if (!slotStart && !slotEnd && timeSlotId) {
+      const fm = timeSlotId.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      if (fm) fallbackRange = `${fm[1]}-${fm[2]}`;
+    }
 
     // Gerçek zamanlı dinleyici — aynı tekne + tarih + aktif rezervasyonlar
     const q = query(
@@ -91,7 +109,7 @@ export default function DoubleSeatLayout({
     };
 
     const targetTourName = extractTourName(slotDisplayName);
-    const targetRange = slotStart && slotEnd ? `${slotStart}-${slotEnd}` : null;
+    const targetRange = slotStart && slotEnd ? `${slotStart}-${slotEnd}` : fallbackRange;
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allOccupied: number[] = [];
@@ -103,12 +121,11 @@ export default function DoubleSeatLayout({
         const resTourName = extractTourName(data.timeSlotDisplay);
         const resRange = extractTimeRange(data.timeSlotDisplay);
 
-        // Saat aralığı varsa öncelikli olarak ona bak — tur adı aynı olsa bile
-        // farklı saatler farklı slot demektir (örn. sabah turu vs öğle turu)
-        const slotMatches = targetRange && resRange
-          ? targetRange === resRange
-          : (targetTourName && resTourName && targetTourName === resTourName) ||
-            data.timeSlotId === timeSlotId;
+        // Eşleştirme: saat aralığı, timeSlotId veya tur adı
+        const rangeMatches = targetRange && resRange && targetRange === resRange;
+        const idMatches = data.timeSlotId === timeSlotId;
+        const nameOnlyMatches = !resRange && targetTourName && resTourName && targetTourName === resTourName;
+        const slotMatches = rangeMatches || idMatches || nameOnlyMatches;
 
         if (slotMatches && Array.isArray(data.selectedSeats)) {
           allOccupied.push(...data.selectedSeats);

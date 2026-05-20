@@ -58,15 +58,33 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
       boat.timeSlots || [],
       dateStr
     );
+    // timeSlotId index ("0","1") veya zaman aralığı ("13:30-18:30") olabilir
     const slotIndex = parseInt(timeSlotId);
-    const currentSlot = !isNaN(slotIndex) && effectiveSlots[slotIndex]
+    let currentSlot = !isNaN(slotIndex) && effectiveSlots[slotIndex]
       ? effectiveSlots[slotIndex]
       : null;
+
+    // Index ile bulunamadıysa, start-end formatı ile dene
+    if (!currentSlot && timeSlotId) {
+      const timeMatch = timeSlotId.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      if (timeMatch) {
+        currentSlot = effectiveSlots.find((s: any) =>
+          s.start === timeMatch[1] && s.end === timeMatch[2]
+        ) || null;
+      }
+    }
 
     // timeSlotDisplay formatını oluştur (eşleştirme için)
     const slotDisplayName = currentSlot?.displayName || '';
     const slotStart = currentSlot?.start || '';
     const slotEnd = currentSlot?.end || '';
+
+    // timeSlotId'den de zaman aralığı çıkarmayı dene (fallback)
+    let fallbackRange: string | null = null;
+    if (!slotStart && !slotEnd && timeSlotId) {
+      const fm = timeSlotId.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      if (fm) fallbackRange = `${fm[1]}-${fm[2]}`;
+    }
 
     // Gerçek zamanlı dinleyici — aynı tekne + tarih + aktif rezervasyonlar
     const q = query(
@@ -88,30 +106,63 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
     };
 
     const targetTourName = extractTourName(slotDisplayName);
-    const targetRange = slotStart && slotEnd ? `${slotStart}-${slotEnd}` : null;
+    const targetRange = slotStart && slotEnd ? `${slotStart}-${slotEnd}` : fallbackRange;
+
+    console.log('🔍 SeatMap DEBUG:', {
+      boatId: boat.id,
+      dateStr,
+      timeSlotId,
+      slotIndex,
+      currentSlot: currentSlot ? { displayName: currentSlot.displayName, start: currentSlot.start, end: currentSlot.end } : null,
+      targetTourName,
+      targetRange,
+      effectiveSlotsCount: effectiveSlots.length,
+      effectiveSlots: effectiveSlots.map((s: any) => ({ displayName: s.displayName, start: s.start, end: s.end })),
+    });
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allOccupied: number[] = [];
 
+      console.log('🔍 SeatMap: Firestore snapshot, toplam rez:', snapshot.size);
+
       snapshot.forEach((d) => {
         const data = d.data();
+
+        console.log('🔍 SeatMap rez:', {
+          id: d.id,
+          timeSlotDisplay: data.timeSlotDisplay,
+          timeSlotId: data.timeSlotId,
+          selectedSeats: data.selectedSeats,
+          status: data.status,
+        });
+
         if (!data.timeSlotDisplay) return;
 
         const resTourName = extractTourName(data.timeSlotDisplay);
         const resRange = extractTimeRange(data.timeSlotDisplay);
 
-        // Saat aralığı varsa öncelikli olarak ona bak — tur adı aynı olsa bile
-        // farklı saatler farklı slot demektir (örn. sabah turu vs öğle turu)
-        const slotMatches = targetRange && resRange
-          ? targetRange === resRange
-          : (targetTourName && resTourName && targetTourName === resTourName) ||
-            data.timeSlotId === timeSlotId;
+        // Eşleştirme: saat aralığı, timeSlotId veya tur adı
+        // Saat aralıkları değişmiş olabilir (07:00-13:00 → 07:30-12:30), bu yüzden
+        // sadece saat aralığına güvenmiyoruz — timeSlotId eşleşmesi de yeterli
+        const rangeMatches = targetRange && resRange && targetRange === resRange;
+        const idMatches = data.timeSlotId === timeSlotId;
+        const nameOnlyMatches = !resRange && targetTourName && resTourName && targetTourName === resTourName;
+        const slotMatches = rangeMatches || idMatches || nameOnlyMatches;
+
+        console.log('🔍 SeatMap eslestirme:', {
+          resTourName,
+          resRange,
+          targetRange,
+          targetTourName,
+          slotMatches,
+        });
 
         if (slotMatches && Array.isArray(data.selectedSeats)) {
           allOccupied.push(...data.selectedSeats);
         }
       });
 
+      console.log('🔍 SeatMap: Dolu koltuklar:', allOccupied);
       setOccupiedSeats([...new Set(allOccupied)]);
       setLoading(false);
     }, (error) => {

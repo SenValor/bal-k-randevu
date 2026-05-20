@@ -128,12 +128,11 @@ export async function addReservation(
         const resTourName = extractTourName(data.timeSlotDisplay);
         const resRange    = extractTimeRange(data.timeSlotDisplay);
 
-        // Saat aralığı varsa öncelikli olarak ona bak — tur adı aynı olsa bile
-        // farklı saatler farklı slot demektir (örn. sabah turu vs öğle turu)
-        const slotMatches = targetRange && resRange
-          ? targetRange === resRange
-          : (targetTourName && resTourName && targetTourName === resTourName) ||
-            data.timeSlotId === reservationData.timeSlotId;
+        // Eşleştirme: saat aralığı, timeSlotId veya tur adı
+        const rangeMatches = targetRange && resRange && targetRange === resRange;
+        const idMatches = data.timeSlotId === reservationData.timeSlotId;
+        const nameOnlyMatches = !resRange && targetTourName && resTourName && targetTourName === resTourName;
+        const slotMatches = rangeMatches || idMatches || nameOnlyMatches;
 
         if (slotMatches && Array.isArray(data.selectedSeats)) {
           occupiedSeats.push(...data.selectedSeats);

@@ -280,15 +280,9 @@ export default function AdminAddReservationPage() {
     }
 
     if (selectedSeats.includes(seatNumber)) {
-      // Koltuğu çıkar, kişi sayısını da güncelle
-      const newSeats = selectedSeats.filter(s => s !== seatNumber);
-      setSelectedSeats(newSeats);
-      setNumberOfPeople(Math.max(1, newSeats.length));
+      setSelectedSeats(selectedSeats.filter(s => s !== seatNumber));
     } else {
-      // Koltuğu ekle, kişi sayısını da güncelle
-      const newSeats = [...selectedSeats, seatNumber];
-      setSelectedSeats(newSeats);
-      setNumberOfPeople(newSeats.length);
+      setSelectedSeats([...selectedSeats, seatNumber]);
     }
   };
 
@@ -297,11 +291,6 @@ export default function AdminAddReservationPage() {
 
     if (!selectedBoat || !selectedDate || !selectedTimeSlot || selectedSeats.length === 0) {
       alert('Lütfen tüm alanları doldurun ve koltuk seçin!');
-      return;
-    }
-
-    if (selectedSeats.length !== numberOfPeople) {
-      alert(`${numberOfPeople} kişi için ${numberOfPeople} koltuk seçmelisiniz!`);
       return;
     }
 
@@ -348,10 +337,10 @@ export default function AdminAddReservationPage() {
         timeSlotId: selectedTimeSlot,
         timeSlotDisplay: timeSlotDisplayValue,
         selectedSeats,
-        adultCount: numberOfPeople,
+        adultCount: selectedSeats.length,
         childCount: 0,
         babyCount: 0,
-        totalPeople: numberOfPeople,
+        totalPeople: selectedSeats.length,
         totalPrice: selectedTour?.price || 0,
         // Admin tarafından eklenen rezervasyonlar direkt onaylı — WhatsApp doğrulaması gerekmez
         status: 'confirmed',
@@ -709,7 +698,7 @@ export default function AdminAddReservationPage() {
                 </h2>
                 <div className="bg-white/10 px-4 py-2 rounded-lg">
                   <span className="text-white/80 text-sm">
-                    {selectedSeats.length}/{numberOfPeople} koltuk seçildi
+                    {selectedSeats.length} koltuk seçildi
                   </span>
                 </div>
               </div>
@@ -721,7 +710,7 @@ export default function AdminAddReservationPage() {
                     <DoubleSeatLayout
                       selectedSeats={selectedSeats}
                       onSeatToggle={handleSeatClick}
-                      maxSeats={numberOfPeople}
+                      maxSeats={selectedBoat.capacity || 12}
                       selectedDate={new Date(selectedDate)}
                       timeSlotId={selectedTimeSlot}
                       isPrivateTour={false}
@@ -730,7 +719,7 @@ export default function AdminAddReservationPage() {
                     <SeatMap
                       selectedSeats={selectedSeats}
                       onSeatToggle={handleSeatClick}
-                      maxSeats={numberOfPeople}
+                      maxSeats={selectedBoat.capacity || 12}
                       selectedDate={new Date(selectedDate)}
                       timeSlotId={selectedTimeSlot}
                       isPrivateTour={false}
@@ -759,8 +748,7 @@ export default function AdminAddReservationPage() {
           )}
 
           {/* Müşteri Bilgileri */}
-          {selectedSeats.length > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div className={`bg-white/5 border border-white/10 rounded-2xl p-6 ${selectedSeats.length === 0 ? 'hidden' : ''}`}>
               <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                 <User className="w-5 h-5 text-[#00A9A5]" />
                 Müşteri Bilgileri
@@ -818,8 +806,7 @@ export default function AdminAddReservationPage() {
                 </div>
               </div>
             </div>
-          )}
-
+          
           {/* Submit Button */}
           {selectedSeats.length > 0 && (
             <div className="flex gap-4">
