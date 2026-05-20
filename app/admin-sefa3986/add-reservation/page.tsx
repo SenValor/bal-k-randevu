@@ -8,7 +8,7 @@ import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import { Boat, subscribeToBoats, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { Tour, subscribeToTours } from '@/lib/tourHelpers';
-import { getReservationsByBoatDateSlot, getCalendarFullness } from '@/lib/reservationHelpers';
+import { getReservationsByBoatDateSlot, getCalendarFullness, generateReservationNumber } from '@/lib/reservationHelpers';
 import SeatMap from '@/components/reservation/SeatMap';
 import DoubleSeatLayout from '@/components/reservation/DoubleSeatLayout';
 
@@ -280,13 +280,15 @@ export default function AdminAddReservationPage() {
     }
 
     if (selectedSeats.includes(seatNumber)) {
-      setSelectedSeats(selectedSeats.filter(s => s !== seatNumber));
+      // Koltuğu çıkar, kişi sayısını da güncelle
+      const newSeats = selectedSeats.filter(s => s !== seatNumber);
+      setSelectedSeats(newSeats);
+      setNumberOfPeople(Math.max(1, newSeats.length));
     } else {
-      if (selectedSeats.length < numberOfPeople) {
-        setSelectedSeats([...selectedSeats, seatNumber]);
-      } else {
-        alert(`En fazla ${numberOfPeople} koltuk seçebilirsiniz!`);
-      }
+      // Koltuğu ekle, kişi sayısını da güncelle
+      const newSeats = [...selectedSeats, seatNumber];
+      setSelectedSeats(newSeats);
+      setNumberOfPeople(newSeats.length);
     }
   };
 
@@ -328,6 +330,8 @@ export default function AdminAddReservationPage() {
       const currentTimeSlot = timeSlots.find(ts => ts.id === selectedTimeSlot);
       const timeSlotMapsLink = (currentTimeSlot as any)?.mapsLink || selectedBoat.mapsLink || '';
 
+      const reservationNumber = generateReservationNumber();
+
       const newReservation = {
         userId: 'admin-manual',
         userName: customerName || 'Admin Ekledi',
@@ -336,7 +340,7 @@ export default function AdminAddReservationPage() {
         boatId: selectedBoat.id,
         boatName: selectedBoat.name,
         boatMapsLink: selectedBoat.mapsLink || '',
-        timeSlotMapsLink: timeSlotMapsLink, // Saat dilimine özel konum
+        timeSlotMapsLink: timeSlotMapsLink,
         tourId: selectedTourId || '',
         tourName: selectedTour?.name || 'Özel Tur',
         date: selectedDate,
@@ -349,7 +353,9 @@ export default function AdminAddReservationPage() {
         babyCount: 0,
         totalPeople: numberOfPeople,
         totalPrice: selectedTour?.price || 0,
-        status: 'pending',
+        // Admin tarafından eklenen rezervasyonlar direkt onaylı — WhatsApp doğrulaması gerekmez
+        status: 'confirmed',
+        reservationNumber,
         createdAt: new Date().toISOString(),
         isManual: true,
         notes: notes || '',
@@ -357,8 +363,8 @@ export default function AdminAddReservationPage() {
 
       await addDoc(collection(db, 'reservations'), newReservation);
 
-      alert('✅ Rezervasyon başarıyla eklendi! Bekleyen randevular sayfasından onaylayabilirsiniz.');
-      router.push('/admin-sefa3986/pending');
+      alert(`✅ Rezervasyon onaylandı! Rezervasyon No: ${reservationNumber}`);
+      router.push('/admin-sefa3986/reservations');
     } catch (error) {
       console.error('Rezervasyon ekleme hatası:', error);
       alert('❌ Bir hata oluştu!');
