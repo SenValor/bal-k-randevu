@@ -134,10 +134,11 @@ export default function DoubleSeatLayout({
     return selectedSeats.length < maxSeats;
   };
 
+  // SeatMap ile aynı sistem: 1-6 = İskele, 7-12 = Sancak
   const getSeatCode = (seatId: number) => {
-    const pairNumber = Math.ceil(seatId / 2);
-    const side = seatId % 2 === 1 ? 'IS' : 'SA';
-    return `${boatCode}_${side}${pairNumber}`;
+    const side = seatId <= 6 ? 'IS' : 'SA';
+    const position = seatId <= 6 ? seatId : seatId - 6;
+    return `${boatCode}_${side}${position}`;
   };
 
   const getSeatColor = (seatId: number) => {
@@ -153,11 +154,13 @@ export default function DoubleSeatLayout({
     return 'bg-white border-2 border-[#6B9BC3]/40 hover:border-[#6B9BC3] hover:bg-[#6B9BC3]/10 cursor-pointer';
   };
 
-  // İkili düzen: 3 çift dikdörtgen, her biri 2 koltuk içeriyor
+  // İkili düzen: 3 çift dikdörtgen
+  // Sol (İskele): 1,2 | 3,4 | 5,6  →  IS1–IS6
+  // Sağ (Sancak): 7,8 | 9,10 | 11,12  →  SA1–SA6
   const rectanglePairs = [
-    [[1, 3], [2, 4]],     // Dikdörtgen 1: İskele (1,2) | Sancak (1,2)
-    [[5, 7], [6, 8]],     // Dikdörtgen 2: İskele (3,4) | Sancak (3,4)
-    [[9, 11], [10, 12]],  // Dikdörtgen 3: İskele (5,6) | Sancak (5,6)
+    [[1, 2], [7, 8]],      // Sıra 1: İskele (1,2) | Sancak (7,8)
+    [[3, 4], [9, 10]],     // Sıra 2: İskele (3,4) | Sancak (9,10)
+    [[5, 6], [11, 12]],    // Sıra 3: İskele (5,6) | Sancak (11,12)
   ];
 
   return (
@@ -195,10 +198,7 @@ export default function DoubleSeatLayout({
                     {/* Orta Çizgi */}
                     <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-[#6B9BC3]/50 -translate-y-1/2 z-10 rounded-full" />
                     
-                    {leftSeats.map((seatId, index) => {
-                      const displayNumber = Math.ceil(seatId / 2);
-                      
-                      return (
+                    {leftSeats.map((seatId) => (
                         <motion.button
                           key={seatId}
                           whileHover={canSelect(seatId) ? { scale: 1.05 } : {}}
@@ -223,7 +223,7 @@ export default function DoubleSeatLayout({
                               isOccupied(seatId) ? 'text-red-400' : 
                               isSelected(seatId) ? 'text-[#00A9A5]' : 'text-[#0D2847]'
                             }`}>
-                              {displayNumber}
+                              {seatId}
                             </span>
                             <span className={`text-[8px] mt-0.5 ${
                               isOccupied(seatId) ? 'text-red-400/60' : 
@@ -233,8 +233,7 @@ export default function DoubleSeatLayout({
                             </span>
                           </div>
                         </motion.button>
-                      );
-                    })}
+                      ))}
                   </div>
                 </div>
 
@@ -244,10 +243,7 @@ export default function DoubleSeatLayout({
                     {/* Orta Çizgi */}
                     <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-[#6B9BC3]/50 -translate-y-1/2 z-10 rounded-full" />
                     
-                    {rightSeats.map((seatId, index) => {
-                      const displayNumber = Math.ceil(seatId / 2);
-                      
-                      return (
+                    {rightSeats.map((seatId) => (
                         <motion.button
                           key={seatId}
                           whileHover={canSelect(seatId) ? { scale: 1.05 } : {}}
@@ -272,7 +268,7 @@ export default function DoubleSeatLayout({
                               isOccupied(seatId) ? 'text-red-400' : 
                               isSelected(seatId) ? 'text-[#00A9A5]' : 'text-[#0D2847]'
                             }`}>
-                              {displayNumber}
+                              {seatId}
                             </span>
                             <span className={`text-[8px] mt-0.5 ${
                               isOccupied(seatId) ? 'text-red-400/60' : 
@@ -282,8 +278,7 @@ export default function DoubleSeatLayout({
                             </span>
                           </div>
                         </motion.button>
-                      );
-                    })}
+                      ))}
                   </div>
                 </div>
               </motion.div>
