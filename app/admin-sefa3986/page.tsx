@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Anchor, Users, FileText, Clock, BarChart3, Calendar, Compass, Image, HelpCircle, Settings } from 'lucide-react';
+import { Anchor, Users, FileText, Clock, BarChart3, Calendar, Compass, Image, HelpCircle, Settings, Megaphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminDashboard() {
@@ -87,6 +87,15 @@ export default function AdminDashboard() {
       icon: Image,
       color: 'from-purple-500 to-purple-600',
       path: '/admin-sefa3986/gallery',
+      available: true,
+    },
+    {
+      id: 'announcements',
+      title: 'Duyurular',
+      description: 'Mobil uygulama duyurularını yönet',
+      icon: Megaphone,
+      color: 'from-orange-500 to-orange-600',
+      path: '/admin-sefa3986/announcements',
       available: true,
     },
     {
