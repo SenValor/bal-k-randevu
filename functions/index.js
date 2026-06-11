@@ -506,6 +506,84 @@ https://baliksefasi.com/rezervasyon-sorgula
   });
 
 // ============================================================
+// 📢 DUYURU BİLDİRİMİ - Yeni duyuru oluşturulunca push gönder
+// ============================================================
+
+/**
+ * announcements koleksiyonuna yeni belge eklenince
+ * expoPushToken kayıtlı tüm kullanıcılara Expo push bildirimi gönderir.
+ * Uygulama öldürülmüş/arka planda olsa da OS bildirimi gösterir.
+ */
+exports.onAnnouncementCreated = functions
+  .region("us-central1")
+  .firestore.document("announcements/{announcementId}")
+  .onCreate(async (snap, context) => {
+    try {
+      const ann = snap.data();
+      const announcementId = context.params.announcementId;
+
+      if (!ann.isActive) {
+        console.log("ℹ️ Duyuru aktif değil, bildirim gönderilmiyor.");
+        return null;
+      }
+
+      console.log(`🔔 Yeni duyuru: ${announcementId} — "${ann.title}"`);
+
+      // expoPushToken kayıtlı tüm kullanıcıları çek
+      const usersSnap = await admin.firestore().collection("users").get();
+
+      const tokens = [];
+      usersSnap.forEach((doc) => {
+        const token = doc.data().expoPushToken;
+        if (token && typeof token === "string" && token.startsWith("ExponentPushToken[")) {
+          tokens.push(token);
+        }
+      });
+
+      if (tokens.length === 0) {
+        console.log("ℹ️ Push token bulunan kullanıcı yok.");
+        return null;
+      }
+
+      console.log(`📱 ${tokens.length} kullanıcıya bildirim gönderiliyor...`);
+
+      const title = `${ann.emoji || "📢"} ${ann.title}`;
+      const body = ann.body || "";
+
+      // Expo Push API en fazla 100 mesaj kabul eder; batch'lere böl
+      const BATCH = 100;
+      for (let i = 0; i < tokens.length; i += BATCH) {
+        const chunk = tokens.slice(i, i + BATCH).map((to) => ({
+          to,
+          title,
+          body,
+          data: { announcementId },
+          sound: "default",
+        }));
+
+        const response = await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate",
+          },
+          body: JSON.stringify(chunk),
+        });
+
+        const result = await response.json();
+        console.log(`📊 Batch ${Math.floor(i / BATCH) + 1}:`, JSON.stringify(result));
+      }
+
+      console.log("✅ Tüm push bildirimleri gönderildi.");
+      return null;
+    } catch (err) {
+      console.error("❌ onAnnouncementCreated hatası:", err.message);
+      return null;
+    }
+  });
+
+// ============================================================
 // 🧹 OTOMATIK TEMİZLEME - Süresi Dolmuş Doğrulama Kodları
 // ============================================================
 
