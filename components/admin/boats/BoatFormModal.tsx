@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Loader2, Plus, Trash2, Anchor, Image as ImageIcon, Upload, Fish, Calendar, Clock } from 'lucide-react';
+import { X, Loader2, Plus, Trash2, Anchor, Image as ImageIcon, Upload, Fish, Calendar, Clock, Video } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Boat, BoatFormData, addBoat, updateBoat, TimeSlot, ScheduledTimeSlots } from '@/lib/boatHelpers';
@@ -26,6 +26,9 @@ export default function BoatFormModal({
   const [error, setError] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>('');
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingVideoCover, setUploadingVideoCover] = useState<number | null>(null);
 
   const [formData, setFormData] = useState<BoatFormData>({
     name: '',
@@ -48,6 +51,9 @@ export default function BoatFormModal({
     ribbonText: '',
     isRibbonActive: false,
     ribbonColor: 'red',
+    photos: [],
+    videos: [],
+    videoCovers: [],
   });
 
   useEffect(() => {
@@ -56,7 +62,6 @@ export default function BoatFormModal({
 
   useEffect(() => {
     if (isOpen && boat) {
-      // Düzenleme modu
       setFormData({
         name: boat.name,
         code: boat.code || '',
@@ -74,9 +79,11 @@ export default function BoatFormModal({
         ribbonText: boat.ribbonText || '',
         isRibbonActive: boat.isRibbonActive || false,
         ribbonColor: boat.ribbonColor || 'red',
+        photos: boat.photos || [],
+        videos: boat.videos || [],
+        videoCovers: boat.videoCovers || [],
       });
     } else if (isOpen) {
-      // Yeni ekleme modu - formu sıfırla
       setFormData({
         name: '',
         code: '',
@@ -98,6 +105,9 @@ export default function BoatFormModal({
         ribbonText: '',
         isRibbonActive: false,
         ribbonColor: 'red',
+        photos: [],
+        videos: [],
+        videoCovers: [],
       });
     }
     setError('');
@@ -944,6 +954,257 @@ export default function BoatFormModal({
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Galeri Fotoğrafları */}
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-3">
+                  Galeri Fotoğrafları
+                </label>
+
+                {/* Upload Button */}
+                <label className={`flex items-center gap-3 w-full border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all
+                  ${uploadingGallery ? 'border-white/20 opacity-50 cursor-not-allowed' : 'border-white/20 hover:border-[#00A9A5]/60 hover:bg-white/5'}`}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={uploadingGallery || loading}
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length === 0) return;
+                      setUploadingGallery(true);
+                      try {
+                        const uploaded: string[] = [];
+                        for (const file of files) {
+                          const storageRef = ref(storage, `boats/gallery/${Date.now()}_${file.name}`);
+                          await uploadBytes(storageRef, file);
+                          const url = await getDownloadURL(storageRef);
+                          uploaded.push(url);
+                        }
+                        setFormData((prev) => ({ ...prev, photos: [...(prev.photos || []), ...uploaded] }));
+                      } catch {
+                        setError('Fotoğraf yüklenirken bir hata oluştu');
+                      } finally {
+                        setUploadingGallery(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  {uploadingGallery ? (
+                    <>
+                      <Loader2 className="w-5 h-5 text-[#00A9A5] animate-spin flex-shrink-0" />
+                      <span className="text-white/60 text-sm">Yükleniyor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5 text-white/40 flex-shrink-0" />
+                      <span className="text-white/40 text-sm">Fotoğraf ekle (çoklu seçim yapabilirsiniz)</span>
+                    </>
+                  )}
+                </label>
+
+                {/* Photo Grid */}
+                {formData.photos && formData.photos.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    {formData.photos.map((url, idx) => (
+                      <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/10">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={`Galeri ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, photos: (prev.photos || []).filter((_, i) => i !== idx) }))}
+                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-5 h-5 text-red-400" />
+                        </button>
+                        <div className="absolute bottom-1 right-1 bg-black/50 rounded-full px-1.5 py-0.5 text-xs text-white/70">
+                          {idx + 1}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(!formData.photos || formData.photos.length === 0) && (
+                  <p className="text-white/30 text-xs mt-2">
+                    Henüz galeri fotoğrafı yok. Mobil uygulamada tekne detay sayfasında gösterilir.
+                  </p>
+                )}
+              </div>
+
+              {/* Galeri Videoları */}
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-3 flex items-center gap-2">
+                  <Video className="w-4 h-4 text-blue-400" />
+                  Galeri Videoları
+                </label>
+
+                <label className={`flex items-center gap-3 w-full border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all
+                  ${uploadingVideo ? 'border-white/20 opacity-50 cursor-not-allowed' : 'border-blue-500/30 hover:border-blue-400/60 hover:bg-blue-500/5'}`}>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    multiple
+                    disabled={uploadingVideo || loading}
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length === 0) return;
+
+                      const tooBig = files.find((f) => f.size > 200 * 1024 * 1024);
+                      if (tooBig) {
+                        setError(`"${tooBig.name}" 200MB sınırını aşıyor`);
+                        e.target.value = '';
+                        return;
+                      }
+
+                      setUploadingVideo(true);
+                      setError('');
+                      try {
+                        const uploaded: string[] = [];
+                        for (const file of files) {
+                          const storageRef = ref(storage, `boats/videos/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`);
+                          await uploadBytes(storageRef, file);
+                          const url = await getDownloadURL(storageRef);
+                          uploaded.push(url);
+                        }
+                        setFormData((prev) => ({ ...prev, videos: [...(prev.videos || []), ...uploaded] }));
+                      } catch {
+                        setError('Video yüklenirken bir hata oluştu');
+                      } finally {
+                        setUploadingVideo(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  {uploadingVideo ? (
+                    <>
+                      <Loader2 className="w-5 h-5 text-blue-400 animate-spin flex-shrink-0" />
+                      <span className="text-white/60 text-sm">Video yükleniyor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5 text-blue-400/60 flex-shrink-0" />
+                      <div>
+                        <p className="text-white/60 text-sm">Video ekle (çoklu seçim)</p>
+                        <p className="text-white/30 text-xs mt-0.5">MP4, MOV, AVI · Maks. 200MB/video</p>
+                      </div>
+                    </>
+                  )}
+                </label>
+
+                {formData.videos && formData.videos.length > 0 && (
+                  <div className="space-y-3 mt-3">
+                    {formData.videos.map((url, idx) => {
+                      const cover = (formData.videoCovers || [])[idx];
+                      return (
+                        <div key={idx} className="rounded-xl overflow-hidden bg-white/5 border border-white/10">
+                          {/* Video */}
+                          <div className="relative group">
+                            <video
+                              src={url}
+                              controls
+                              className="w-full aspect-video object-cover"
+                              preload="metadata"
+                            />
+                            <div className="absolute top-2 left-2 bg-black/60 rounded-full px-2 py-0.5 text-xs text-white/70">
+                              Video {idx + 1}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setFormData((prev) => ({
+                                ...prev,
+                                videos: (prev.videos || []).filter((_, i) => i !== idx),
+                                videoCovers: (prev.videoCovers || []).filter((_, i) => i !== idx),
+                              }))}
+                              className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Kapak Görseli */}
+                          <div className="p-3 border-t border-white/10">
+                            <p className="text-white/50 text-xs mb-2 flex items-center gap-1.5">
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              Video Kapak Görseli
+                            </p>
+                            {cover ? (
+                              <div className="relative group/cover">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={cover}
+                                  alt={`Kapak ${idx + 1}`}
+                                  className="w-full aspect-video object-cover rounded-lg border border-white/10"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData((prev) => {
+                                    const covers = [...(prev.videoCovers || [])];
+                                    covers[idx] = '';
+                                    return { ...prev, videoCovers: covers };
+                                  })}
+                                  className="absolute top-1.5 right-1.5 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded-md transition-colors opacity-0 group-hover/cover:opacity-100"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <label className={`flex items-center gap-2 w-full border border-dashed rounded-lg px-3 py-2 cursor-pointer transition-all
+                                ${uploadingVideoCover === idx ? 'border-white/20 opacity-60 cursor-not-allowed' : 'border-white/20 hover:border-blue-400/50 hover:bg-blue-500/5'}`}>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={uploadingVideoCover !== null || loading}
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    setUploadingVideoCover(idx);
+                                    try {
+                                      const storageRef = ref(storage, `boats/video-covers/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`);
+                                      await uploadBytes(storageRef, file);
+                                      const coverUrl = await getDownloadURL(storageRef);
+                                      setFormData((prev) => {
+                                        const covers = [...(prev.videoCovers || [])];
+                                        covers[idx] = coverUrl;
+                                        return { ...prev, videoCovers: covers };
+                                      });
+                                    } catch {
+                                      setError('Kapak görseli yüklenirken hata oluştu');
+                                    } finally {
+                                      setUploadingVideoCover(null);
+                                      e.target.value = '';
+                                    }
+                                  }}
+                                />
+                                {uploadingVideoCover === idx ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+                                    <span className="text-white/50 text-xs">Yükleniyor...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="w-4 h-4 text-white/30 flex-shrink-0" />
+                                    <span className="text-white/40 text-xs">Kapak görseli yükle (PNG, JPG)</span>
+                                  </>
+                                )}
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {(!formData.videos || formData.videos.length === 0) && (
+                  <p className="text-white/30 text-xs mt-2">
+                    Henüz video yok. Tekne detay sayfasında gösterilecek.
+                  </p>
+                )}
               </div>
 
               {/* Action Buttons */}

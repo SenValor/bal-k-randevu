@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Meta Business API credentials
+const META_TOKEN = 'EAAMfyFpCzHsBRVrp1RxSv7AKtXETgUMPRplEA8ZB3vVsfZBX4Jeq4JFOoYquX1RwkdfjIa62TQJGZBf4tyvVBaZACZBVieFo5KKFY6vF9COMVWDvZAzbx9jaVlOr3H41QcpEgiBdLLGrZCNiGu1SaEfUfQlWaV4aO5l3fIytKCjm5M8E0OuC11hL2ey44vRYRDmkfVdQnaci0vWohcZBMJAy8o4fQaK5xZAiZBeovz2dWC';
+const META_PHONE_ID = '797993213405372';
+
 // Telefon numarasını WhatsApp formatına çevirir
 function formatPhoneNumber(phone: string): string {
   if (!phone) return "";
@@ -43,16 +47,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { type, reservation } = body;
 
-    // Env variables
-    const accessToken = process.env.META_ACCESS_TOKEN;
-    const phoneId = process.env.META_PHONE_ID;
-
-    if (!accessToken || !phoneId) {
-      return NextResponse.json(
-        { success: false, error: 'WhatsApp API credentials eksik' },
-        { status: 500 }
-      );
-    }
+    const accessToken = META_TOKEN;
+    const phoneId = META_PHONE_ID;
 
     if (!reservation.userPhone) {
       return NextResponse.json(

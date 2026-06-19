@@ -78,6 +78,9 @@ export interface Boat {
   ribbonText?: string;
   isRibbonActive?: boolean;
   ribbonColor?: string; // 'red' | 'blue' | 'green' | 'yellow'
+  photos?: string[]; // Galeri fotoğrafları
+  videos?: string[]; // Galeri videoları
+  videoCovers?: string[]; // Video kapak görselleri (videos[] ile aynı sırada)
 }
 
 export type BoatFormData = Omit<Boat, 'id' | 'createdAt' | 'updatedAt'>;

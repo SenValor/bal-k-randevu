@@ -95,9 +95,23 @@ export default function PendingReservationsPage() {
         updatedAt: new Date().toISOString(),
       });
 
+      // WhatsApp onay mesajı gönder
+      const reservation = reservations.find((r) => r.id === reservationId);
+      if (reservation?.userPhone) {
+        try {
+          await fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'approval', reservation }),
+          });
+        } catch (waError) {
+          console.error('WhatsApp mesajı gönderilemedi:', waError);
+        }
+      }
+
       // Listeyi güncelle
       setReservations((prev) => prev.filter((r) => r.id !== reservationId));
-      alert('✅ Rezervasyon onaylandı! WhatsApp mesajı gönderilecek.');
+      alert('✅ Rezervasyon onaylandı ve WhatsApp mesajı gönderildi.');
     } catch (error) {
       console.error('Onaylama hatası:', error);
       alert('❌ Rezervasyon onaylanırken bir hata oluştu.');
@@ -146,13 +160,27 @@ export default function PendingReservationsPage() {
           status: 'confirmed',
           updatedAt: new Date().toISOString(),
         });
+
+        // WhatsApp onay mesajı gönder
+        const reservation = reservations.find((r) => r.id === id);
+        if (reservation?.userPhone) {
+          try {
+            await fetch('/api/send-whatsapp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'approval', reservation }),
+            });
+          } catch (waError) {
+            console.error('WhatsApp mesajı gönderilemedi:', waError);
+          }
+        }
       });
 
       await Promise.all(promises);
 
       setReservations((prev) => prev.filter((r) => !selectedReservations.includes(r.id)));
       setSelectedReservations([]);
-      alert(`✅ ${selectedReservations.length} rezervasyon onaylandı! WhatsApp mesajları gönderilecek.`);
+      alert(`✅ ${selectedReservations.length} rezervasyon onaylandı ve WhatsApp mesajları gönderildi.`);
     } catch (error) {
       console.error('Toplu onaylama hatası:', error);
       alert('❌ Rezervasyonlar onaylanırken bir hata oluştu.');

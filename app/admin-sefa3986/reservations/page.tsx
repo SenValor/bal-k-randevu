@@ -282,6 +282,25 @@ export default function AdminReservationsPage() {
         updatedAt: new Date().toISOString(),
       });
 
+      // WhatsApp mesajı gönder (onay veya iptal)
+      if (newStatus === 'confirmed' || newStatus === 'cancelled') {
+        const reservation = reservations.find(r => r.id === id);
+        if (reservation?.userPhone) {
+          try {
+            await fetch('/api/send-whatsapp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: newStatus === 'confirmed' ? 'approval' : 'cancellation',
+                reservation,
+              }),
+            });
+          } catch (waError) {
+            console.error('WhatsApp mesajı gönderilemedi:', waError);
+          }
+        }
+      }
+
       // Yerel state'i güncelle
       setReservations(reservations.map(r => 
         r.id === id ? { ...r, status: newStatus } : r
