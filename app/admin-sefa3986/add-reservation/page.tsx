@@ -1,16 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Calendar as CalendarIcon, Clock, Users, Ship, User, Phone, Mail, Loader2, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
-import { Boat, subscribeToBoats, getTimeSlotsForDate } from '@/lib/boatHelpers';
-import { Tour, subscribeToTours } from '@/lib/tourHelpers';
-import { getReservationsByBoatDateSlot, getCalendarFullness, generateReservationNumber } from '@/lib/reservationHelpers';
-import SeatMap from '@/components/reservation/SeatMap';
 import DoubleSeatLayout from '@/components/reservation/DoubleSeatLayout';
+import SeatMap from '@/components/reservation/SeatMap';
+import { Boat, getTimeSlotsForDate, subscribeToBoats } from '@/lib/boatHelpers';
+import { db } from '@/lib/firebaseClient';
+import { generateReservationNumber, getCalendarFullness, getReservationsByBoatDateSlot } from '@/lib/reservationHelpers';
+import { Tour, subscribeToTours } from '@/lib/tourHelpers';
+import { addDoc, collection } from 'firebase/firestore';
+import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Loader2, Ship, User, Users } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 interface TimeSlot {
   id: string;
@@ -299,20 +298,20 @@ export default function AdminAddReservationPage() {
     try {
       const selectedTour = tours.find(t => t.id === selectedTourId);
       
-      // Seçili saat diliminin display bilgisini al
+      // Seçili saat diliminin display bilgisini al — timeSlots state'i
+      // getTimeSlotsForDate ile (scheduledTimeSlots dahil) yüklendiği için
+      // seçili tarihin GERÇEK saatlerini içerir. Mobil uygulama saat aralığı
+      // üzerinden eşleştirme yaptığından buradan üretmek zorunludur.
       const selectedSlot = timeSlots.find(ts => ts.id === selectedTimeSlot);
       let timeSlotDisplayValue = selectedTimeSlot;
-      
-      if (selectedSlot && selectedBoat?.timeSlots) {
-        const boatSlot = selectedBoat.timeSlots[parseInt(selectedTimeSlot)] || 
-                        selectedBoat.timeSlots.find((s: any) => s.id === selectedTimeSlot || `${s.start}-${s.end}` === selectedTimeSlot);
-        
-        if (boatSlot) {
-          const displayName = (boatSlot as any).displayName || '';
-          const start = (boatSlot as any).start || '';
-          const end = (boatSlot as any).end || '';
-          timeSlotDisplayValue = displayName ? `${displayName} (${start} - ${end})` : `${start} - ${end}`;
-        }
+
+      if (selectedSlot && selectedSlot.start && selectedSlot.end) {
+        const displayName = selectedSlot.label && selectedSlot.label !== `${selectedSlot.start} - ${selectedSlot.end}`
+          ? selectedSlot.label
+          : '';
+        timeSlotDisplayValue = displayName
+          ? `${displayName} (${selectedSlot.start} - ${selectedSlot.end})`
+          : `${selectedSlot.start} - ${selectedSlot.end}`;
       }
 
       // Seçili saat diliminin mapsLink'ini al
@@ -332,6 +331,7 @@ export default function AdminAddReservationPage() {
         timeSlotMapsLink: timeSlotMapsLink,
         tourId: selectedTourId || '',
         tourName: selectedTour?.name || 'Özel Tur',
+        tourCategory: selectedTour?.category || 'private',
         date: selectedDate,
         timeSlot: selectedTimeSlot,
         timeSlotId: selectedTimeSlot,

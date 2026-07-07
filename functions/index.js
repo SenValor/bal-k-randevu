@@ -624,3 +624,151 @@ exports.cleanExpiredVerificationCodes = functions
       return null;
     }
   });
+
+// ============================================================
+// 🛡️ ÇİFT REZERVASYON KORUMASI (Sunucu Tarafı Güvenlik Ağı)
+// ============================================================
+
+// "Tur Adı (07:30 - 12:30)" formatından saat aralığını çıkarır
+function extractTimeRangeGuard(display) {
+  if (!display || typeof display !== "string") return null;
+  const m = display.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+  return m ? `${m[1]}-${m[2]}` : null;
+}
+
+// Mobil uygulamadaki slotMatches ile aynı mantık:
+// saat aralığı eşleşirse VEYA timeSlotId eşleşirse aynı slot sayılır
+function slotsMatchGuard(resDisplay, resSlotId, targetDisplay, targetSlotId) {
+  const targetRange = extractTimeRangeGuard(targetDisplay);
+  const resRange = extractTimeRangeGuard(resDisplay);
+  if (targetRange && resRange && targetRange === resRange) return true;
+  if (
+    resSlotId !== undefined && resSlotId !== null &&
+    targetSlotId !== undefined && targetSlotId !== null &&
+    String(resSlotId) === String(targetSlotId)
+  ) return true;
+  return false;
+}
+
+/**
+ * Yeni rezervasyon oluşturulduğunda aynı tekne/tarih/slot içinde koltuk
+ * çakışması olup olmadığını kontrol eder. Çakışma varsa SONRA gelen
+ * rezervasyonu otomatik iptal eder (status: cancelled).
+ * Eski uygulama sürümleri, web ve admin panel dahil TÜM kanalları kapsar.
+ * İptal, mevcut onReservationCancelled tetikleyicisi üzerinden müşteriye
+ * WhatsApp bilgilendirmesi de gönderir.
+ */
+exports.onReservationCreatedGuard = functions
+  .region("us-central1")
+  .firestore.document("reservations/{reservationId}")
+  .onCreate(async (snap, context) => {
+    try {
+      const data = snap.data();
+      const id = context.params.reservationId;
+
+      if (!data) return null;
+      if (!["pending", "confirmed"].includes(data.status)) return null;
+      if (!Array.isArray(data.selectedSeats) || data.selectedSeats.length === 0) return null;
+      if (!data.boatId || !data.date) return null;
+
+      const db = admin.firestore();
+      const qs = await db
+        .collection("reservations")
+        .where("boatId", "==", data.boatId)
+        .where("date", "==", data.date)
+        .where("status", "in", ["pending", "confirmed"])
+        .get();
+
+      const myCreatedAt = data.createdAt || snap.createTime.toDate().toISOString();
+      const conflictSeats = new Set();
+
+      qs.forEach((d) => {
+        if (d.id === id) return;
+        const r = d.data();
+        if (!slotsMatchGuard(r.timeSlotDisplay, r.timeSlotId, data.timeSlotDisplay, data.timeSlotId)) return;
+
+        // Sadece BİZDEN ÖNCE oluşturulmuş rezervasyonlara karşı iptal ederiz.
+        // (Aynı anda oluşan çiftte deterministik sıralama: createdAt, eşitse doc id)
+        const otherCreatedAt = r.createdAt || "";
+        const otherIsEarlier =
+          otherCreatedAt < myCreatedAt ||
+          (otherCreatedAt === myCreatedAt && d.id < id);
+        if (!otherIsEarlier) return;
+
+        const otherSeats = Array.isArray(r.selectedSeats) ? r.selectedSeats : [];
+        data.selectedSeats.forEach((s) => {
+          if (otherSeats.includes(s)) conflictSeats.add(s);
+        });
+      });
+
+      if (conflictSeats.size === 0) {
+        console.log(`✅ Guard: ${id} çakışma yok.`);
+        return null;
+      }
+
+      const seatsStr = [...conflictSeats].join(", ");
+      console.log(`🛑 Guard: ${id} rezervasyonunda koltuk çakışması (${seatsStr}) — otomatik iptal ediliyor.`);
+
+      // 1) Sonra gelen rezervasyonu iptal et
+      await snap.ref.update({
+        status: "cancelled",
+        cancelReason: `Otomatik iptal: koltuk çakışması (${seatsStr})`,
+        autoCancelled: true,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // 2) Koltuk kilidindeki girdilerini temizle (mobil kilit sistemi)
+      try {
+        const range = extractTimeRangeGuard(data.timeSlotDisplay);
+        const lockId = `${data.boatId}_${data.date}_${range || `slot${data.timeSlotId}`}`;
+        const lockRef = db.collection("seatLocks").doc(lockId);
+        await db.runTransaction(async (tx) => {
+          const lockSnap = await tx.get(lockRef);
+          if (!lockSnap.exists) return;
+          const seats = { ...(lockSnap.data().seats || {}) };
+          let changed = false;
+          for (const key of Object.keys(seats)) {
+            if (seats[key] && seats[key].r === id) {
+              delete seats[key];
+              changed = true;
+            }
+          }
+          if (changed) tx.set(lockRef, { seats });
+        });
+      } catch (lockErr) {
+        console.error("⚠️ Guard: kilit temizleme hatası:", lockErr.message);
+      }
+
+      // 3) Kullanıcıya push bildirimi gönder (best-effort)
+      try {
+        if (data.userId && data.userId !== "admin-manual") {
+          const userSnap = await db.collection("users").doc(data.userId).get();
+          const token = userSnap.exists ? userSnap.data().expoPushToken : null;
+          if (token && typeof token === "string" && token.startsWith("ExponentPushToken[")) {
+            await fetch("https://exp.host/--/api/v2/push/send", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+              },
+              body: JSON.stringify({
+                to: token,
+                title: "⚠️ Rezervasyonunuz İptal Edildi",
+                body: `Seçtiğiniz koltuk(lar) (${seatsStr}) başka bir müşteri tarafından daha önce alındığı için ${data.reservationNumber || ""} numaralı rezervasyonunuz iptal edildi. Lütfen farklı koltuk seçerek tekrar deneyin.`,
+                data: { reservationId: id },
+                sound: "default",
+              }),
+            });
+            console.log("📱 Guard: iptal push bildirimi gönderildi.");
+          }
+        }
+      } catch (pushErr) {
+        console.error("⚠️ Guard: push gönderme hatası:", pushErr.message);
+      }
+
+      return null;
+    } catch (error) {
+      console.error("❌ onReservationCreatedGuard hatası:", error);
+      return null;
+    }
+  });
