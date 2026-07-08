@@ -637,11 +637,14 @@ function extractTimeRangeGuard(display) {
 }
 
 // Mobil uygulamadaki slotMatches ile aynı mantık:
-// saat aralığı eşleşirse VEYA timeSlotId eşleşirse aynı slot sayılır
+// Her iki tarafta saat aralığı varsa KESİN karşılaştır (farklıysa false döner).
+// Sadece biri eksikse timeSlotId'ye düş.
 function slotsMatchGuard(resDisplay, resSlotId, targetDisplay, targetSlotId) {
   const targetRange = extractTimeRangeGuard(targetDisplay);
   const resRange = extractTimeRangeGuard(resDisplay);
-  if (targetRange && resRange && targetRange === resRange) return true;
+  // Her iki tarafta saat aralığı varsa kesin cevap — farklıysa ERKEN false döner
+  if (targetRange && resRange) return targetRange === resRange;
+  // En az biri eksikse timeSlotId ile karşılaştır
   if (
     resSlotId !== undefined && resSlotId !== null &&
     targetSlotId !== undefined && targetSlotId !== null &&
