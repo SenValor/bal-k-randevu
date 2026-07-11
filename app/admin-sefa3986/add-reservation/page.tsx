@@ -6,10 +6,15 @@ import { Boat, getTimeSlotsForDate, subscribeToBoats } from '@/lib/boatHelpers';
 import { db } from '@/lib/firebaseClient';
 import { generateReservationNumber, getCalendarFullness, getReservationsByBoatDateSlot } from '@/lib/reservationHelpers';
 import { Tour, subscribeToTours } from '@/lib/tourHelpers';
-import { addDoc, collection } from 'firebase/firestore';
+import { collection, doc, runTransaction } from 'firebase/firestore';
 import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Loader2, Ship, User, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+function extractTimeRange(display: string): string | null {
+  const m = display.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+  return m ? `${m[1]}-${m[2]}` : null;
+}
 
 interface TimeSlot {
   id: string;
@@ -350,7 +355,26 @@ export default function AdminAddReservationPage() {
         notes: notes || '',
       };
 
-      await addDoc(collection(db, 'reservations'), newReservation);
+      // seatLocks ID'si mobile ile birebir aynı format: boatId_date_HH:MM-HH:MM
+      const range = extractTimeRange(timeSlotDisplayValue);
+      const lockId = `${selectedBoat.id}_${selectedDate}_${range || `slot${selectedTimeSlot}`}`;
+      const newDocRef = doc(collection(db, 'reservations'));
+      const lockRef = doc(db, 'seatLocks', lockId);
+
+      await runTransaction(db, async (transaction) => {
+        const lockSnap = await transaction.get(lockRef);
+        const seats: Record<string, { r: string; t: string }> = lockSnap.exists()
+          ? { ...(lockSnap.data().seats ?? {}) }
+          : {};
+
+        const nowIso = new Date().toISOString();
+        for (const seat of selectedSeats) {
+          seats[String(seat)] = { r: newDocRef.id, t: nowIso };
+        }
+
+        transaction.set(lockRef, { seats });
+        transaction.set(newDocRef, newReservation);
+      });
 
       alert(`✅ Rezervasyon onaylandı! Rezervasyon No: ${reservationNumber}`);
       router.push('/admin-sefa3986/reservations');

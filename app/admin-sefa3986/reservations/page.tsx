@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Calendar, 
-  Search, 
-  Filter, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Calendar,
+  Search,
+  Filter,
+  CheckCircle,
+  XCircle,
   Clock,
   Ship,
   User,
@@ -20,9 +20,11 @@ import {
   Plus,
   MessageCircle,
   Send,
-  Trash2
+  Trash2,
+  Archive,
+  AlertTriangle
 } from 'lucide-react';
-import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc, where } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import { Reservation } from '@/lib/reservationHelpers';
 import { useRouter } from 'next/navigation';
@@ -55,6 +57,25 @@ export default function AdminReservationsPage() {
   const [exportTimeSlots, setExportTimeSlots] = useState<string[]>([]);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<any[]>([]);
   
+  // Archive Modal
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiveMonth, setArchiveMonth] = useState(''); // 'YYYY-MM'
+  const [archiving, setArchiving] = useState(false);
+  const [archivePreview, setArchivePreview] = useState<{ count: number; docs: Reservation[] } | null>(null);
+
+  // Geçmiş 24 ayı listele (en yeni başta)
+  const pastMonths: { key: string; label: string }[] = (() => {
+    const now = new Date();
+    const months = [];
+    const TR_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+    for (let i = 1; i <= 24; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push({ key, label: `${TR_MONTHS[d.getMonth()]} ${d.getFullYear()}` });
+    }
+    return months;
+  })();
+
   // Edit Modal
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
@@ -382,6 +403,110 @@ export default function AdminReservationsPage() {
     } catch (error) {
       console.error('Silme hatası:', error);
       alert('❌ Rezervasyon silinirken bir hata oluştu.');
+    }
+  };
+
+  // Aylık arşiv: seçilen ayın tüm rezervasyonlarını Firestore'dan çek
+  const loadArchivePreview = async () => {
+    if (!archiveMonth) return;
+    setArchiving(true);
+    setArchivePreview(null);
+    try {
+      const [year, month] = archiveMonth.split('-');
+      const startDate = `${year}-${month}-01`;
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+      const q = query(
+        collection(db, 'reservations'),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate)
+      );
+      const snap = await getDocs(q);
+      const docs: Reservation[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation));
+      setArchivePreview({ count: docs.length, docs });
+    } catch (err) {
+      console.error(err);
+      alert('Veriler alınamadı.');
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  // CSV olarak indir (UTF-8 BOM → Excel Türkçe açar)
+  const handleArchiveDownloadCSV = () => {
+    if (!archivePreview) return;
+    const toAsciiSafe = (s: any) => String(s ?? '').replace(/"/g, '""');
+    const headers = [
+      'Rezervasyon No', 'Ad Soyad', 'Telefon', 'E-posta',
+      'Tekne', 'Tur', 'Tarih', 'Saat Dilimi',
+      'Koltuklar', 'Kişi Sayısı', 'Toplam Fiyat', 'Durum', 'Oluşturulma'
+    ];
+    const rows = archivePreview.docs.map(r => [
+      toAsciiSafe(r.reservationNumber),
+      toAsciiSafe(r.userName),
+      toAsciiSafe((r as any).userPhone),
+      toAsciiSafe(r.userEmail),
+      toAsciiSafe(r.boatName),
+      toAsciiSafe(r.tourName),
+      toAsciiSafe(r.date),
+      toAsciiSafe(r.timeSlotDisplay),
+      toAsciiSafe((r.selectedSeats || []).join(' ')),
+      toAsciiSafe(r.totalPeople),
+      toAsciiSafe(r.totalPrice),
+      toAsciiSafe(r.status),
+      toAsciiSafe(r.createdAt),
+    ]);
+    const csv =
+      '﻿' +
+      [headers, ...rows].map(row => row.map(c => `"${c}"`).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Rezervasyonlar_${archiveMonth}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  // Seçilen aydaki tüm rezervasyonları Firestore'dan sil (batch, 500'er)
+  const handleArchiveDelete = async () => {
+    if (!archivePreview || archivePreview.docs.length === 0) return;
+    const [year, month] = archiveMonth.split('-');
+    const monthNames = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+    const monthLabel = `${monthNames[parseInt(month) - 1]} ${year}`;
+
+    const confirmed = window.confirm(
+      `⚠️ ${monthLabel} ayındaki ${archivePreview.count} rezervasyonu kalıcı olarak silmek istediğinize emin misiniz?\n\nBu işlem GERİ ALINAMAZ! CSV'yi indirdiğinizden emin olun.`
+    );
+    if (!confirmed) return;
+
+    const doubleCheck = window.confirm(
+      `Son onay: ${archivePreview.count} kayıt silinecek. Devam edilsin mi?`
+    );
+    if (!doubleCheck) return;
+
+    setArchiving(true);
+    try {
+      const chunkSize = 500;
+      for (let i = 0; i < archivePreview.docs.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        archivePreview.docs.slice(i, i + chunkSize).forEach(r => {
+          batch.delete(doc(db, 'reservations', r.id));
+        });
+        await batch.commit();
+      }
+      alert(`✅ ${archivePreview.count} rezervasyon başarıyla silindi.`);
+      setShowArchiveModal(false);
+      setArchivePreview(null);
+      setArchiveMonth('');
+      // Listeyi yenile
+      fetchReservations();
+    } catch (err) {
+      console.error(err);
+      alert('❌ Silme işlemi sırasında hata oluştu.');
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -924,7 +1049,7 @@ www.baliksefasi.com`;
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <button
                 onClick={() => router.push('/admin-sefa3986/add-reservation')}
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-purple-500/30"
@@ -937,7 +1062,14 @@ www.baliksefasi.com`;
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#00A9A5] to-[#008B87] hover:from-[#008B87] hover:to-[#00A9A5] text-white font-semibold rounded-xl transition-all shadow-lg shadow-[#00A9A5]/30"
               >
                 <Download className="w-5 h-5" />
-                Randevu Listesi İndir
+                Günlük Liste İndir
+              </button>
+              <button
+                onClick={() => { setShowArchiveModal(true); setArchivePreview(null); setArchiveMonth(''); }}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-orange-500/30"
+              >
+                <Archive className="w-5 h-5" />
+                Aylık Arşiv
               </button>
             </div>
           </div>
@@ -1647,6 +1779,146 @@ www.baliksefasi.com`;
                 İndir {exportTimeSlots.length > 0 && `(${exportTimeSlots.length} Saat)`}
               </button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Archive Modal */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl p-6 max-w-lg w-full max-h-[90vh] flex flex-col"
+          >
+            {/* Başlık */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Archive className="w-6 h-6 text-orange-400" />
+                <h3 className="text-xl font-bold text-white">Aylık Arşiv & Temizlik</h3>
+              </div>
+              <button
+                onClick={() => { setShowArchiveModal(false); setArchivePreview(null); setArchiveMonth(''); }}
+                disabled={archiving}
+                className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-white/50 text-xs mb-4">
+              Bir aya tıklayın → veriyi getirin → CSV indirin → gerekirse silin.
+            </p>
+
+            {/* Ay listesi */}
+            {!archiveMonth && (
+              <div className="overflow-y-auto flex-1 pr-1">
+                <div className="grid grid-cols-2 gap-2">
+                  {pastMonths.map((m) => (
+                    <button
+                      key={m.key}
+                      onClick={() => { setArchiveMonth(m.key); setArchivePreview(null); }}
+                      className="px-4 py-3 bg-white/5 hover:bg-orange-500/20 border border-white/10 hover:border-orange-500/50 rounded-xl text-white text-sm font-medium transition-all text-left"
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Seçili ay detayı */}
+            {archiveMonth && (
+              <div className="flex-1 flex flex-col">
+                {/* Seçili ay başlığı + geri */}
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    onClick={() => { setArchiveMonth(''); setArchivePreview(null); }}
+                    disabled={archiving}
+                    className="p-1.5 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-white font-semibold text-lg">
+                    {pastMonths.find(m => m.key === archiveMonth)?.label ?? archiveMonth}
+                  </span>
+                </div>
+
+                {/* Yükleme / Önizleme */}
+                {archivePreview === null && !archiving && (
+                  <button
+                    onClick={loadArchivePreview}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all mb-3"
+                  >
+                    <Search className="w-5 h-5" />
+                    Kayıtları Getir
+                  </button>
+                )}
+
+                {archiving && (
+                  <div className="flex items-center justify-center py-8 gap-3 text-white/60">
+                    <Loader2 className="w-6 h-6 animate-spin text-orange-400" />
+                    İşlem devam ediyor...
+                  </div>
+                )}
+
+                {archivePreview !== null && !archiving && (
+                  <div className="space-y-3">
+                    {/* Sonuç kutusu */}
+                    <div className={`p-4 rounded-xl border ${
+                      archivePreview.count === 0
+                        ? 'bg-yellow-500/10 border-yellow-500/30'
+                        : 'bg-white/5 border-white/10'
+                    }`}>
+                      {archivePreview.count === 0 ? (
+                        <p className="text-yellow-400 text-sm">Bu ay için kayıt bulunamadı.</p>
+                      ) : (
+                        <div className="space-y-1 text-sm">
+                          <p className="text-white font-bold text-base">{archivePreview.count} rezervasyon</p>
+                          <div className="flex gap-3 text-xs text-white/50 mt-1">
+                            <span className="text-green-400">✓ Onaylı: {archivePreview.docs.filter(r => r.status === 'confirmed').length}</span>
+                            <span className="text-yellow-400">⏳ Bekleyen: {archivePreview.docs.filter(r => r.status === 'pending').length}</span>
+                            <span className="text-red-400">✗ İptal: {archivePreview.docs.filter(r => r.status === 'cancelled').length}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* CSV İndir */}
+                    {archivePreview.count > 0 && (
+                      <button
+                        onClick={handleArchiveDownloadCSV}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl transition-all"
+                      >
+                        <Download className="w-5 h-5" />
+                        CSV İndir ({archivePreview.count} kayıt)
+                      </button>
+                    )}
+
+                    {/* Uyarı */}
+                    {archivePreview.count > 0 && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                        <p className="text-red-400 text-xs">
+                          Silme geri alınamaz. Önce CSV'yi indirip yedekleyin.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Sil */}
+                    {archivePreview.count > 0 && (
+                      <button
+                        onClick={handleArchiveDelete}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-500/10 hover:bg-red-500/30 border border-red-500/40 text-red-400 font-semibold rounded-xl transition-all"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                        Bu Ayı Sil ({archivePreview.count} kayıt)
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </motion.div>
         </div>
       )}
