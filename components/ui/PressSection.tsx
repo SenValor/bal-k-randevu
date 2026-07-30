@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Youtube, Play } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface PressItem {
   id: string;
@@ -16,6 +17,7 @@ interface PressItem {
 export default function PressSection() {
   const [pressItems, setPressItems] = useState<PressItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetchPressItems();
@@ -70,11 +72,11 @@ export default function PressSection() {
           <div className="flex items-center justify-center gap-3 mb-4">
             <Youtube className="w-10 h-10 text-[#8B3A3A]" />
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#0D2847]">
-              Basında Biz
+              {t('press.title')}
             </h2>
           </div>
           <p className="text-[#1B3A5C]/80 text-lg md:text-xl max-w-2xl mx-auto">
-            Medyada yer alan haberlerimiz ve röportajlarımız
+            {t('press.desc')}
           </p>
         </motion.div>
 

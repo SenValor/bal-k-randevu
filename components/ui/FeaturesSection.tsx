@@ -2,9 +2,11 @@
 
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function FeaturesSection() {
   const ref = useRef(null);
+  const { t } = useLanguage();
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ["start end", "end start"],
@@ -14,9 +16,9 @@ export default function FeaturesSection() {
   const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.8, 1, 0.8]);
 
   const stats = [
-    { value: "5+", label: "Yıllık Deneyim" },
-    { value: "10.000+", label: "Mutlu Müşteri" },
-    { value: "4+", label: "Tekne Filosu" },
+    { value: "5+", label: t('features.yearsExp') },
+    { value: "10.000+", label: t('features.happyClients') },
+    { value: "4+", label: t('features.fleet') },
   ];
 
   return (
@@ -49,10 +51,10 @@ export default function FeaturesSection() {
           className="text-center mb-20"
         >
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 drop-shadow-lg">
-            Neden Balık Sefası?
+            {t('features.title')}
           </h2>
           <p className="text-white text-lg md:text-xl max-w-2xl mx-auto drop-shadow-md">
-            Yıllardır İstanbul Boğazı'nda güvenilir hizmet
+            {t('features.desc')}
           </p>
         </motion.div>
 

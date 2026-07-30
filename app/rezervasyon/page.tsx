@@ -5,9 +5,11 @@ import { Users, Anchor, Loader2, ArrowRight } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Boat, subscribeToBoats } from '@/lib/boatHelpers';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/context/LanguageContext';
 
 
 export default function RezervasyonPage() {
+  const { t, language } = useLanguage();
   const [boats, setBoats] = useState<Boat[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBoat, setSelectedBoat] = useState<string | null>(null);
@@ -40,10 +42,10 @@ export default function RezervasyonPage() {
         className="max-w-6xl mx-auto mb-12 text-center"
       >
         <h1 className="text-5xl md:text-6xl font-bold text-[#0D2847] mb-4">
-          Tekne <span className="text-[#6B9BC3]">Seçimi</span>
+          {t('res.title')} <span className="text-[#6B9BC3]">{t('res.titleSuffix')}</span>
         </h1>
         <p className="text-xl text-[#1B3A5C]/70">
-          Size en uygun tekneyi seçin
+          {t('res.subtitle')}
         </p>
       </motion.div>
 
@@ -56,8 +58,8 @@ export default function RezervasyonPage() {
         /* Empty State */
         <div className="max-w-6xl mx-auto text-center py-20">
           <Anchor className="w-16 h-16 text-[#1B3A5C]/40 mx-auto mb-4" />
-          <h3 className="text-2xl font-bold text-[#0D2847] mb-2">Henüz Tekne Eklenmedi</h3>
-          <p className="text-[#1B3A5C]/60">Admin panelden tekne ekleyebilirsiniz.</p>
+          <h3 className="text-2xl font-bold text-[#0D2847] mb-2">{t('res.noBoats')}</h3>
+          <p className="text-[#1B3A5C]/60">{t('res.noBoatsDesc')}</p>
         </div>
       ) : (
         /* Boats Grid - 2x2 (mobil ve desktop) */
@@ -131,7 +133,7 @@ export default function RezervasyonPage() {
                       {/* Metni defalarca tekrarla ki boşluk kalmasın ve sonsuz döngü oluşsun */}
                       {[1, 2, 3, 4].map((i) => (
                         <span key={i} className="whitespace-nowrap font-bold text-xs uppercase px-4 inline-block">
-                          {boat.ribbonText}
+                          {language === 'en' ? (boat.ribbonText_en || boat.ribbonText) : boat.ribbonText}
                         </span>
                       ))}
                     </motion.div>
@@ -152,13 +154,13 @@ export default function RezervasyonPage() {
 
               {/* Description */}
               <p className="text-[#1B3A5C]/70 text-sm">
-                {boat.description}
+                {language === 'en' ? (boat.description_en || boat.description) : boat.description}
               </p>
 
               {/* Capacity */}
               <div className="flex items-center gap-2 text-[#1B3A5C]/80">
                 <Users className="w-5 h-5 text-[#6B9BC3]" />
-                <span className="font-medium">{boat.capacity} Kişilik Kapasite</span>
+                <span className="font-medium">{boat.capacity} {t('res.people')} {t('res.capacity')}</span>
               </div>
             </div>
 
@@ -204,7 +206,7 @@ export default function RezervasyonPage() {
               
               {/* Button Content */}
               <span className="relative flex items-center gap-4 drop-shadow-lg">
-                <span className="text-2xl tracking-wide">DEVAM ET</span>
+                <span className="text-2xl tracking-wide">{t('res.continue').toUpperCase()}</span>
                 <ArrowRight className="w-7 h-7 group-hover:translate-x-3 transition-transform duration-300 drop-shadow-md" />
               </span>
 

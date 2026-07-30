@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Meta Business API credentials
-const META_TOKEN = 'EAAMfyFpCzHsBRVrp1RxSv7AKtXETgUMPRplEA8ZB3vVsfZBX4Jeq4JFOoYquX1RwkdfjIa62TQJGZBf4tyvVBaZACZBVieFo5KKFY6vF9COMVWDvZAzbx9jaVlOr3H41QcpEgiBdLLGrZCNiGu1SaEfUfQlWaV4aO5l3fIytKCjm5M8E0OuC11hL2ey44vRYRDmkfVdQnaci0vWohcZBMJAy8o4fQaK5xZAiZBeovz2dWC';
+const META_TOKEN = 'EAAMfyFpCzHsBSGat2DWtTPN0yGaMQeCZBSKZBEpf8aOgmK9We9GrijQEKnLQtCpL7EGROEJJuYOW7QyAdt5qkjQMauENjiLIy4jtqt7gpowawFsajeWdJTQAZCIeZCQKaUR14CuiWMCYoESsZADQFVJJ0vJdbFqp2AlZC4WMJBIB7DC8j3ogTBOfSxp6k75i84u7hnmX1iOQroQZAmdEiTuo0o7rHlgtJHZAwCINZAG8a';
 const META_PHONE_ID = '797993213405372';
 
 // Telefon numarasını WhatsApp formatına çevirir

@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface StepNavigationProps {
   onBack: () => void;
@@ -9,6 +10,7 @@ interface StepNavigationProps {
 }
 
 export default function StepNavigation({ onBack, onContinue }: StepNavigationProps) {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
       {/* Back Button */}
@@ -19,7 +21,7 @@ export default function StepNavigation({ onBack, onContinue }: StepNavigationPro
         className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-[#6B9BC3]/10 backdrop-blur-xl text-[#1B3A5C] border-2 border-[#6B9BC3]/30 hover:bg-[#6B9BC3]/20 hover:border-[#6B9BC3] transition-all duration-300 font-medium"
       >
         <ArrowLeft className="w-5 h-5" />
-        <span>Geri</span>
+        <span>{t('stepnav.back')}</span>
       </motion.button>
 
       {/* Continue Button */}
@@ -29,7 +31,7 @@ export default function StepNavigation({ onBack, onContinue }: StepNavigationPro
         onClick={onContinue}
         className="flex items-center justify-center gap-2 px-8 py-3 rounded-2xl bg-gradient-to-r from-[#8B3A3A] to-[#722E2E] text-white font-bold shadow-lg shadow-[#8B3A3A]/30 hover:shadow-xl hover:shadow-[#8B3A3A]/40 transition-all duration-300"
       >
-        <span>Devam Et</span>
+        <span>{t('stepnav.continue')}</span>
         <ArrowRight className="w-5 h-5" />
       </motion.button>
     </div>

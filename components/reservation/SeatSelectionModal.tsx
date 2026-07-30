@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import SeatMap from './SeatMap';
 import DoubleSeatLayout from './DoubleSeatLayout';
 import { Boat } from '@/lib/boatHelpers';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface SeatSelectionModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export default function SeatSelectionModal({
   childCount = 0,
   babyCount = 0,
 }: SeatSelectionModalProps) {
+  const { t } = useLanguage();
   const [selectedSeats, setSelectedSeats] = useState<number[]>([]);
   const [isPrivateTour, setIsPrivateTour] = useState(false);
   const [seatLayout, setSeatLayout] = useState<'single' | 'double'>('single');
@@ -156,7 +158,7 @@ export default function SeatSelectionModal({
               {/* Header */}
               <div className="sticky top-0 bg-gradient-to-r from-[#6B9BC3] to-[#5B8DB8] p-6 flex items-center justify-between border-b border-white/20 z-10 md:rounded-t-3xl rounded-t-3xl">
                 <div>
-                  <h2 className="text-2xl font-bold text-white">Koltuk Seçimi</h2>
+                  <h2 className="text-2xl font-bold text-white">{t('seat.title')}</h2>
                   <p className="text-white/90 text-sm mt-1">
                     {formatDate(selectedDate)} • {selectedTour?.title}
                   </p>
@@ -186,7 +188,7 @@ export default function SeatSelectionModal({
                 {/* Info */}
                 <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-[#6B9BC3]/30 p-4 mb-6">
                   <div className="flex items-center justify-between">
-                    <span className="text-[#1B3A5C]/70">Seçilecek Koltuk:</span>
+                    <span className="text-[#1B3A5C]/70">{t('seat.toSelect')}</span>
                     <span className="text-2xl font-bold text-[#8B3A3A]">
                       {selectedSeats.length} / {peopleCount}
                     </span>
@@ -220,22 +222,22 @@ export default function SeatSelectionModal({
                 <div className="flex items-center justify-center gap-6 mt-6 pt-6 border-t border-[#6B9BC3]/20">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-gray-100 border-2 border-gray-300" />
-                    <span className="text-[#1B3A5C]/70 text-sm">Boş</span>
+                    <span className="text-[#1B3A5C]/70 text-sm">{t('seat.empty')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-[#6B9BC3]/30 border-2 border-[#6B9BC3]" />
-                    <span className="text-[#1B3A5C]/70 text-sm">Seçili</span>
+                    <span className="text-[#1B3A5C]/70 text-sm">{t('seat.selected')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-red-500/20 border-2 border-red-500/50" />
-                    <span className="text-[#1B3A5C]/70 text-sm">Dolu</span>
+                    <span className="text-[#1B3A5C]/70 text-sm">{t('seat.occupied')}</span>
                   </div>
                 </div>
 
                 {/* Uyarı Mesajı */}
                 <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
                   <p className="text-amber-800 text-sm leading-relaxed">
-                    <span className="font-semibold">Not:</span> Koltuk seçimi ön rezervasyon içindir; oturma düzeninde yapılacak olası değişiklikler Balık Sefası ekibinin takdirindedir ve konforunuz gözetilerek uygulanır.
+                    <span className="font-semibold">{t('seat.note')}</span> {t('seat.noteText')}
                   </p>
                 </div>
 
@@ -255,8 +257,8 @@ export default function SeatSelectionModal({
                   `}
                 >
                   {selectedSeats.length === peopleCount
-                    ? 'Rezervasyonu Tamamla'
-                    : `${peopleCount - selectedSeats.length} Koltuk Daha Seçin`}
+                    ? t('seat.complete')
+                    : `${peopleCount - selectedSeats.length} ${t('seat.selectMore')}`}
                 </motion.button>
               </div>
             </div>

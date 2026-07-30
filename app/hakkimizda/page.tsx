@@ -6,6 +6,7 @@ import { Anchor, Target, Eye, Heart, Loader2 } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import Link from 'next/link';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface AboutContent {
   title: string;
@@ -18,6 +19,7 @@ interface AboutContent {
 
 export default function HakkimizdaPage() {
   const [loading, setLoading] = useState(true);
+  const { t } = useLanguage();
   const [content, setContent] = useState<AboutContent>({
     title: 'Hakkımızda',
     subtitle: 'İstanbul Boğazı\'nda Balık Avı Deneyimi',
@@ -96,7 +98,7 @@ export default function HakkimizdaPage() {
           >
             <div className="flex items-center gap-3 mb-4">
               <Target className="w-8 h-8 text-[#6B9BC3]" />
-              <h2 className="text-2xl font-bold text-[#0D2847]">Misyonumuz</h2>
+              <h2 className="text-2xl font-bold text-[#0D2847]">{t('about.mission')}</h2>
             </div>
             <p className="text-[#1B3A5C]/80 leading-relaxed">
               {content.mission}
@@ -112,7 +114,7 @@ export default function HakkimizdaPage() {
           >
             <div className="flex items-center gap-3 mb-4">
               <Eye className="w-8 h-8 text-[#8B3A3A]" />
-              <h2 className="text-2xl font-bold text-[#0D2847]">Vizyonumuz</h2>
+              <h2 className="text-2xl font-bold text-[#0D2847]">{t('about.vision')}</h2>
             </div>
             <p className="text-[#1B3A5C]/80 leading-relaxed">
               {content.vision}
@@ -128,7 +130,7 @@ export default function HakkimizdaPage() {
           >
             <div className="flex items-center gap-3 mb-4">
               <Heart className="w-8 h-8 text-[#6B9BC3]" />
-              <h2 className="text-2xl font-bold text-[#0D2847]">Değerlerimiz</h2>
+              <h2 className="text-2xl font-bold text-[#0D2847]">{t('about.values')}</h2>
             </div>
             <ul className="space-y-2">
               {content.values.map((value, index) => (
@@ -152,7 +154,7 @@ export default function HakkimizdaPage() {
             href="/rezervasyon"
             className="inline-block px-8 py-4 bg-gradient-to-r from-[#8B3A3A] to-[#722E2E] hover:from-[#A04848] hover:to-[#8B3A3A] text-white font-bold text-lg rounded-2xl shadow-lg shadow-[#8B3A3A]/30 transition-all"
           >
-            Hemen Rezervasyon Yap
+            {t('about.makeReservation')}
           </Link>
         </motion.div>
       </div>

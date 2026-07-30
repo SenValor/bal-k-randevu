@@ -2,25 +2,27 @@
 
 import { motion } from 'framer-motion';
 import { Mail, Phone, MapPin } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function IletisimPage() {
+  const { t } = useLanguage();
 
   const contactInfo = [
     {
       icon: Phone,
-      title: 'Telefon',
+      title: t('contact.phone'),
       content: '+90 531 089 25 37',
       href: 'tel:+905310892537',
     },
     {
       icon: Mail,
-      title: 'E-posta',
+      title: t('contact.email'),
       content: 'iletisimbaliksefasi@gmail.com',
       href: 'mailto:iletisimbaliksefasi@gmail.com',
     },
     {
       icon: MapPin,
-      title: 'Adres',
+      title: t('contact.address'),
       content: 'Eyüp Odabaşı Sporcular Parkı, Yenimahalle Mah. Yeni Mahalle Cd, 34450 Sarıyer/İstanbul',
       href: 'https://maps.app.goo.gl/CDDsJdyxKzt8KkVr8',
     },
@@ -36,10 +38,10 @@ export default function IletisimPage() {
           className="text-center mb-16"
         >
           <h1 className="text-5xl md:text-6xl font-bold text-[#0D2847] mb-4">
-            İletişim
+            {t('contact.title')}
           </h1>
           <p className="text-xl text-[#6B9BC3] font-medium">
-            Bizimle iletişime geçin
+            {t('contact.subtitle')}
           </p>
         </motion.div>
 

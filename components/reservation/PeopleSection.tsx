@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { Users, Minus, Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface PeopleSectionProps {
   adultCount: number;
@@ -27,6 +28,7 @@ export default function PeopleSection({
   onConfirm,
   maxCapacity,
 }: PeopleSectionProps) {
+  const { t } = useLanguage();
   const [isPrivateTour, setIsPrivateTour] = useState(false);
   const [adultPrice, setAdultPrice] = useState(0);
   const [childPrice, setChildPrice] = useState(0);
@@ -68,29 +70,29 @@ export default function PeopleSection({
   const categories = [
     {
       emoji: '👨',
-      title: 'Yetişkin',
-      subtitle: '7+ yaş',
-      price: adultPrice > 0 ? `₺${adultPrice}` : 'Yükleniyor...',
-      priceLabel: 'Tam fiyat',
+      title: t('people.adult'),
+      subtitle: t('people.adultAge'),
+      price: adultPrice > 0 ? `₺${adultPrice}` : t('people.loading'),
+      priceLabel: t('people.adultLabel'),
       count: adultCount,
       setCount: setAdultCount,
       minCount: 1,
     },
     {
       emoji: '👶',
-      title: 'Çocuk',
-      subtitle: '3-6 yaş',
-      price: childPrice > 0 ? `₺${childPrice}` : 'Yükleniyor...',
-      priceLabel: '%50 indirim',
+      title: t('people.child'),
+      subtitle: t('people.childAge'),
+      price: childPrice > 0 ? `₺${childPrice}` : t('people.loading'),
+      priceLabel: t('people.childLabel'),
       count: childCount,
       setCount: setChildCount,
       minCount: 0,
     },
     {
       emoji: '🍼',
-      title: 'Bebek',
-      subtitle: '0-3 yaş',
-      price: 'Ücretsiz',
+      title: t('people.baby'),
+      subtitle: t('people.babyAge'),
+      price: t('people.babyPrice'),
       priceLabel: '',
       count: babyCount,
       setCount: setBabyCount,
@@ -116,7 +118,7 @@ export default function PeopleSection({
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
           <Users className="w-6 h-6 text-[#6B9BC3]" />
-          <h2 className="text-2xl font-bold text-[#0D2847]">Kaç kişi katılacak?</h2>
+          <h2 className="text-2xl font-bold text-[#0D2847]">{t('people.title')}</h2>
         </div>
 
         {/* Özel Tur Bilgilendirme */}
@@ -227,11 +229,11 @@ export default function PeopleSection({
         <div className="bg-gradient-to-r from-[#6B9BC3]/10 to-[#5B8DB8]/10 border border-[#6B9BC3]/30 rounded-2xl p-4 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[#1B3A5C]/70 text-sm">Toplam Kişi</p>
-              <p className="text-[#0D2847] font-bold text-2xl">{totalPeople} Kişi</p>
+              <p className="text-[#1B3A5C]/70 text-sm">{t('people.totalPeople')}</p>
+              <p className="text-[#0D2847] font-bold text-2xl">{totalPeople} {t('people.person')}</p>
             </div>
             <div className="text-right">
-              <p className="text-[#1B3A5C]/70 text-sm">Toplam Tutar</p>
+              <p className="text-[#1B3A5C]/70 text-sm">{t('people.totalPrice')}</p>
               <p className="text-[#8B3A3A] font-bold text-2xl">₺{totalPrice}</p>
             </div>
           </div>
@@ -251,7 +253,7 @@ export default function PeopleSection({
             }
           `}
         >
-          {totalPeople > 0 ? 'Koltuk Seçimine Geç' : 'Lütfen kişi sayısı seçin'}
+          {totalPeople > 0 ? t('people.toSeatSelection') : t('res.selectBoat')}
         </motion.button>
       </div>
     </section>

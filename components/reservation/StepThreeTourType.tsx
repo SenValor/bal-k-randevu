@@ -6,8 +6,10 @@ import { Loader2, Compass, ArrowRight } from 'lucide-react';
 import TourTypeCard from './TourTypeCard';
 import { Tour, subscribeToTours } from '@/lib/tourHelpers';
 import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function StepThreeTourType() {
+  const { t, language } = useLanguage();
   const [tours, setTours] = useState<Tour[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTourType, setSelectedTourType] = useState<string | null>(null);
@@ -52,10 +54,10 @@ export default function StepThreeTourType() {
           className="text-center mb-12"
         >
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#0D2847] mb-4">
-            Hangi türde bir <span className="text-[#6B9BC3]">tur</span> istiyorsunuz?
+            {t('tour.pageTitle')} <span className="text-[#6B9BC3]">{t('tour.pageTitleHighlight')}</span> {t('tour.pageTitleEnd')}
           </h1>
           <p className="text-lg md:text-xl text-[#1B3A5C]/70 max-w-2xl mx-auto">
-            Fiyat seçeneklerimizi inceleyin ve size uygun olanı seçin
+            {t('tour.pageDesc')}
           </p>
         </motion.div>
 
@@ -68,8 +70,8 @@ export default function StepThreeTourType() {
           /* Empty State */
           <div className="text-center py-20">
             <Compass className="w-16 h-16 text-[#1B3A5C]/40 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-[#0D2847] mb-2">Henüz Tur Eklenmedi</h3>
-            <p className="text-[#1B3A5C]/60">Admin panelden tur ekleyebilirsiniz.</p>
+            <h3 className="text-2xl font-bold text-[#0D2847] mb-2">{t('tour.empty')}</h3>
+            <p className="text-[#1B3A5C]/60">{t('tour.emptyDesc')}</p>
           </div>
         ) : (
           /* Tour Type Cards Grid */
@@ -89,14 +91,14 @@ export default function StepThreeTourType() {
               // Firestore'dan gelen veriyi TourTypeCard formatına çevir
               const formattedTour = {
                 id: tour.id,
-                emoji: tour.category === 'private' ? '⭐' : 
-                       tour.category === 'normal-with-equipment' ? '🐟' : 
+                emoji: tour.category === 'private' ? '⭐' :
+                       tour.category === 'normal-with-equipment' ? '🐟' :
                        tour.category === 'normal-without-equipment' ? '🎣' : '🐟',
-                title: tour.name,
-                description: tour.includes,
+                title: language === 'en' ? (tour.name_en || tour.name) : tour.name,
+                description: language === 'en' ? (tour.includes_en?.length ? tour.includes_en : tour.includes) : tour.includes,
                 price: tour.price.toString(),
-                unit: tour.category === 'private' ? 'grup fiyatı' : 'kişi başı',
-                details: tour.description,
+                unit: tour.category === 'private' ? t('tour.groupPrice') : t('tour.perPerson'),
+                details: language === 'en' ? (tour.description_en || tour.description) : tour.description,
               };
 
               return (
@@ -149,7 +151,7 @@ export default function StepThreeTourType() {
                   
                   {/* Button Content */}
                   <span className="relative flex items-center gap-4 drop-shadow-lg">
-                    <span className="text-2xl tracking-wide">DEVAM ET</span>
+                    <span className="text-2xl tracking-wide">{t('tour.continue').toUpperCase()}</span>
                     <ArrowRight className="w-7 h-7 group-hover:translate-x-3 transition-transform duration-300 drop-shadow-md" />
                   </span>
 

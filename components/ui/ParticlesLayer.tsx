@@ -22,10 +22,11 @@ export default function ParticlesLayer() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
-    // Set canvas size
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -33,13 +34,12 @@ export default function ParticlesLayer() {
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
 
-    // Initialize particles
-    const particleCount = 80;
+    const particleCount = 30;
     const colors = [
       "rgba(255, 255, 255, ",
-      "rgba(0, 169, 165, ",  // teal
-      "rgba(0, 201, 197, ",  // teal-light
-      "rgba(0, 68, 136, ",   // navy-light
+      "rgba(0, 169, 165, ",
+      "rgba(0, 201, 197, ",
+      "rgba(0, 68, 136, ",
     ];
 
     particlesRef.current = Array.from({ length: particleCount }, () => ({
@@ -53,22 +53,18 @@ export default function ParticlesLayer() {
       color: colors[Math.floor(Math.random() * colors.length)],
     }));
 
-    // Animation loop
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       particlesRef.current.forEach((particle) => {
-        // Update position
         particle.y += particle.speedY;
         particle.x += particle.speedX;
 
-        // Update opacity
         particle.opacity += particle.opacitySpeed;
         if (particle.opacity <= 0.1 || particle.opacity >= 0.7) {
           particle.opacitySpeed *= -1;
         }
 
-        // Reset particle if it goes off screen
         if (particle.y < -10) {
           particle.y = canvas.height + 10;
           particle.x = Math.random() * canvas.width;
@@ -77,15 +73,10 @@ export default function ParticlesLayer() {
           particle.x = Math.random() * canvas.width;
         }
 
-        // Draw particle
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
         ctx.fillStyle = particle.color + particle.opacity + ")";
         ctx.fill();
-
-        // Add glow effect
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = particle.color + particle.opacity + ")";
       });
 
       animationFrameRef.current = requestAnimationFrame(animate);

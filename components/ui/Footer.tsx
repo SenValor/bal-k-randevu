@@ -7,9 +7,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+  const { t } = useLanguage();
   const [aboutText, setAboutText] = useState('İstanbul Boğazı\'nda unutulmaz balık avı deneyimleri ve tekne turları. Profesyonel ekibimiz ve modern teknelerimizle hizmetinizdeyiz.');
 
   useEffect(() => {
@@ -34,20 +36,20 @@ export default function Footer() {
 
   const footerLinks = {
     hizmetler: [
-      { label: 'Tekne Kiralama', href: '/rezervasyon' },
-      { label: 'Balık Avı Turu', href: '/rezervasyon' },
-      { label: 'Grup Rezervasyon', href: '/rezervasyon' },
-      { label: 'Özel Organizasyon', href: '/iletisim' },
-      { label: 'Rezervasyon Sorgula', href: '/rezervasyon-sorgula' },
+      { label: t('footer.boatRental'), href: '/rezervasyon' },
+      { label: t('footer.fishingTour'), href: '/rezervasyon' },
+      { label: t('footer.groupReservation'), href: '/rezervasyon' },
+      { label: t('footer.privateOrg'), href: '/iletisim' },
+      { label: t('footer.queryReservation'), href: '/rezervasyon-sorgula' },
     ],
     kurumsal: [
-      { label: 'Hakkımızda', href: '/hakkimizda' },
-      { label: 'Galeri', href: '/galeri' },
-      { label: 'İletişim', href: '/iletisim' },
-      { label: 'Sıkça Sorulan Sorular', href: '/sss' },
-      { label: 'Gizlilik Politikası', href: '/privacy-policy' },
-      { label: 'Kullanım Koşulları', href: '/terms-of-service' },
-      { label: 'Veri Silme', href: '/data-deletion' },
+      { label: t('footer.aboutUs'), href: '/hakkimizda' },
+      { label: t('footer.gallery'), href: '/galeri' },
+      { label: t('footer.contact'), href: '/iletisim' },
+      { label: t('footer.faq'), href: '/sss' },
+      { label: t('footer.privacy'), href: '/privacy-policy' },
+      { label: t('footer.terms'), href: '/terms-of-service' },
+      { label: t('footer.dataDeletion'), href: '/data-deletion' },
     ],
   };
 
@@ -104,7 +106,7 @@ export default function Footer() {
             <div>
               <h4 className="text-[#0D2847] font-bold text-lg mb-6 flex items-center gap-2">
                 <span className="w-1 h-6 bg-[#6B9BC3] rounded-full" />
-                Hizmetlerimiz
+                {t('footer.services')}
               </h4>
               <ul className="space-y-3">
                 {footerLinks.hizmetler.map((link, index) => (
@@ -125,7 +127,7 @@ export default function Footer() {
             <div>
               <h4 className="text-[#0D2847] font-bold text-lg mb-6 flex items-center gap-2">
                 <span className="w-1 h-6 bg-[#8B3A3A] rounded-full" />
-                Kurumsal
+                {t('footer.corporate')}
               </h4>
               <ul className="space-y-3">
                 {footerLinks.kurumsal.map((link, index) => (
@@ -158,7 +160,7 @@ export default function Footer() {
         >
           {/* Copyright */}
           <p className="text-[#1B3A5C]/60 text-sm text-center md:text-left">
-            © {currentYear} Balık Sefası. Tüm hakları saklıdır.
+            © {currentYear} Balık Sefası. {t('footer.copyright')}
           </p>
 
           {/* Social Links */}

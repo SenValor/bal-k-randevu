@@ -11,8 +11,10 @@ import Services from '@/components/ui/Services';
 import PressSection from '@/components/ui/PressSection';
 import FeaturesSection from '@/components/ui/FeaturesSection';
 import Footer from '@/components/ui/Footer';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function Home() {
+  const { t } = useLanguage();
   const [galleryItems, setGalleryItems] = useState<any[]>([]);
 
   useEffect(() => {
@@ -74,14 +76,14 @@ export default function Home() {
               transition={{ delay: 0.2 }}
               className="inline-block text-[#6B9BC3] text-sm font-semibold tracking-[0.2em] uppercase mb-4"
             >
-              Anılarımız
+              {t('gallery.tag')}
             </motion.span>
             <h2 className="text-4xl md:text-6xl font-bold text-white mb-6">
-              Görsellerimiz
+              {t('gallery.title')}
             </h2>
             <div className="w-24 h-1 bg-gradient-to-r from-transparent via-[#6B9BC3] to-transparent mx-auto mb-6" />
             <p className="text-lg md:text-xl text-white/70 max-w-2xl mx-auto">
-              Denizde yaşadığımız unutulmaz anlardan özel kareler
+              {t('gallery.desc')}
             </p>
           </motion.div>
 
@@ -89,7 +91,7 @@ export default function Home() {
           {galleryItems.length === 0 ? (
             <div className="text-center py-20">
               <div className="w-16 h-16 border-4 border-[#6B9BC3] border-t-transparent rounded-full mx-auto mb-4 animate-spin" />
-              <p className="text-white/60 text-lg">Görseller yükleniyor...</p>
+              <p className="text-white/60 text-lg">{t('gallery.loading')}</p>
             </div>
           ) : (
             <>
@@ -117,7 +119,7 @@ export default function Home() {
                           <h3 className="text-white font-bold text-lg mb-1">
                             {item.text}
                           </h3>
-                          <p className="text-white/60 text-sm">Detayları gör</p>
+                          <p className="text-white/60 text-sm">{t('gallery.viewDetail')}</p>
                         </div>
                       </div>
                     </motion.div>
@@ -151,7 +153,7 @@ export default function Home() {
                                 {item.text}
                               </h3>
                               <p className="text-white/60 text-xs">
-                                Detayları gör
+                                {t('gallery.viewDetail')}
                               </p>
                             </div>
                           </div>
@@ -176,7 +178,7 @@ export default function Home() {
                         d="M13 5l7 7-7 7M5 5l7 7-7 7"
                       />
                     </svg>
-                    <span>Kaydırın</span>
+                    <span>{t('gallery.scroll')}</span>
                   </div>
                 </div>
               </div>
@@ -193,7 +195,7 @@ export default function Home() {
                   href="/galeri"
                   className="inline-flex items-center gap-3 bg-gradient-to-r from-[#6B9BC3] to-[#5B8DB8] hover:from-[#7FADD1] hover:to-[#6B9BC3] text-white font-semibold px-8 py-4 rounded-full shadow-lg hover:shadow-xl hover:shadow-[#6B9BC3]/30 transition-all duration-300 group"
                 >
-                  <span>Tüm Görselleri Gör</span>
+                  <span>{t('gallery.viewAll')}</span>
                   <svg
                     className="w-5 h-5 group-hover:translate-x-1 transition-transform"
                     fill="none"

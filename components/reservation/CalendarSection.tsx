@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-reac
 import { useState, useEffect } from 'react';
 import { Boat } from '@/lib/boatHelpers';
 import { getCalendarFullness } from '@/lib/reservationHelpers';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface CalendarSectionProps {
   selectedDate: Date | null;
@@ -12,6 +13,7 @@ interface CalendarSectionProps {
 }
 
 export default function CalendarSection({ selectedDate, onDateSelect }: CalendarSectionProps) {
+  const { t } = useLanguage();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [availabilityMap, setAvailabilityMap] = useState<Map<string, number>>(new Map());
@@ -65,13 +67,15 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
           const startDateStr = formatLocalDate(startDate);
           const endDateStr = formatLocalDate(endDate);
           
-          // Takvim doluluk verilerini al
+          // Takvim doluluk verilerini al (scheduledTimeSlots ile per-date saat sayısı hesaplanır)
           const fullnessMap = await getCalendarFullness(
             boat.id,
             startDateStr,
             endDateStr,
             boat.capacity,
-            boat.timeSlots?.length || 1
+            boat.timeSlots?.length || 1,
+            boat.timeSlots,
+            boat.scheduledTimeSlots
           );
           
           console.log('📅 Takvim Doluluk Map:', {
@@ -123,9 +127,9 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
   };
 
   const getAvailabilityText = (fullness: number) => {
-    if (fullness >= 1) return 'Tüm Saatler Dolu';
-    if (fullness >= 0.5) return 'Rezervasyon Var';
-    return 'Müsait';
+    if (fullness >= 1) return t('cal.allFull');
+    if (fullness >= 0.5) return t('cal.limited');
+    return t('cal.available');
   };
 
   const formatDateKey = (day: number) => {
@@ -197,12 +201,12 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
     }
   };
 
-  const monthNames = [
-    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
-  ];
+  const { language } = useLanguage();
+  const monthNames = language === 'en'
+    ? ['January','February','March','April','May','June','July','August','September','October','November','December']
+    : ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 
-  const dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+  const dayNames = t('cal.days').split(',');
 
   const goToPreviousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
@@ -224,7 +228,7 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <CalendarIcon className="w-5 h-5 text-[#6B9BC3]" />
-            <h2 className="text-xl font-bold text-[#0D2847]">Tarih Seçin</h2>
+            <h2 className="text-xl font-bold text-[#0D2847]">{t('cal.selectDate')}</h2>
           </div>
           
           {/* Ay/Yıl Navigasyonu */}
@@ -336,15 +340,15 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
         <div className="flex items-center justify-center gap-6 mt-6 pt-6 border-t border-[#6B9BC3]/20">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-green-500/20 border border-green-500/50" />
-            <span className="text-[#1B3A5C]/70 text-sm">Müsait</span>
+            <span className="text-[#1B3A5C]/70 text-sm">{t('cal.available')}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-yellow-500/20 border border-yellow-500/50" />
-            <span className="text-[#1B3A5C]/70 text-sm">Az Yer</span>
+            <span className="text-[#1B3A5C]/70 text-sm">{t('cal.limited')}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-red-500/20 border border-red-500/50" />
-            <span className="text-[#1B3A5C]/70 text-sm">Dolu</span>
+            <span className="text-[#1B3A5C]/70 text-sm">{t('cal.full')}</span>
           </div>
         </div>
       </div>

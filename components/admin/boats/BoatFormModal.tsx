@@ -49,6 +49,7 @@ export default function BoatFormModal({
     scheduledTimeSlots: [],
     isActive: true,
     ribbonText: '',
+    ribbonText_en: '',
     isRibbonActive: false,
     ribbonColor: 'red',
     photos: [],
@@ -66,6 +67,7 @@ export default function BoatFormModal({
         name: boat.name,
         code: boat.code || '',
         description: boat.description,
+        description_en: boat.description_en || '',
         mapsLink: boat.mapsLink || '',
         capacity: boat.capacity,
         imageUrl: boat.imageUrl,
@@ -77,6 +79,7 @@ export default function BoatFormModal({
         scheduledTimeSlots: boat.scheduledTimeSlots || [],
         isActive: boat.isActive,
         ribbonText: boat.ribbonText || '',
+        ribbonText_en: boat.ribbonText_en || '',
         isRibbonActive: boat.isRibbonActive || false,
         ribbonColor: boat.ribbonColor || 'red',
         photos: boat.photos || [],
@@ -88,6 +91,7 @@ export default function BoatFormModal({
         name: '',
         code: '',
         description: '',
+        description_en: '',
         mapsLink: '',
         capacity: 10,
         imageUrl: '',
@@ -103,6 +107,7 @@ export default function BoatFormModal({
         scheduledTimeSlots: [],
         isActive: true,
         ribbonText: '',
+        ribbonText_en: '',
         isRibbonActive: false,
         ribbonColor: 'red',
         photos: [],
@@ -391,13 +396,28 @@ export default function BoatFormModal({
               {/* Açıklama */}
               <div>
                 <label className="block text-white/80 text-sm font-medium mb-2">
-                  Açıklama
+                  Açıklama 🇹🇷
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   disabled={loading}
                   placeholder="Tekne hakkında kısa açıklama..."
+                  rows={3}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50 resize-none"
+                />
+              </div>
+
+              {/* Açıklama EN */}
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-2">
+                  Description 🇬🇧 <span className="text-white/40 font-normal">(opsiyonel)</span>
+                </label>
+                <textarea
+                  value={formData.description_en}
+                  onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
+                  disabled={loading}
+                  placeholder="Short description about the boat..."
                   rows={3}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50 resize-none"
                 />
@@ -607,7 +627,7 @@ export default function BoatFormModal({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div>
                       <label className="block text-white/80 text-sm font-medium mb-2">
-                        Bant Metni
+                        Bant Metni 🇹🇷
                       </label>
                       <input
                         type="text"
@@ -617,6 +637,19 @@ export default function BoatFormModal({
                         placeholder="Örn: DOLU, TADİLATTA"
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50"
                       />
+                      <div className="mt-2">
+                        <label className="block text-white/60 text-xs font-medium mb-1">
+                          Ribbon Text 🇬🇧 <span className="text-white/30">(opsiyonel)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.ribbonText_en}
+                          onChange={(e) => setFormData({ ...formData, ribbonText_en: e.target.value })}
+                          disabled={loading}
+                          placeholder="E.g.: FULL, MAINTENANCE"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -736,7 +769,7 @@ export default function BoatFormModal({
                         </div>
 
                         <div>
-                          <label className="block text-white/60 text-xs mb-1">Görünen Ad</label>
+                          <label className="block text-white/60 text-xs mb-1">Görünen Ad 🇹🇷</label>
                           <input
                             type="text"
                             value={slot.displayName}
@@ -746,6 +779,19 @@ export default function BoatFormModal({
                             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/30 focus:border-[#00A9A5] outline-none transition-all disabled:opacity-50"
                           />
                         </div>
+                      </div>
+
+                      {/* EN Display Name */}
+                      <div className="mb-3">
+                        <label className="block text-white/60 text-xs mb-1">Display Name 🇬🇧 <span className="text-white/30">(opsiyonel)</span></label>
+                        <input
+                          type="text"
+                          value={slot.displayName_en || ''}
+                          onChange={(e) => handleTimeSlotChange(index, 'displayName_en', e.target.value)}
+                          disabled={loading}
+                          placeholder="Morning Tour"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/30 focus:border-[#00A9A5] outline-none transition-all disabled:opacity-50"
+                        />
                       </div>
 
                       {/* Konum (Maps Link) */}
@@ -896,7 +942,7 @@ export default function BoatFormModal({
                                 />
                               </div>
                               <div>
-                                <label className="block text-white/40 text-xs mb-1">Ad</label>
+                                <label className="block text-white/40 text-xs mb-1">Ad 🇹🇷</label>
                                 <input
                                   type="text"
                                   value={slot.displayName}
@@ -904,6 +950,14 @@ export default function BoatFormModal({
                                   disabled={loading}
                                   placeholder="Sabah Turu"
                                   className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs placeholder-white/30 focus:border-purple-400 outline-none transition-all disabled:opacity-50"
+                                />
+                                <input
+                                  type="text"
+                                  value={slot.displayName_en || ''}
+                                  onChange={(e) => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'displayName_en', e.target.value)}
+                                  disabled={loading}
+                                  placeholder="Morning Tour 🇬🇧"
+                                  className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs placeholder-white/30 focus:border-purple-400 outline-none transition-all disabled:opacity-50 mt-1"
                                 />
                               </div>
                               <div className="flex items-end">

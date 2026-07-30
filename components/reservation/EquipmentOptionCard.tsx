@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Minus, Plus } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface EquipmentOptionCardProps {
   title: string;
@@ -20,6 +21,7 @@ export default function EquipmentOptionCard({
   onDecrement,
   isActive,
 }: EquipmentOptionCardProps) {
+  const { t } = useLanguage();
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
@@ -64,7 +66,7 @@ export default function EquipmentOptionCard({
 
         {/* Price */}
         <p className="text-sm text-[#1B3A5C]/70 mb-4">
-          {formatPrice(price)} / kişi
+          {formatPrice(price)} / {t('price.perPerson')}
         </p>
 
         {/* Counter */}

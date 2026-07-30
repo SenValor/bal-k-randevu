@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useLanguage } from '@/context/LanguageContext';
 import EquipmentOptionCard from './EquipmentOptionCard';
 import PriceSummaryBox from './PriceSummaryBox';
 import StepNavigation from './StepNavigation';
@@ -14,6 +15,7 @@ const PRICES = {
 };
 
 export default function StepFourEquipment() {
+  const { t } = useLanguage();
   // localStorage'dan kişi sayılarını al
   const [totalAdults, setTotalAdults] = useState(0);
   const [totalChildren, setTotalChildren] = useState(0);
@@ -119,16 +121,16 @@ export default function StepFourEquipment() {
 
   const priceBreakdown = [
     ...(adultGear.with > 0
-      ? [{ label: `${adultGear.with} Yetişkin (Ekipman Dahil)`, price: adultGear.with * PRICES.adultWithGear }]
+      ? [{ label: `${adultGear.with} ${t('equip.adultWithGear')}`, price: adultGear.with * PRICES.adultWithGear }]
       : []),
     ...(adultGear.own > 0
-      ? [{ label: `${adultGear.own} Yetişkin (Kendi Ekipmanı)`, price: adultGear.own * PRICES.adultOwnGear }]
+      ? [{ label: `${adultGear.own} ${t('equip.adultOwnGear')}`, price: adultGear.own * PRICES.adultOwnGear }]
       : []),
     ...(childGear.with > 0
-      ? [{ label: `${childGear.with} Çocuk (Ekipman Dahil)`, price: childGear.with * PRICES.childWithGear }]
+      ? [{ label: `${childGear.with} ${t('equip.childWithGear')}`, price: childGear.with * PRICES.childWithGear }]
       : []),
     ...(childGear.own > 0
-      ? [{ label: `${childGear.own} Çocuk (Kendi Ekipmanı)`, price: childGear.own * PRICES.childOwnGear }]
+      ? [{ label: `${childGear.own} ${t('equip.childOwnGear')}`, price: childGear.own * PRICES.childOwnGear }]
       : []),
   ];
 
@@ -143,10 +145,10 @@ export default function StepFourEquipment() {
           className="text-center mb-12"
         >
           <h1 className="text-3xl md:text-4xl font-bold text-[#0D2847] mb-3">
-            Olta <span className="text-[#6B9BC3]">Seçimi</span>
+            {t('equip.title')} <span className="text-[#6B9BC3]">{t('equip.titleHighlight')}</span>
           </h1>
           <p className="text-lg text-[#1B3A5C]/70">
-            Her kişi için olta durumunu belirleyin
+            {t('equip.desc')}
           </p>
         </motion.div>
 
@@ -159,11 +161,11 @@ export default function StepFourEquipment() {
             className="mb-8"
           >
             <h2 className="text-xl font-semibold text-[#0D2847] mb-4">
-              Yetişkinler ({totalAdults} kişi)
+              {t('equip.adults')} ({totalAdults} {t('equip.person')})
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <EquipmentOptionCard
-                title="Ekipman Dahil"
+                title={t('equip.withGear')}
                 price={PRICES.adultWithGear}
                 count={adultGear.with}
                 onIncrement={handleAdultWithIncrement}
@@ -171,7 +173,7 @@ export default function StepFourEquipment() {
                 isActive={adultGear.with > 0}
               />
               <EquipmentOptionCard
-                title="Kendi Ekipmanı"
+                title={t('equip.ownGear')}
                 price={PRICES.adultOwnGear}
                 count={adultGear.own}
                 onIncrement={handleAdultOwnIncrement}
@@ -191,11 +193,11 @@ export default function StepFourEquipment() {
             className="mb-8"
           >
             <h2 className="text-xl font-semibold text-[#0D2847] mb-4">
-              Çocuklar ({totalChildren} kişi)
+              {t('equip.children')} ({totalChildren} {t('equip.person')})
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <EquipmentOptionCard
-                title="Ekipman Dahil"
+                title={t('equip.withGear')}
                 price={PRICES.childWithGear}
                 count={childGear.with}
                 onIncrement={handleChildWithIncrement}
@@ -203,7 +205,7 @@ export default function StepFourEquipment() {
                 isActive={childGear.with > 0}
               />
               <EquipmentOptionCard
-                title="Kendi Ekipmanı"
+                title={t('equip.ownGear')}
                 price={PRICES.childOwnGear}
                 count={childGear.own}
                 onIncrement={handleChildOwnIncrement}

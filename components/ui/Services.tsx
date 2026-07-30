@@ -5,9 +5,11 @@ import { Anchor, Fish, Users } from "lucide-react";
 import { useRef } from "react";
 import Card from "./Card";
 import ReservationButton from "./ReservationButton";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function Services() {
   const ref = useRef(null);
+  const { t } = useLanguage();
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ["start end", "end start"],
@@ -19,18 +21,18 @@ export default function Services() {
   const services = [
     {
       icon: Anchor,
-      title: "Tekne Kiralama",
-      desc: "Lüks teknelerimizle Boğaz'ın eşsiz manzarasının keyfini çıkarın",
+      title: t('services.boatRental'),
+      desc: t('services.boatRentalDesc'),
     },
     {
       icon: Fish,
-      title: "Balık Avı Turu",
-      desc: "Profesyonel rehberlerimiz eşliğinde balık avı deneyimi yaşayın",
+      title: t('services.fishingTour'),
+      desc: t('services.fishingTourDesc'),
     },
     {
       icon: Users,
-      title: "Grup Rezervasyon",
-      desc: "Özel günleriniz için grup rezervasyonları ve organizasyonlar",
+      title: t('services.groupReservation'),
+      desc: t('services.groupReservationDesc'),
     },
   ];
 
@@ -55,10 +57,10 @@ export default function Services() {
           className="text-center mb-16"
         >
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 drop-shadow-lg">
-            Hizmetlerimiz
+            {t('services.title')}
           </h2>
           <p className="text-gray-300 text-lg md:text-xl max-w-2xl mx-auto drop-shadow-md">
-            Size özel hazırlanmış deneyimlerimizle unutulmaz anılar biriktirin
+            {t('services.desc')}
           </p>
         </motion.div>
 

@@ -6,6 +6,7 @@ import { Anchor, ChevronDown, Loader2 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import Link from 'next/link';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface FAQ {
   id: string;
@@ -18,6 +19,7 @@ export default function SSSPage() {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetchFAQs();
@@ -62,10 +64,10 @@ export default function SSSPage() {
           className="text-center mb-16"
         >
           <h1 className="text-5xl md:text-6xl font-bold text-[#0D2847] mb-4">
-            Sık Sorulan Sorular
+            {t('sss.title')}
           </h1>
           <p className="text-xl text-[#6B9BC3] font-medium">
-            Merak ettiklerinizin cevapları burada
+            {t('sss.subtitle')}
           </p>
         </motion.div>
 
@@ -73,7 +75,7 @@ export default function SSSPage() {
         <div className="max-w-4xl mx-auto">
           {faqs.length === 0 ? (
             <div className="text-center py-20">
-              <p className="text-[#1B3A5C]/50 text-lg">Henüz soru eklenmemiş</p>
+              <p className="text-[#1B3A5C]/50 text-lg">{t('sss.empty')}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -137,7 +139,7 @@ export default function SSSPage() {
             href="/rezervasyon"
             className="inline-block px-8 py-4 bg-gradient-to-r from-[#8B3A3A] to-[#722E2E] hover:from-[#A04848] hover:to-[#8B3A3A] text-white font-bold text-lg rounded-2xl shadow-lg shadow-[#8B3A3A]/30 transition-all"
           >
-            Rezervasyon Yap
+            {t('nav.makeReservation')}
           </Link>
         </motion.div>
       </div>

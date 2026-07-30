@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 // reservationHelpers — getOccupiedSeats artık doğrudan burada hesaplanıyor
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -24,6 +25,7 @@ export default function DoubleSeatLayout({
   timeSlotId,
   isPrivateTour = false,
 }: DoubleSeatLayoutProps) {
+  const { t } = useLanguage();
   const [occupiedSeats, setOccupiedSeats] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [boatCode, setBoatCode] = useState('T1');
@@ -186,7 +188,7 @@ export default function DoubleSeatLayout({
         {/* Boat Header (Baş) */}
         <div className="text-center mb-4">
           <div className="inline-block bg-[#6B9BC3]/30 border-2 border-[#1B3A5C] rounded-full px-4 py-1.5">
-            <span className="text-[#0D2847] font-bold text-sm">⬆ BAŞ</span>
+            <span className="text-[#0D2847] font-bold text-sm">⬆ {t('seat.bow')}</span>
           </div>
         </div>
 
@@ -306,7 +308,7 @@ export default function DoubleSeatLayout({
         {/* Boat Footer (Kıç) */}
         <div className="text-center mt-4">
           <div className="inline-block bg-[#1B3A5C]/20 border-2 border-[#1B3A5C] rounded-full px-4 py-1.5">
-            <span className="text-[#0D2847] font-bold text-sm">⬇ KIÇ</span>
+            <span className="text-[#0D2847] font-bold text-sm">⬇ {t('seat.stern')}</span>
           </div>
         </div>
       </div>

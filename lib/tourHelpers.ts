@@ -13,12 +13,17 @@ import { db } from './firebaseClient';
 export interface Tour {
   id: string;
   name: string;
+  name_en?: string;
   description: string;
+  description_en?: string;
   price: number;
-  includes: string[]; // Dahil olan hizmetler
-  excludes: string[]; // Dahil olmayan hizmetler
-  highlights: string[]; // Öne çıkan özellikler
-  category: 'normal-with-equipment' | 'normal-without-equipment' | 'private'; // Tur kategorisi
+  includes: string[];
+  includes_en?: string[];
+  excludes: string[];
+  excludes_en?: string[];
+  highlights: string[];
+  highlights_en?: string[];
+  category: 'normal-with-equipment' | 'normal-without-equipment' | 'private';
   isActive: boolean;
   createdAt: string;
   updatedAt?: string;

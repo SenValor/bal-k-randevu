@@ -6,11 +6,13 @@ import { Menu, X, Calendar, Search } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const router = useRouter();
+  const { t, language, toggleLanguage } = useLanguage();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -26,12 +28,12 @@ export default function Navbar() {
   };
 
   const navLinks = [
-    { href: '/', label: 'Ana Sayfa' },
-    { href: '/rezervasyon', label: 'Rezervasyon' },
-    { href: '/galeri', label: 'Galeri' },
-    { href: '/hakkimizda', label: 'Hakkımızda' },
-    { href: '/iletisim', label: 'İletişim' },
-    { href: '/sss', label: 'SSS' },
+    { href: '/', label: t('nav.home') },
+    { href: '/rezervasyon', label: t('nav.reservation') },
+    { href: '/galeri', label: t('nav.gallery') },
+    { href: '/hakkimizda', label: t('nav.about') },
+    { href: '/iletisim', label: t('nav.contact') },
+    { href: '/sss', label: t('nav.faq') },
   ];
 
   return (
@@ -69,7 +71,7 @@ export default function Navbar() {
                   Balık Sefası
                 </span>
                 <span className="text-xs text-[#6B9BC3] font-medium drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                  İstanbul Boğazı
+                  {t('nav.subtitle')}
                 </span>
               </div>
             </Link>
@@ -89,7 +91,19 @@ export default function Navbar() {
             </div>
 
             {/* Desktop Actions */}
-            <div className="hidden lg:flex items-center gap-4">
+            <div className="hidden lg:flex items-center gap-3">
+              {/* Language Toggle */}
+              <motion.button
+                onClick={toggleLanguage}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/40 text-white text-sm font-bold transition-all"
+              >
+                <span className={language === 'tr' ? 'text-white' : 'text-white/50'}>TR</span>
+                <span className="text-white/30">|</span>
+                <span className={language === 'en' ? 'text-white' : 'text-white/50'}>EN</span>
+              </motion.button>
+
               {/* Rezervasyon Sorgula */}
               <motion.button
                 onClick={() => router.push('/rezervasyon-sorgula')}
@@ -98,7 +112,7 @@ export default function Navbar() {
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#00A9A5]/10 hover:bg-[#00A9A5]/20 border border-[#00A9A5]/30 hover:border-[#00A9A5]/50 text-[#00A9A5] transition-all"
               >
                 <Search className="w-4 h-4" />
-                <span className="text-sm font-medium">Rezervasyon Sorgula</span>
+                <span className="text-sm font-medium">{t('nav.queryReservation')}</span>
               </motion.button>
 
               {/* CTA Button */}
@@ -109,22 +123,35 @@ export default function Navbar() {
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#8B3A3A] to-[#722E2E] hover:from-[#A04848] hover:to-[#8B3A3A] text-white font-semibold shadow-lg shadow-[#8B3A3A]/30 hover:shadow-[#8B3A3A]/50 transition-all"
               >
                 <Calendar className="w-4 h-4" />
-                <span>Rezervasyon Yap</span>
+                <span>{t('nav.makeReservation')}</span>
               </motion.button>
             </div>
 
-            {/* Mobile Menu Button */}
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all"
-            >
-              {isMobileMenuOpen ? (
-                <X className="w-6 h-6" />
-              ) : (
-                <Menu className="w-6 h-6" />
-              )}
-            </motion.button>
+            {/* Mobile Right Side */}
+            <div className="lg:hidden flex items-center gap-2">
+              {/* Language Toggle Mobile */}
+              <button
+                onClick={toggleLanguage}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-bold transition-all"
+              >
+                <span className={language === 'tr' ? 'text-white' : 'text-white/50'}>TR</span>
+                <span className="text-white/30">|</span>
+                <span className={language === 'en' ? 'text-white' : 'text-white/50'}>EN</span>
+              </button>
+
+              {/* Mobile Menu Button */}
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all"
+              >
+                {isMobileMenuOpen ? (
+                  <X className="w-6 h-6" />
+                ) : (
+                  <Menu className="w-6 h-6" />
+                )}
+              </motion.button>
+            </div>
           </div>
         </div>
       </motion.nav>
@@ -169,7 +196,7 @@ export default function Navbar() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#00A9A5]/10 hover:bg-[#00A9A5]/20 border-2 border-[#00A9A5]/50 text-[#00A9A5] font-semibold transition-all"
                 >
                   <Search className="w-4 h-4" />
-                  <span>Rezervasyon Sorgula</span>
+                  <span>{t('nav.queryReservation')}</span>
                 </button>
 
                 <button
@@ -180,7 +207,7 @@ export default function Navbar() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-[#8B3A3A] to-[#722E2E] text-white font-semibold shadow-lg shadow-[#8B3A3A]/30 transition-all"
                 >
                   <Calendar className="w-4 h-4" />
-                  <span>Rezervasyon Yap</span>
+                  <span>{t('nav.makeReservation')}</span>
                 </button>
               </div>
             </div>

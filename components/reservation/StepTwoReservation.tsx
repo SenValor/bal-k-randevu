@@ -7,8 +7,10 @@ import TourSlotSection from './TourSlotSection';
 import PeopleSection from './PeopleSection';
 import SeatSelectionModal from './SeatSelectionModal';
 import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function StepTwoReservation() {
+  const { t } = useLanguage();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTour, setSelectedTour] = useState<{ id: number; time: string; title: string; availableSeats?: number } | null>(null);
   const [adultCount, setAdultCount] = useState(1);
@@ -65,10 +67,10 @@ export default function StepTwoReservation() {
           className="text-center mb-12"
         >
           <h1 className="text-4xl md:text-5xl font-bold text-[#0D2847] mb-3">
-            Rezervasyon <span className="text-[#6B9BC3]">Detayları</span>
+            {t('step2.title')} <span className="text-[#6B9BC3]">{t('step2.titleHighlight')}</span>
           </h1>
           <p className="text-[#1B3A5C]/70 text-lg">
-            Tarih, saat ve kişi sayısını seçin
+            {t('step2.desc')}
           </p>
         </motion.div>
 

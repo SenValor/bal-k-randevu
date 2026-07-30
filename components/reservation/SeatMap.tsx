@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 // reservationHelpers — getOccupiedSeats artık doğrudan burada hesaplanıyor
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -19,6 +20,7 @@ interface SeatMapProps {
 const TOTAL_SEATS = 12;
 
 export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selectedDate, timeSlotId, isPrivateTour = false }: SeatMapProps) {
+  const { t } = useLanguage();
   const [occupiedSeats, setOccupiedSeats] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [boatCode, setBoatCode] = useState('T1');
@@ -214,7 +216,7 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
         {/* Boat Header (Baş) */}
         <div className="text-center mb-1.5">
           <div className="inline-block bg-[#6B9BC3]/30 border-2 border-[#1B3A5C] rounded-full px-1.5 py-0.5">
-            <span className="text-[#0D2847] font-bold text-[8px]">⬆ BAŞ</span>
+            <span className="text-[#0D2847] font-bold text-[8px]">⬆ {t('seat.bow')}</span>
           </div>
         </div>
 
@@ -337,7 +339,7 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
         {/* Boat Footer (Kıç) */}
         <div className="text-center mt-1.5">
           <div className="inline-block bg-[#1B3A5C]/20 border-2 border-[#1B3A5C] rounded-full px-1.5 py-0.5">
-            <span className="text-[#0D2847] font-bold text-[8px]">⬇ KIÇ</span>
+            <span className="text-[#0D2847] font-bold text-[8px]">⬇ {t('seat.stern')}</span>
           </div>
         </div>
       </div>

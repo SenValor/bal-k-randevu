@@ -9,10 +9,12 @@ import GlassCard from "./GlassCard";
 import ParticlesLayer from "./ParticlesLayer";
 import WavesGrid from "./WavesGrid";
 import FishingAnimation from "./FishingAnimation";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function HeroCinematic() {
   const ref = useRef(null);
   const router = useRouter();
+  const { t } = useLanguage();
   const [showFishing, setShowFishing] = useState(false);
   
   const { scrollYProgress } = useScroll({
@@ -167,39 +169,46 @@ export default function HeroCinematic() {
                 {/* Decorative Corner Elements */}
                 <div className="absolute top-4 left-4 w-12 h-12 border-t-2 border-l-2 border-[#6B9BC3] rounded-tl-2xl opacity-50" />
                 <div className="absolute bottom-4 right-4 w-12 h-12 border-b-2 border-r-2 border-[#6B9BC3] rounded-br-2xl opacity-50" />
-                
+
                 {/* Ana Başlık */}
                 <motion.h1
-                  initial={{ opacity: 0, y: 100, scale: 0.8 }}
+                  initial={{ opacity: 0, y: 40, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ 
-                    duration: 1.2, 
-                    ease: [0.22, 1, 0.36, 1],
-                    delay: 0.5 
-                  }}
-                  className="text-4xl md:text-5xl lg:text-6xl font-bold text-[#0D2847] leading-tight tracking-tight"
+                  transition={{ duration: 1.0, ease: [0.22, 1, 0.36, 1], delay: 0.5 }}
+                  className="text-4xl md:text-5xl lg:text-6xl font-bold text-[#0D2847] leading-tight"
                   style={{
-                    textShadow: '0 2px 10px rgba(107, 155, 195, 0.2)'
+                    fontFamily: "'Cinzel', serif",
+                    letterSpacing: '0.02em',
+                    textShadow: '0 2px 12px rgba(107, 155, 195, 0.25)',
                   }}
                 >
                   Balık Sefası
                 </motion.h1>
 
-                {/* Alt Başlık */}
-                <motion.div>
-                  <motion.p
-                    initial={{ opacity: 0, y: 50 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ 
-                      duration: 1, 
-                      ease: [0.22, 1, 0.36, 1],
-                      delay: 0.7 
-                    }}
-                    className="text-sm md:text-base lg:text-lg text-[#1B3A5C]/80 mt-3 mb-6 font-light leading-relaxed"
-                  >
-                    İstanbul Boğazı'nda yeni nesil balık avı deneyimi
-                  </motion.p>
+                {/* Dekoratif Ayraç */}
+                <motion.div
+                  initial={{ opacity: 0, scaleX: 0 }}
+                  animate={{ opacity: 1, scaleX: 1 }}
+                  transition={{ duration: 0.8, delay: 0.65 }}
+                  className="flex items-center justify-center gap-3 my-3"
+                >
+                  <div className="h-px w-14 bg-gradient-to-r from-transparent to-[#6B9BC3]/50" />
+                  <svg className="w-4 h-4 text-[#6B9BC3]/60" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3.744A10.5 10.5 0 0112 2.25c5.799 0 10.5 4.7 10.5 10.5 0 .414-.023.823-.069 1.225M6.75 3.744A10.46 10.46 0 002.25 12c0 1.98.548 3.83 1.5 5.41M6.75 3.744C8.08 3.262 9.511 3 11 3" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21l3-3m0 0l3-3m-3 3l-3-3m3 3l3 3" />
+                  </svg>
+                  <div className="h-px w-14 bg-gradient-to-l from-transparent to-[#6B9BC3]/50" />
                 </motion.div>
+
+                {/* Alt Başlık */}
+                <motion.p
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.7 }}
+                  className="text-sm md:text-base text-[#1B3A5C]/70 mb-5 font-light leading-relaxed tracking-wide"
+                >
+                  {t('hero.subtitle')}
+                </motion.p>
 
                 {/* Butonlar */}
                 <motion.div
@@ -223,7 +232,7 @@ export default function HeroCinematic() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-[11px] text-center leading-tight">Sıkça Sorulan Sorular</span>
+                      <span className="text-[11px] text-center leading-tight">{t('hero.faq')}</span>
                     </span>
                   </motion.button>
 
@@ -245,7 +254,7 @@ export default function HeroCinematic() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                       </svg>
-                      <span className="text-[11px]">Basında Biz</span>
+                      <span className="text-[11px]">{t('hero.press')}</span>
                     </span>
                   </motion.button>
 
@@ -271,29 +280,21 @@ export default function HeroCinematic() {
                       transition={{ duration: 0.6, ease: "easeInOut" }}
                     />
                     
-                    {/* Shimmer Effect */}
-                    <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                      animate={{ x: ['-200%', '200%'] }}
-                      transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                    />
-                    
                     {/* Content */}
                     <span className="relative z-10 flex items-center justify-center gap-2.5">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <span className="tracking-wide">Rezervasyon Yap</span>
-                      <motion.svg
-                        className="w-5 h-5"
+                      <span className="tracking-wide">{t('hero.makeReservation')}</span>
+                      <svg
+                        className="w-5 h-5 animate-bounce"
+                        style={{ animationDuration: '1.5s' }}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
-                        animate={{ x: [0, 5, 0] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </motion.svg>
+                      </svg>
                     </span>
                     
                     {/* Glow Border */}
@@ -318,7 +319,7 @@ export default function HeroCinematic() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <span className="text-[11px]">Galeri</span>
+                      <span className="text-[11px]">{t('hero.gallery')}</span>
                     </span>
                   </motion.button>
 
@@ -340,7 +341,7 @@ export default function HeroCinematic() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-[11px]">Hakkımızda</span>
+                      <span className="text-[11px]">{t('hero.aboutUs')}</span>
                     </span>
                   </motion.button>
 
@@ -362,7 +363,7 @@ export default function HeroCinematic() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
-                      <span className="text-[11px]">İletişim</span>
+                      <span className="text-[11px]">{t('hero.contact')}</span>
                     </span>
                   </motion.button>
                 </motion.div>
@@ -378,12 +379,9 @@ export default function HeroCinematic() {
             style={{ opacity: useTransform(scrollYProgress, [0, 0.2], [1, 0]) }}
             className="mt-16 text-[#1B3A5C]/60 text-sm"
           >
-            <motion.div
-              animate={{ y: [0, 10, 0] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            >
+            <div className="animate-bounce">
               Aşağı kaydırın
-            </motion.div>
+            </div>
           </motion.div>
         </div>
       </div>

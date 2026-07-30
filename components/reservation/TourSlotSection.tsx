@@ -5,12 +5,14 @@ import { Clock, Anchor, Loader2, Moon, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { getAllTimeSlotsFullness } from '@/lib/reservationHelpers';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface TimeSlotWithFullness {
   id: string;
   start: string;
   end: string;
   displayName: string;
+  displayName_en?: string;
   fullness: number;
   baitWarning?: boolean;
 }
@@ -22,6 +24,7 @@ interface TourSlotSectionProps {
 }
 
 export default function TourSlotSection({ selectedDate, selectedTour, onTourSelect }: TourSlotSectionProps) {
+  const { t, language } = useLanguage();
   const [timeSlots, setTimeSlots] = useState<TimeSlotWithFullness[]>([]);
   const [loading, setLoading] = useState(true);
   const [boatName, setBoatName] = useState('');
@@ -86,6 +89,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
           start: slot.start,
           end: slot.end,
           displayName: slot.displayName,
+          displayName_en: slot.displayName_en,
           fullness: 0,
           baitWarning: slot.baitWarning || false,
         }));
@@ -128,6 +132,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
           start: slot.start,
           end: slot.end,
           displayName: slot.displayName,
+          displayName_en: slot.displayName_en,
           fullness: 0,
           baitWarning: slot.baitWarning || false,
         }));
@@ -183,9 +188,9 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
     const occupied = Math.round(fullness * capacity);
     const available = capacity - occupied;
     
-    if (available === 0) return 'Dolu';
-    if (available === 1) return '1 Kişilik Yer Var';
-    return `${available} Kişilik Yer Var`;
+    if (available === 0) return t('slot.full');
+    if (available === 1) return t('slot.spot1');
+    return `${available} ${t('slot.spotsLeft')}`;
   };
 
   // Gece yarısını geçen tur kontrolü (01:00-07:00 arası)
@@ -271,7 +276,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
         <div className="flex items-center gap-3 mb-6">
           <Anchor className="w-6 h-6 text-[#6B9BC3]" />
           <h2 className="text-2xl font-bold text-[#0D2847]">
-            Uygun Turlar ve Saatler
+            {t('slot.title')}
             {boatName && <span className="text-[#6B9BC3] ml-2">({boatName})</span>}
           </h2>
         </div>
@@ -313,10 +318,10 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
                   transition={{ delay: index * 0.05, type: 'spring', stiffness: 120, damping: 15 }}
                   whileHover={!isDisabled ? { scale: 1.03, y: -4 } : {}}
                   whileTap={!isDisabled ? { scale: 0.98 } : {}}
-                  onClick={() => !isDisabled && handleTourSelection({ 
-                    id: parseInt(slot.id), 
-                    time: `${slot.start} - ${slot.end}`, 
-                    title: slot.displayName,
+                  onClick={() => !isDisabled && handleTourSelection({
+                    id: parseInt(slot.id),
+                    time: `${slot.start} - ${slot.end}`,
+                    title: language === 'en' ? (slot.displayName_en || slot.displayName) : slot.displayName,
                     availableSeats: boatCapacity - Math.round(slot.fullness * boatCapacity)
                   }, slot)}
                   disabled={isDisabled}
@@ -350,7 +355,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
                     <div className="flex items-center gap-2 mb-2">
                       <Anchor className={`w-5 h-5 ${isDisabled ? 'text-red-500' : isSelected ? 'text-[#6B9BC3]' : 'text-[#1B3A5C]'}`} />
                       <h3 className={`text-lg font-bold ${isDisabled ? 'text-red-500' : 'text-[#0D2847]'}`}>
-                        {slot.displayName}
+                        {language === 'en' ? (slot.displayName_en || slot.displayName) : slot.displayName}
                       </h3>
                     </div>
 
@@ -388,7 +393,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
                     {isDisabled && (
                       <div className="mt-3 inline-block bg-red-500/20 border border-red-500/50 rounded-full px-3 py-1">
                         <span className="text-xs text-red-400 font-medium">
-                          {isPrivateTour ? 'Bu Saatte Rezervasyon Var' : 'Dolu'}
+                          {isPrivateTour ? t('slot.fullPrivate') : t('slot.full')}
                         </span>
                       </div>
                     )}

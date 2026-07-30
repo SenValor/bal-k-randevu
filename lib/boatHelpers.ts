@@ -15,6 +15,7 @@ export interface TimeSlot {
   start: string;
   end: string;
   displayName: string;
+  displayName_en?: string;
   baitWarning?: boolean; // Yem uyarısı aktif mi?
   mapsLink?: string; // Bu saat dilimine özel Google Maps konumu
 }
@@ -61,6 +62,7 @@ export interface Boat {
   capacity: number;
   imageUrl: string;
   description: string;
+  description_en?: string;
   mapsLink?: string; // Google Maps konumu
   startDate: string; // YYYY-MM-DD formatında
   endDate: string;   // YYYY-MM-DD formatında
@@ -76,6 +78,7 @@ export interface Boat {
   createdAt: string;
   updatedAt?: string;
   ribbonText?: string;
+  ribbonText_en?: string;
   isRibbonActive?: boolean;
   ribbonColor?: string; // 'red' | 'blue' | 'green' | 'yellow'
   photos?: string[]; // Galeri fotoğrafları
@@ -167,7 +170,7 @@ export async function toggleBoatStatus(
 export function subscribeToBoats(
   callback: (boats: Boat[]) => void
 ): () => void {
-  const q = query(collection(db, 'boats'), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, 'boats'), orderBy('createdAt', 'asc'));
 
   const unsubscribe = onSnapshot(
     q,

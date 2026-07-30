@@ -8,12 +8,15 @@ import { addReservation, checkSeatsAvailable, ReservationFormData } from '@/lib/
 import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { Tour } from '@/lib/tourHelpers';
 import { isPhoneBlacklisted, getBlacklistInfo } from '@/lib/blacklistHelpers';
+import { validatePromoCode, incrementPromoCodeUsage, PromoCode } from '@/lib/promoCodeHelpers';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function StepFourConfirmation() {
   const { user } = useAuth();
+  const { t, language } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [showGuestForm, setShowGuestForm] = useState(false);
   const [reservationComplete, setReservationComplete] = useState(false);
@@ -31,6 +34,12 @@ export default function StepFourConfirmation() {
   
   // WhatsApp Onayı
   const [whatsappConsent, setWhatsappConsent] = useState(false);
+
+  // Kampanya kodu
+  const [promoInput, setPromoInput] = useState('');
+  const [promoData, setPromoData] = useState<PromoCode | null>(null);
+  const [promoError, setPromoError] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
 
 
   // Rezervasyon verileri
@@ -78,13 +87,27 @@ export default function StepFourConfirmation() {
     }
   };
 
+  const handleApplyPromoCode = async () => {
+    if (!promoInput.trim()) return;
+    setPromoLoading(true);
+    setPromoError('');
+    setPromoData(null);
+    const result = await validatePromoCode(promoInput.trim());
+    if (result.valid && result.promoCode) {
+      setPromoData(result.promoCode);
+    } else {
+      setPromoError(result.error || 'Geçersiz kod');
+    }
+    setPromoLoading(false);
+  };
+
   const handleGuestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     // Validation - E-posta opsiyonel
     if (!guestName.trim() || !guestSurname.trim() || !guestPhone.trim()) {
-      setError('Lütfen zorunlu alanları doldurun');
+      setError(t('confirm.requiredFields'));
       return;
     }
 
@@ -93,7 +116,7 @@ export default function StepFourConfirmation() {
 
   const handleMemberConfirm = async () => {
     if (!memberPhone.trim()) {
-      setError('Lütfen telefon numaranızı girin');
+      setError(t('confirm.enterPhone'));
       return;
     }
     await createReservation();
@@ -101,7 +124,7 @@ export default function StepFourConfirmation() {
 
   const createReservation = async () => {
     if (!boat || !tourType || !reservationData) {
-      setError('Rezervasyon bilgileri eksik');
+      setError(t('confirm.missingData'));
       return;
     }
 
@@ -121,9 +144,9 @@ export default function StepFourConfirmation() {
         console.log('❌ KARA LİSTEDE BULUNDU!', blacklistInfo);
         
         setError(
-          `⛔ Bu telefon numarası ile rezervasyon yapamazsınız!\n\n` +
-          `Sebep: ${blacklistInfo?.reason || 'Belirtilmemiş'}\n\n` +
-          `Lütfen bizimle iletişime geçin.`
+          t('confirm.blacklisted') +
+          (blacklistInfo?.reason || (language === 'en' ? 'Not specified' : 'Belirtilmemiş')) +
+          t('confirm.blacklistedContact')
         );
         setLoading(false);
         return;
@@ -269,10 +292,17 @@ export default function StepFourConfirmation() {
         totalPeople: reservationData.totalPeople || reservationData.seats?.length || 0,
         totalPrice: calculatedPrice,
         equipmentSelection: equipmentSelection || null,
-        baitWarning: hasBaitWarning, // Yem uyarısı
+        baitWarning: hasBaitWarning,
         status: 'pending',
-        whatsappConsent: whatsappConsent, // WhatsApp onayı
-        whatsappConsentDate: whatsappConsent ? new Date().toISOString() : null, // Onay tarihi
+        whatsappConsent: whatsappConsent,
+        whatsappConsentDate: whatsappConsent ? new Date().toISOString() : null,
+        promoCode: promoData ? {
+          id: promoData.id,
+          code: promoData.code,
+          discountType: promoData.discountType,
+          discountValue: promoData.discountValue,
+          description: promoData.description,
+        } : null,
       };
 
       console.log('Firestore\'a kaydedilecek rezervasyon:', reservation);
@@ -293,8 +323,7 @@ export default function StepFourConfirmation() {
 
       if (!seatCheck.available) {
         setError(
-          `Seçtiğiniz koltuklar (${seatCheck.conflictingSeats.join(', ')}) az önce başkası tarafından alındı.\n` +
-          `Lütfen geri dönüp farklı koltuk seçin.`
+          `${seatCheck.conflictingSeats.join(', ')} ${t('confirm.seatsTaken')}`
         );
         setLoading(false);
         return;
@@ -305,19 +334,22 @@ export default function StepFourConfirmation() {
       console.log('Rezervasyon sonucu:', result);
 
       if (result.success) {
+        // Kampanya kodu kullanımını artır
+        if (promoData?.id) {
+          await incrementPromoCodeUsage(promoData.id);
+        }
         setReservationComplete(true);
         setReservationNumber(result.reservationNumber || '');
-        // localStorage'ı temizle
         localStorage.removeItem('selectedBoat');
         localStorage.removeItem('selectedTourType');
         localStorage.removeItem('reservationData');
         localStorage.removeItem('equipmentSelection');
       } else {
-        setError(result.error || 'Rezervasyon oluşturulamadı');
+        setError(result.error || t('confirm.generalError'));
       }
     } catch (err) {
       console.error('Rezervasyon hatası:', err);
-      setError('Bir hata oluştu. Lütfen tekrar deneyin.');
+      setError(t('confirm.generalError'));
     } finally {
       setLoading(false);
     }
@@ -347,14 +379,14 @@ export default function StepFourConfirmation() {
 
             {/* Title */}
             <h1 className="text-3xl md:text-4xl font-bold text-[#0D2847] mb-8">
-              Rezervasyonunuz Başarıyla Oluşturuldu! 🎉
+              {t('confirm.successTitle')}
             </h1>
 
             {/* Rezervasyon Numarası */}
             {reservationNumber && (
               <>
                 <div className="bg-gradient-to-r from-[#00A9A5]/10 to-[#6B9BC3]/10 rounded-2xl border-2 border-[#00A9A5]/30 p-6 mb-6">
-                  <p className="text-sm text-[#1B3A5C]/70 mb-2">Rezervasyon Numaranız</p>
+                  <p className="text-sm text-[#1B3A5C]/70 mb-2">{t('confirm.resNumber')}</p>
                   <div className="flex items-center justify-center gap-3">
                     <span className="text-3xl font-bold text-[#00A9A5] tracking-wider">
                       {reservationNumber}
@@ -362,16 +394,16 @@ export default function StepFourConfirmation() {
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(reservationNumber);
-                        alert('Rezervasyon numarası kopyalandı!');
+                        alert(t('confirm.copied'));
                       }}
                       className="flex items-center gap-2 px-4 py-2 bg-[#00A9A5] text-white rounded-lg hover:bg-[#008985] transition-colors text-sm font-medium"
                     >
                       <Copy className="w-4 h-4" />
-                      Kopyala
+                      {t('confirm.copy')}
                     </button>
                   </div>
                   <p className="text-xs text-[#1B3A5C]/60 mt-3">
-                    Bu numarayı kullanarak rezervasyonunuzu sorgulayabilir ve iptal edebilirsiniz
+                    {t('confirm.resNumberInfo')}
                   </p>
                 </div>
               </>
@@ -379,7 +411,7 @@ export default function StepFourConfirmation() {
 
             {/* Reservation Details */}
             <div className="bg-white/80 rounded-2xl border-2 border-[#6B9BC3]/30 p-5 mb-6 text-left">
-              <h2 className="text-lg font-bold text-[#0D2847] mb-3">Rezervasyon Detayları</h2>
+              <h2 className="text-lg font-bold text-[#0D2847] mb-3">{t('confirm.resDetails')}</h2>
               
               <div className="space-y-2.5">
                 <div className="flex items-center gap-3 text-[#1B3A5C]/80 text-sm">
@@ -392,7 +424,7 @@ export default function StepFourConfirmation() {
                 </div>
                 <div className="flex items-center gap-3 text-[#1B3A5C]/80 text-sm">
                   <Calendar className="w-4 h-4 text-[#6B9BC3]" />
-                  <span>{reservationData?.date ? new Date(reservationData.date).toLocaleDateString('tr-TR') : ''}</span>
+                  <span>{reservationData?.date ? new Date(reservationData.date).toLocaleDateString(language === 'en' ? 'en-GB' : 'tr-TR') : ''}</span>
                 </div>
                 <div className="flex items-center gap-3 text-[#1B3A5C]/80 text-sm">
                   <Clock className="w-4 h-4 text-[#6B9BC3]" />
@@ -400,7 +432,7 @@ export default function StepFourConfirmation() {
                 </div>
                 <div className="flex items-center gap-3 text-[#1B3A5C]/80 text-sm">
                   <Users className="w-4 h-4 text-[#6B9BC3]" />
-                  <span>{reservationData?.seats?.length} Kişi</span>
+                  <span>{reservationData?.seats?.length} {t('confirm.persons')}</span>
                 </div>
               </div>
             </div>
@@ -411,7 +443,7 @@ export default function StepFourConfirmation() {
                 onClick={() => window.location.href = '/'}
                 className="px-8 py-3 bg-gradient-to-r from-[#8B3A3A] to-[#722E2E] hover:from-[#A04848] hover:to-[#8B3A3A] text-white font-semibold rounded-xl shadow-lg shadow-[#8B3A3A]/30 transition-all"
               >
-                Ana Sayfa
+                {t('confirm.homePage')}
               </button>
             </div>
           </motion.div>
@@ -434,10 +466,10 @@ export default function StepFourConfirmation() {
             {/* Header */}
             <div className="text-center mb-8">
               <h1 className="text-3xl md:text-4xl font-bold text-[#0D2847] mb-3">
-                İletişim Bilgileriniz
+                {t('confirm.contactTitle')}
               </h1>
               <p className="text-[#1B3A5C]/70 text-lg">
-                Rezervasyonunuzu tamamlamak için bilgilerinizi girin
+                {t('confirm.contactDesc')}
               </p>
             </div>
 
@@ -446,7 +478,7 @@ export default function StepFourConfirmation() {
               {/* Name */}
               <div>
                 <label className="block text-[#1B3A5C]/80 text-sm font-medium mb-2">
-                  Ad *
+                  {t('confirm.firstName')}
                 </label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#1B3A5C]/40" />
@@ -454,7 +486,7 @@ export default function StepFourConfirmation() {
                     type="text"
                     value={guestName}
                     onChange={(e) => setGuestName(e.target.value)}
-                    placeholder="Adınız"
+                    placeholder={t('confirm.firstNamePlaceholder')}
                     className="w-full bg-white border-2 border-[#6B9BC3]/30 rounded-xl pl-12 pr-4 py-3 text-[#0D2847] placeholder-[#1B3A5C]/40 focus:border-[#6B9BC3] focus:bg-white outline-none transition-all"
                     required
                   />
@@ -464,7 +496,7 @@ export default function StepFourConfirmation() {
               {/* Surname */}
               <div>
                 <label className="block text-[#1B3A5C]/80 text-sm font-medium mb-2">
-                  Soyad *
+                  {t('confirm.lastName')}
                 </label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#1B3A5C]/40" />
@@ -472,7 +504,7 @@ export default function StepFourConfirmation() {
                     type="text"
                     value={guestSurname}
                     onChange={(e) => setGuestSurname(e.target.value)}
-                    placeholder="Soyadınız"
+                    placeholder={t('confirm.lastNamePlaceholder')}
                     className="w-full bg-white border-2 border-[#6B9BC3]/30 rounded-xl pl-12 pr-4 py-3 text-[#0D2847] placeholder-[#1B3A5C]/40 focus:border-[#6B9BC3] focus:bg-white outline-none transition-all"
                     required
                   />
@@ -482,7 +514,7 @@ export default function StepFourConfirmation() {
               {/* Phone */}
               <div>
                 <label className="block text-[#1B3A5C]/80 text-sm font-medium mb-2">
-                  Telefon *
+                  {t('confirm.phone')}
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#1B3A5C]/40" />
@@ -506,7 +538,7 @@ export default function StepFourConfirmation() {
               {/* Email */}
               <div>
                 <label className="block text-[#1B3A5C]/80 text-sm font-medium mb-2">
-                  E-posta (Opsiyonel)
+                  {t('confirm.email')}
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#1B3A5C]/40" />
@@ -514,7 +546,7 @@ export default function StepFourConfirmation() {
                     type="text"
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
-                    placeholder="ornek@email.com"
+                    placeholder={t('confirm.emailPlaceholder')}
                     className="w-full bg-white border-2 border-[#6B9BC3]/30 rounded-xl pl-12 pr-4 py-3 text-[#0D2847] placeholder-[#1B3A5C]/40 focus:border-[#6B9BC3] focus:bg-white outline-none transition-all"
                   />
                 </div>
@@ -526,6 +558,19 @@ export default function StepFourConfirmation() {
                   <p className="text-red-400 text-sm">{error}</p>
                 </div>
               )}
+
+              {/* Kampanya Kodu */}
+              <PromoCodeSection
+                promoInput={promoInput}
+                setPromoInput={setPromoInput}
+                promoData={promoData}
+                setPromoData={setPromoData}
+                promoError={promoError}
+                setPromoError={setPromoError}
+                promoLoading={promoLoading}
+                onApply={handleApplyPromoCode}
+                language={language}
+              />
 
               {/* WhatsApp Onay Checkbox */}
               <label className="flex items-start gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl cursor-pointer hover:bg-green-500/20 transition-colors">
@@ -539,12 +584,12 @@ export default function StepFourConfirmation() {
                   <div className="flex items-center gap-2 mb-1">
                     <MessageCircle className="w-4 h-4 text-green-600" />
                     <span className="text-sm font-semibold text-[#003366]">
-                      WhatsApp Bildirimleri
+                      {t('confirm.whatsapp')}
                     </span>
                   </div>
                   <p className="text-xs text-gray-600 leading-relaxed">
-                    Rezervasyon onayı ve bilgilendirme mesajlarını WhatsApp üzerinden almak istiyorum. 
-                    <span className="text-green-600 font-medium"> (Önerilir - Hızlı bildirim için)</span>
+                    {t('confirm.whatsappDesc')}
+                    <span className="text-green-600 font-medium">{t('confirm.whatsappRecommended')}</span>
                   </p>
                 </div>
               </label>
@@ -558,10 +603,10 @@ export default function StepFourConfirmation() {
                 {loading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Rezervasyon Oluşturuluyor...
+                    {t('confirm.creating')}
                   </>
                 ) : (
-                  'Rezervasyonu Tamamla'
+                  t('confirm.completeReservation')
                 )}
               </button>
             </form>
@@ -585,10 +630,10 @@ export default function StepFourConfirmation() {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl md:text-4xl font-bold text-[#0D2847] mb-3">
-              Rezervasyon Özeti
+              {t('confirm.summaryTitle')}
             </h1>
             <p className="text-[#1B3A5C]/70 text-lg">
-              Bilgilerinizi kontrol edin ve onaylayın
+              {t('confirm.summaryDesc')}
             </p>
           </div>
 
@@ -596,13 +641,13 @@ export default function StepFourConfirmation() {
           <div className="bg-white/80 rounded-2xl border-2 border-[#6B9BC3]/30 p-6 mb-8">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-[#1B3A5C]/70">Tekne:</span>
+                <span className="text-[#1B3A5C]/70">{t('confirm.boat')}</span>
                 <span className="text-[#0D2847] font-semibold">{boat?.name}</span>
               </div>
               {boat?.mapsLink && (
                 <div className="flex items-center justify-between bg-[#6B9BC3]/10 rounded-lg p-3 -mx-2">
                   <span className="text-[#1B3A5C]/70 flex items-center gap-2">
-                    📍 Kalkış Noktası:
+                    {t('confirm.departure')}
                   </span>
                   <a
                     href={boat.mapsLink}
@@ -610,7 +655,7 @@ export default function StepFourConfirmation() {
                     rel="noopener noreferrer"
                     className="text-[#6B9BC3] hover:text-[#5B8DB8] font-semibold underline flex items-center gap-1 transition-colors"
                   >
-                    Haritada Gör
+                    {t('confirm.viewMap')}
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
@@ -618,25 +663,25 @@ export default function StepFourConfirmation() {
                 </div>
               )}
               <div className="flex items-center justify-between">
-                <span className="text-[#1B3A5C]/70">Tur Tipi:</span>
+                <span className="text-[#1B3A5C]/70">{t('confirm.tourType')}</span>
                 <span className="text-[#0D2847] font-semibold">{tourType?.name}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#1B3A5C]/70">Tarih:</span>
+                <span className="text-[#1B3A5C]/70">{t('confirm.date')}</span>
                 <span className="text-[#0D2847] font-semibold">
-                  {reservationData?.date ? new Date(reservationData.date).toLocaleDateString('tr-TR') : ''}
+                  {reservationData?.date ? new Date(reservationData.date).toLocaleDateString(language === 'en' ? 'en-GB' : 'tr-TR') : ''}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#1B3A5C]/70">Saat:</span>
+                <span className="text-[#1B3A5C]/70">{t('confirm.time')}</span>
                 <span className="text-[#0D2847] font-semibold">{reservationData?.tour?.time}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#1B3A5C]/70">Kişi Sayısı:</span>
+                <span className="text-[#1B3A5C]/70">{t('confirm.guestCount')}</span>
                 <span className="text-[#0D2847] font-semibold">{reservationData?.seats?.length}</span>
               </div>
               <div className="flex items-center justify-between pt-4 border-t border-[#6B9BC3]/20">
-                <span className="text-[#1B3A5C]/70 text-lg">Toplam Tutar:</span>
+                <span className="text-[#1B3A5C]/70 text-lg">{t('confirm.totalAmount')}</span>
                 <span className="text-[#8B3A3A] font-bold text-2xl">
                   ₺{tourType && reservationData ? tourType.price * reservationData.seats.length : 0}
                 </span>
@@ -646,19 +691,19 @@ export default function StepFourConfirmation() {
 
           {/* User Info */}
           <div className="bg-white/80 rounded-2xl border-2 border-[#6B9BC3]/30 p-6 mb-8">
-            <h3 className="text-[#0D2847] font-semibold mb-4">İletişim Bilgileri</h3>
+            <h3 className="text-[#0D2847] font-semibold mb-4">{t('confirm.contactInfo')}</h3>
             <div className="space-y-4">
               <div>
-                <p className="text-[#1B3A5C]/70 text-sm mb-1">Ad Soyad</p>
+                <p className="text-[#1B3A5C]/70 text-sm mb-1">{t('confirm.fullName')}</p>
                 <p className="text-[#0D2847]">{user?.displayName || user?.email}</p>
               </div>
               <div>
-                <p className="text-[#1B3A5C]/70 text-sm mb-1">Email</p>
+                <p className="text-[#1B3A5C]/70 text-sm mb-1">{t('confirm.email')}</p>
                 <p className="text-[#1B3A5C]/80 text-sm">{user?.email}</p>
               </div>
               <div>
                 <label className="block text-[#1B3A5C]/80 text-sm font-medium mb-2">
-                  Telefon Numarası *
+                  {t('confirm.phoneLabel')}
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#1B3A5C]/40" />
@@ -666,7 +711,7 @@ export default function StepFourConfirmation() {
                     type="tel"
                     value={memberPhone}
                     onChange={(e) => setMemberPhone(e.target.value)}
-                    placeholder="0555 555 55 55"
+                    placeholder={t('confirm.phonePlaceholder')}
                     className="w-full bg-white border-2 border-[#6B9BC3]/30 rounded-xl pl-12 pr-4 py-3 text-[#0D2847] placeholder-[#1B3A5C]/40 focus:border-[#6B9BC3] focus:bg-white outline-none transition-all"
                     required
                   />
@@ -682,6 +727,19 @@ export default function StepFourConfirmation() {
             </div>
           )}
 
+          {/* Kampanya Kodu */}
+          <PromoCodeSection
+            promoInput={promoInput}
+            setPromoInput={setPromoInput}
+            promoData={promoData}
+            setPromoData={setPromoData}
+            promoError={promoError}
+            setPromoError={setPromoError}
+            promoLoading={promoLoading}
+            onApply={handleApplyPromoCode}
+            language={language}
+          />
+
           {/* WhatsApp Onay Checkbox */}
           <label className="flex items-start gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl cursor-pointer hover:bg-green-500/20 transition-colors mb-6">
             <input
@@ -694,12 +752,12 @@ export default function StepFourConfirmation() {
               <div className="flex items-center gap-2 mb-1">
                 <MessageCircle className="w-4 h-4 text-green-600" />
                 <span className="text-sm font-semibold text-[#003366]">
-                  WhatsApp Bildirimleri
+                  {t('confirm.whatsapp')}
                 </span>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed">
-                Rezervasyon onayı ve bilgilendirme mesajlarını WhatsApp üzerinden almak istiyorum. 
-                <span className="text-green-600 font-medium"> (Önerilir - Hızlı bildirim için)</span>
+                {t('confirm.whatsappDesc')}
+                <span className="text-green-600 font-medium">{t('confirm.whatsappRecommended')}</span>
               </p>
             </div>
           </label>
@@ -713,15 +771,99 @@ export default function StepFourConfirmation() {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Rezervasyon Oluşturuluyor...
+                {t('confirm.creating')}
               </>
             ) : (
-              'Rezervasyonu Onayla'
+              t('confirm.confirmReservation')
             )}
           </button>
         </motion.div>
       </div>
 
     </main>
+  );
+}
+
+function PromoCodeSection({
+  promoInput, setPromoInput, promoData, setPromoData,
+  promoError, setPromoError, promoLoading, onApply, language,
+}: {
+  promoInput: string;
+  setPromoInput: (v: string) => void;
+  promoData: PromoCode | null;
+  setPromoData: (v: PromoCode | null) => void;
+  promoError: string;
+  setPromoError: (v: string) => void;
+  promoLoading: boolean;
+  onApply: () => void;
+  language: string;
+}) {
+  const isEn = language === 'en';
+
+  return (
+    <div className="border border-[#6B9BC3]/30 rounded-xl p-4 bg-[#6B9BC3]/5">
+      <p className="text-sm font-medium text-[#0D2847] mb-3 flex items-center gap-2">
+        <svg className="w-4 h-4 text-[#6B9BC3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+        </svg>
+        {isEn ? 'Do you have a promo code?' : 'Kampanya kodunuz var mı?'}
+      </p>
+
+      {promoData ? (
+        <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl p-3">
+          <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-green-700 font-semibold text-sm">{promoData.code} — Kod Geçerli!</p>
+            <p className="text-green-600 text-xs mt-0.5">
+              {isEn ? 'Show this code on the boat: ' : 'Teknede bu kodu ibraz edin: '}
+              <strong>
+                {promoData.discountType === 'percent'
+                  ? `%${promoData.discountValue} indirim`
+                  : `₺${promoData.discountValue} indirim`}
+              </strong>
+            </p>
+          </div>
+          <button
+            onClick={() => { setPromoData(null); setPromoInput(''); }}
+            className="text-green-500 hover:text-green-700 text-xs underline"
+          >
+            {isEn ? 'Remove' : 'Kaldır'}
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            value={promoInput}
+            onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(''); }}
+            onKeyDown={(e) => e.key === 'Enter' && onApply()}
+            placeholder={isEn ? 'PROMO CODE' : 'KAMPANYA KODU'}
+            className="flex-1 bg-white border-2 border-[#6B9BC3]/30 rounded-xl px-4 py-2.5 text-[#0D2847] placeholder-[#1B3A5C]/30 focus:border-[#6B9BC3] focus:bg-white outline-none text-sm font-mono tracking-wider uppercase"
+          />
+          <button
+            onClick={onApply}
+            disabled={promoLoading || !promoInput.trim()}
+            className="px-4 py-2.5 bg-[#6B9BC3] hover:bg-[#5B8DB8] text-white text-sm font-semibold rounded-xl disabled:opacity-40 transition-colors"
+          >
+            {promoLoading ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (isEn ? 'Apply' : 'Uygula')}
+          </button>
+        </div>
+      )}
+
+      {promoError && !promoData && (
+        <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {promoError}
+        </p>
+      )}
+    </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { db } from './firebaseClient';
+import { TimeSlot, ScheduledTimeSlots, getTimeSlotsForDate } from './boatHelpers';
 
 export interface Reservation {
   id: string;
@@ -657,7 +658,9 @@ export async function getCalendarFullness(
   startDate: string,
   endDate: string,
   boatCapacity: number,
-  timeSlotCount: number
+  timeSlotCount: number,
+  timeSlots?: TimeSlot[],
+  scheduledTimeSlots?: ScheduledTimeSlots[]
 ): Promise<Map<string, number>> {
   const reservations = await getReservationsByBoatDateRange(boatId, startDate, endDate);
   const fullnessMap = new Map<string, number>();
@@ -731,19 +734,26 @@ export async function getCalendarFullness(
       console.log(`  ${date} ${timeSlotId}: ${occupiedSeats}/${boatCapacity} = ${slotFullness.toFixed(2)}`);
     });
 
+    // O tarihe özgü aktif saat sayısını hesapla (scheduledTimeSlots varsa kullan)
+    let activeSlotCount = timeSlotCount;
+    if (timeSlots && timeSlots.length > 0) {
+      const activeSlotsForDate = getTimeSlotsForDate(scheduledTimeSlots, timeSlots, date);
+      activeSlotCount = activeSlotsForDate.length;
+    }
+
     // Takvim renk mantığı:
     // 0 = Tüm saatler boş (YEŞİL)
     // 0.5 = En az 1 saat dolu ama hepsi dolu değil (SARI)
     // 1 = Tüm saatler tamamen dolu (KIRMIZI - seçilemez)
     let dayFullness = 0;
-    if (fullSlotCount === timeSlotCount) {
-      // Tüm saatler tamamen dolu
+    if (activeSlotCount > 0 && fullSlotCount >= activeSlotCount) {
+      // Tüm aktif saatler tamamen dolu
       dayFullness = 1;
-      console.log(`📊 ${date}: TÜM SAATLER DOLU (${fullSlotCount}/${timeSlotCount}) → KIRMIZI`);
+      console.log(`📊 ${date}: TÜM SAATLER DOLU (${fullSlotCount}/${activeSlotCount}) → KIRMIZI`);
     } else if (hasAnyReservation) {
       // En az 1 rezervasyon var ama tüm saatler dolu değil
       dayFullness = 0.5;
-      console.log(`📊 ${date}: REZERVASYON VAR (${fullSlotCount}/${timeSlotCount} dolu) → SARI`);
+      console.log(`📊 ${date}: REZERVASYON VAR (${fullSlotCount}/${activeSlotCount} dolu) → SARI`);
     } else {
       // Hiç rezervasyon yok
       dayFullness = 0;

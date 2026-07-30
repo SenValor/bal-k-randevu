@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Anchor, Users, FileText, Clock, BarChart3, Calendar, Compass, Image, HelpCircle, Settings, Megaphone } from 'lucide-react';
+import { Anchor, Users, FileText, Clock, BarChart3, Calendar, Compass, Image, HelpCircle, Settings, Megaphone, Tag } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminDashboard() {
@@ -105,6 +105,15 @@ export default function AdminDashboard() {
       icon: BarChart3,
       color: 'from-red-500 to-red-600',
       path: '/admin-sefa3986/blacklist',
+      available: true,
+    },
+    {
+      id: 'promo-codes',
+      title: 'Kampanya Kodları',
+      description: 'Sosyal medya indirim kodlarını yönet',
+      icon: Tag,
+      color: 'from-[#00A9A5] to-teal-600',
+      path: '/admin-sefa3986/promo-codes',
       available: true,
     },
     {
