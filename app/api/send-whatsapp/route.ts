@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Meta Business API credentials
-const META_TOKEN = 'EAAMfyFpCzHsBSGat2DWtTPN0yGaMQeCZBSKZBEpf8aOgmK9We9GrijQEKnLQtCpL7EGROEJJuYOW7QyAdt5qkjQMauENjiLIy4jtqt7gpowawFsajeWdJTQAZCIeZCQKaUR14CuiWMCYoESsZADQFVJJ0vJdbFqp2AlZC4WMJBIB7DC8j3ogTBOfSxp6k75i84u7hnmX1iOQroQZAmdEiTuo0o7rHlgtJHZAwCINZAG8a';
-const META_PHONE_ID = '797993213405372';
+const META_TOKEN = process.env.META_WHATSAPP_TOKEN!;
+const META_PHONE_ID = process.env.META_PHONE_ID!;
 
 // Telefon numarasını WhatsApp formatına çevirir
 function formatPhoneNumber(phone: string): string {
@@ -145,7 +144,6 @@ www.baliksefasi.com`;
     }
 
   } catch (error: any) {
-    console.error('WhatsApp mesaj gönderme hatası:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Sunucu hatası' },
       { status: 500 }

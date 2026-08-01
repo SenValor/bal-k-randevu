@@ -43,7 +43,6 @@ export default function BlacklistPage() {
       
       setBlacklist(entries);
     } catch (error) {
-      console.error('Kara liste yüklenirken hata:', error);
       alert('Kara liste yüklenirken bir hata oluştu');
     } finally {
       setLoading(false);
@@ -71,7 +70,6 @@ export default function BlacklistPage() {
       return;
     }
 
-    console.log('📝 Kara listeye eklenecek telefon (AYNEN):', cleanPhone);
 
     try {
       setSubmitting(true);
@@ -90,7 +88,6 @@ export default function BlacklistPage() {
       setShowAddModal(false);
       fetchBlacklist();
     } catch (error) {
-      console.error('Kara listeye eklenirken hata:', error);
       alert('❌ Eklenirken bir hata oluştu');
     } finally {
       setSubmitting(false);
@@ -108,7 +105,6 @@ export default function BlacklistPage() {
       alert('✅ Kara listeden çıkarıldı');
       fetchBlacklist();
     } catch (error) {
-      console.error('Kara listeden çıkarılırken hata:', error);
       alert('❌ Çıkarılırken bir hata oluştu');
     }
   };

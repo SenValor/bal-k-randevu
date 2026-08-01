@@ -132,7 +132,6 @@ export default function TourFormModal({
         setError(result.error || 'Bir hata oluştu');
       }
     } catch (err) {
-      console.error('Form submit hatası:', err);
       setError('Beklenmeyen bir hata oluştu');
     } finally {
       setLoading(false);

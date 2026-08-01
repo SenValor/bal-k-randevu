@@ -37,7 +37,6 @@ export default function GaleriPage() {
       items.sort((a, b) => a.order - b.order);
       setGalleryItems(items);
     } catch (error) {
-      console.error('Galeri yükleme hatası:', error);
     } finally {
       setLoading(false);
     }

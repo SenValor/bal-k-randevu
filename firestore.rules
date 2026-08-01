@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        request.auth.token.email in ['baliksefasi33@admin.com', 'bukre@akturk.com'];
+    }
+
+    // Rezervasyonlar: oluşturma herkese açık, güncelleme/silme sadece admin
+    // İptal işlemleri artık /api/cancel-reservation (Admin SDK) üzerinden yapılıyor
+    match /reservations/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // OTP doğrulama kodları
+    match /verification_codes/{docId} {
+      allow create: if true;
+      allow read: if true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
+    // Tekneler — herkes okur, sadece admin yazar
+    match /boats/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Turlar — herkes okur, sadece admin yazar
+    match /tours/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // SSS — sadece admin yazabilir (EXPLOIT: dışarıdan eklenip silinen kısım bu)
+    match /faq/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Galeri — sadece admin yazabilir
+    match /gallery/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Duyurular — sadece admin yazar
+    match /announcements/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Promo kodlar — herkes okur (doğrulama), sadece admin yazar
+    match /promoCodes/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Koltuk kilitleme — rezervasyon sırasında çakışmayı önler
+    match /seatLocks/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Kara liste — sadece admin erişebilir
+    match /blacklist/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Kullanıcılar — kendi verisini okuyup yazabilir, admin her şeye erişir
+    match /users/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+  }
+}

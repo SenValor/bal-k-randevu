@@ -48,7 +48,6 @@ export async function registerUser(
 
     return { success: true, user };
   } catch (error: any) {
-    console.error('Kayıt hatası:', error);
     
     // Türkçe hata mesajları
     let errorMessage = 'Kayıt sırasında bir hata oluştu';
@@ -76,7 +75,6 @@ export async function loginUser(
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     return { success: true, user: userCredential.user };
   } catch (error: any) {
-    console.error('Giriş hatası:', error);
     
     let errorMessage = 'Giriş sırasında bir hata oluştu';
     
@@ -100,7 +98,6 @@ export async function logoutUser(): Promise<{ success: boolean; error?: string }
     await signOut(auth);
     return { success: true };
   } catch (error: any) {
-    console.error('Çıkış hatası:', error);
     return { success: false, error: 'Çıkış sırasında bir hata oluştu' };
   }
 }
@@ -118,7 +115,6 @@ export async function getUserData(uid: string): Promise<UserData | null> {
     }
     return null;
   } catch (error) {
-    console.error('Kullanıcı bilgileri alınamadı:', error);
     return null;
   }
 }

@@ -121,7 +121,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error('Chat API error:', error);
     return NextResponse.json({ error: error.message || 'Sunucu hatası' }, { status: 500 });
   }
 }

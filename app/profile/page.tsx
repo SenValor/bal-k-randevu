@@ -21,7 +21,6 @@ export default function ProfilePage() {
       await logout();
       router.push('/');
     } catch (error) {
-      console.error('Çıkış hatası:', error);
     }
   };
 

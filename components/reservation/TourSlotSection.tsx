@@ -54,19 +54,11 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
     if (selectedBoatData) {
       try {
         const boat: Boat = JSON.parse(selectedBoatData);
-        console.log('🚢 Tekne yüklendi:', {
-          name: boat.name,
-          id: boat.id,
-          capacity: boat.capacity,
-          timeSlotsCount: boat.timeSlots?.length || 0,
-          scheduledTimeSlotsCount: boat.scheduledTimeSlots?.length || 0
-        });
         setBoatName(boat.name);
         setBoatId(boat.id);
         setBoatCapacity(boat.capacity);
         setCurrentBoat(boat);
       } catch (error) {
-        console.error('Tekne verisi parse edilemedi:', error);
       }
     }
     setLoading(false);
@@ -76,13 +68,11 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
   useEffect(() => {
     // Tekne yoksa çık
     if (!currentBoat) {
-      console.log('⏳ Tekne henüz yüklenmedi');
       return;
     }
 
     // Tarih yoksa varsayılan saat dilimlerini göster (doluluk 0)
     if (!selectedDate) {
-      console.log('📅 Tarih seçilmedi, varsayılan saatler gösteriliyor');
       if (currentBoat.timeSlots && currentBoat.timeSlots.length > 0) {
         const slotsWithFullness = currentBoat.timeSlots.map((slot, index) => ({
           id: `${index}`,
@@ -107,11 +97,6 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
         const day = String(selectedDate.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
         
-        console.log('📅 TourSlot tarih:', {
-          selectedDate: dateStr,
-          localDate: selectedDate.toLocaleDateString('tr-TR'),
-          boatId: currentBoat.id
-        });
         
         // Tarih bazlı saat dilimlerini al
         const effectiveTimeSlots = getTimeSlotsForDate(
@@ -120,11 +105,6 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
           dateStr
         );
 
-        console.log('🕐 Tarih için geçerli saat dilimleri:', {
-          date: dateStr,
-          scheduledCount: currentBoat.scheduledTimeSlots?.length || 0,
-          effectiveSlots: effectiveTimeSlots.map(s => `${s.displayName} (${s.start}-${s.end})`)
-        });
 
         // TimeSlots'ları hazırla
         const slotsWithId = effectiveTimeSlots.map((slot, index) => ({
@@ -141,11 +121,6 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
         setTimeSlots(slotsWithId);
 
         // Sonra doluluk oranlarını hesapla
-        console.log('📊 Doluluk hesaplanıyor...', {
-          boatId: currentBoat.id,
-          date: dateStr,
-          slots: slotsWithId.map(s => s.displayName)
-        });
 
         const fullnessMap = await getAllTimeSlotsFullness(
           currentBoat.id,
@@ -159,10 +134,6 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
           currentBoat.capacity
         );
 
-        console.log('✅ Doluluk hesaplandı:', {
-          mapSize: fullnessMap.size,
-          values: Array.from(fullnessMap.entries())
-        });
 
         // TimeSlots'ları güncel doluluk oranlarıyla güncelle
         setTimeSlots(
@@ -172,7 +143,6 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
           }))
         );
       } catch (error) {
-        console.error('❌ Doluluk hesaplanırken hata:', error);
       }
     };
 

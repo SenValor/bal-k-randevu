@@ -110,33 +110,14 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
     const targetTourName = extractTourName(slotDisplayName);
     const targetRange = slotStart && slotEnd ? `${slotStart}-${slotEnd}` : fallbackRange;
 
-    console.log('🔍 SeatMap DEBUG:', {
-      boatId: boat.id,
-      dateStr,
-      timeSlotId,
-      slotIndex,
-      currentSlot: currentSlot ? { displayName: currentSlot.displayName, start: currentSlot.start, end: currentSlot.end } : null,
-      targetTourName,
-      targetRange,
-      effectiveSlotsCount: effectiveSlots.length,
-      effectiveSlots: effectiveSlots.map((s: any) => ({ displayName: s.displayName, start: s.start, end: s.end })),
-    });
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allOccupied: number[] = [];
 
-      console.log('🔍 SeatMap: Firestore snapshot, toplam rez:', snapshot.size);
 
       snapshot.forEach((d) => {
         const data = d.data();
 
-        console.log('🔍 SeatMap rez:', {
-          id: d.id,
-          timeSlotDisplay: data.timeSlotDisplay,
-          timeSlotId: data.timeSlotId,
-          selectedSeats: data.selectedSeats,
-          status: data.status,
-        });
 
         if (!data.timeSlotDisplay) return;
 
@@ -151,24 +132,15 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
         const nameOnlyMatches = !resRange && targetTourName && resTourName && targetTourName === resTourName;
         const slotMatches = rangeMatches || idMatches || nameOnlyMatches;
 
-        console.log('🔍 SeatMap eslestirme:', {
-          resTourName,
-          resRange,
-          targetRange,
-          targetTourName,
-          slotMatches,
-        });
 
         if (slotMatches && Array.isArray(data.selectedSeats)) {
           allOccupied.push(...data.selectedSeats);
         }
       });
 
-      console.log('🔍 SeatMap: Dolu koltuklar:', allOccupied);
       setOccupiedSeats([...new Set(allOccupied)]);
       setLoading(false);
     }, (error) => {
-      console.error('Dolu koltuklar dinlenirken hata:', error);
       setLoading(false);
     });
 

@@ -39,7 +39,6 @@ export default function AdminSettingsPage() {
         setSettings(docSnap.data() as SettingsData);
       }
     } catch (error) {
-      console.error('Ayarlar yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -51,7 +50,6 @@ export default function AdminSettingsPage() {
       await setDoc(doc(db, 'settings', 'general'), settings);
       alert('Ayarlar başarıyla kaydedildi!');
     } catch (error) {
-      console.error('Kaydetme hatası:', error);
       alert('Bir hata oluştu!');
     } finally {
       setSaving(false);

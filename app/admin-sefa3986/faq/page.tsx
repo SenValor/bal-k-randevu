@@ -42,7 +42,6 @@ export default function AdminFAQPage() {
       faqList.sort((a, b) => a.order - b.order);
       setFaqs(faqList);
     } catch (error) {
-      console.error('FAQ yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -72,7 +71,6 @@ export default function AdminFAQPage() {
       setFormData({ question: '', answer: '', order: 0 });
       fetchFAQs();
     } catch (error) {
-      console.error('Kaydetme hatası:', error);
       alert('Bir hata oluştu!');
     }
   };
@@ -94,7 +92,6 @@ export default function AdminFAQPage() {
       await deleteDoc(doc(db, 'faq', id));
       fetchFAQs();
     } catch (error) {
-      console.error('Silme hatası:', error);
       alert('Silme işlemi başarısız!');
     }
   };

@@ -27,7 +27,6 @@ export default function Footer() {
           }
         }
       } catch (error) {
-        console.error('Hakkımızda metni yükleme hatası:', error);
       }
     };
 

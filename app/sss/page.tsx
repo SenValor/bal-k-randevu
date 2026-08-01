@@ -36,7 +36,6 @@ export default function SSSPage() {
       faqList.sort((a, b) => a.order - b.order);
       setFaqs(faqList);
     } catch (error) {
-      console.error('FAQ yükleme hatası:', error);
     } finally {
       setLoading(false);
     }

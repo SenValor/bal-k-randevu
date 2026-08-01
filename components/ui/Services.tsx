@@ -82,7 +82,7 @@ export default function Services() {
                 icon={service.icon}
                 title={service.title}
                 description={service.desc}
-                onClick={() => console.log(service.title)}
+                
               />
             </motion.div>
           ))}

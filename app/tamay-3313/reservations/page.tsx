@@ -219,7 +219,6 @@ export default function TamayReservationsPage() {
       list.sort((a, b) => a.date.localeCompare(b.date));
       setReservations(list);
     } catch (err) {
-      console.error(err);
     } finally {
       setLoading(false);
     }

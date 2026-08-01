@@ -42,7 +42,6 @@ export default function HakkimizdaPage() {
         setContent(docSnap.data() as AboutContent);
       }
     } catch (error) {
-      console.error('İçerik yükleme hatası:', error);
     } finally {
       setLoading(false);
     }

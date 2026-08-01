@@ -78,15 +78,6 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
             boat.scheduledTimeSlots
           );
           
-          console.log('📅 Takvim Doluluk Map:', {
-            boatId: boat.id,
-            startDate: startDateStr,
-            endDate: endDateStr,
-            capacity: boat.capacity,
-            timeSlots: boat.timeSlots?.length || 1,
-            fullnessMapSize: fullnessMap.size,
-            fullnessData: Array.from(fullnessMap.entries())
-          });
           
           // Doluluk oranını direkt kullan (artık müsaitlik değil, doluluk)
           const fullnessMapForState = new Map<string, number>();
@@ -101,13 +92,10 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
           
           // Sadece dolu günleri logla
           fullnessMap.forEach((fullness, date) => {
-            console.log(`📊 ${date}: Doluluk ${(fullness * 100).toFixed(0)}% → ${fullness >= 1 ? 'KIRMIZI' : fullness >= 0.5 ? 'SARI' : 'YEŞİL'}`);
           });
           
           setAvailabilityMap(fullnessMapForState);
-          console.log('✅ Fullness Map güncellendi:', fullnessMapForState.size, 'gün (tüm ay)');
         } catch (error) {
-          console.error('Takvim doluluk verisi alınamadı:', error);
         }
       }
       setLoading(false);
@@ -167,12 +155,6 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
     const dateKey = formatDateKey(day);
     const fullness = availabilityMap.get(dateKey) ?? 0;
     
-    console.log('🖱️ Takvimde tıklanan gün:', {
-      day,
-      dateKey,
-      fullness,
-      currentMonth: formatLocalDate(currentMonth)
-    });
     
     // Tekne tarih aralığı kontrolü
     if (!isDateInBoatRange(day)) {
@@ -190,10 +172,6 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
       return; // Geçmiş tarih seçilemez
     }
     
-    console.log('✅ Tarih seçildi:', {
-      selectedDate: formatLocalDate(selectedDate),
-      localDate: selectedDate.toLocaleDateString('tr-TR')
-    });
     
     // Tam dolu değilse seçilebilir (fullness < 1)
     if (fullness < 1) {

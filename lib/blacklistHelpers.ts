@@ -16,7 +16,6 @@ export async function isPhoneBlacklisted(phone: string): Promise<boolean> {
       return false;
     }
 
-    console.log('🔍 Kara liste kontrolü - Gelen telefon:', cleanPhone);
 
     // Hem 0'lı hem 0'sız versiyonları oluştur
     let phoneWithZero = cleanPhone;
@@ -30,10 +29,6 @@ export async function isPhoneBlacklisted(phone: string): Promise<boolean> {
       phoneWithZero = '0' + cleanPhone;
     }
 
-    console.log('🔍 Kontrol edilecek versiyonlar:', {
-      withZero: phoneWithZero,
-      withoutZero: phoneWithoutZero
-    });
 
     // Her iki versiyonu da kontrol et
     const phoneVariants = [phoneWithZero, phoneWithoutZero];
@@ -48,14 +43,11 @@ export async function isPhoneBlacklisted(phone: string): Promise<boolean> {
     const found = !querySnapshot.empty;
     
     if (found) {
-      console.log('❌ KARA LİSTEDE BULUNDU!');
     } else {
-      console.log('✅ Kara listede değil');
     }
     
     return found;
   } catch (error) {
-    console.error('❌ Kara liste kontrolü hatası:', error);
     return false;
   }
 }
@@ -107,7 +99,6 @@ export async function getBlacklistInfo(phone: string): Promise<{
       addedAt: data.addedAt || '',
     };
   } catch (error) {
-    console.error('Kara liste bilgisi getirme hatası:', error);
     return null;
   }
 }

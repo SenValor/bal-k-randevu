@@ -20,9 +20,7 @@ export default function Home() {
   useEffect(() => {
     const fetchGallery = async () => {
       try {
-        console.log("🔍 Firebase'den galeri çekiliyor...");
         const querySnapshot = await getDocs(collection(db, "gallery"));
-        console.log("📦 Döküman sayısı:", querySnapshot.size);
 
         if (!querySnapshot.empty) {
           const items = querySnapshot.docs.map((doc) => ({
@@ -31,13 +29,10 @@ export default function Home() {
             order: doc.data().order,
           }));
           items.sort((a: any, b: any) => a.order - b.order);
-          console.log("✅ Galeri yüklendi:", items);
           setGalleryItems(items as any);
         } else {
-          console.log("⚠️ Firebase'de görsel yok!");
         }
       } catch (error) {
-        console.error("❌ Galeri yükleme hatası:", error);
       }
     };
 

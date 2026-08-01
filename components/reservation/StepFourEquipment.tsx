@@ -113,7 +113,6 @@ export default function StepFourEquipment() {
     };
     localStorage.setItem('equipmentSelection', JSON.stringify(equipmentData));
     
-    console.log('Olta seçimleri:', equipmentData);
     
     // Rezervasyon özetine geç
     window.location.href = '/rezervasyon/step-four';

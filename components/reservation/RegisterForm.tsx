@@ -63,7 +63,6 @@ export default function RegisterForm({ onSubmit }: RegisterFormProps) {
       );
 
       if (result.success) {
-        console.log('Kayıt başarılı:', result.user);
         // Kullanıcı verilerini yenile
         await refreshUserData();
         onSubmit();
@@ -71,7 +70,6 @@ export default function RegisterForm({ onSubmit }: RegisterFormProps) {
         setError(result.error || 'Kayıt sırasında bir hata oluştu');
       }
     } catch (err) {
-      console.error('Kayıt hatası:', err);
       setError('Beklenmeyen bir hata oluştu');
     } finally {
       setLoading(false);

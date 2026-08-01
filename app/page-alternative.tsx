@@ -64,7 +64,7 @@ export default function Home() {
               icon={Anchor}
               title="Tekne Kiralama"
               description="Lüks teknelerimizle Boğaz'ın eşsiz manzarasının keyfini çıkarın"
-              onClick={() => console.log('Tekne Kiralama')}
+              
             />
           </SlideUp>
 
@@ -73,7 +73,7 @@ export default function Home() {
               icon={Fish}
               title="Balık Avı Turu"
               description="Profesyonel rehberlerimiz eşliğinde balık avı deneyimi yaşayın"
-              onClick={() => console.log('Balık Avı')}
+              
             />
           </SlideUp>
 
@@ -82,7 +82,7 @@ export default function Home() {
               icon={Users}
               title="Grup Rezervasyon"
               description="Özel günleriniz için grup rezervasyonları ve organizasyonlar"
-              onClick={() => console.log('Grup Rezervasyon')}
+              
             />
           </SlideUp>
         </div>

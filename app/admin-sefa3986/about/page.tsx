@@ -42,7 +42,6 @@ export default function AdminAboutPage() {
         setContent(docSnap.data() as AboutContent);
       }
     } catch (error) {
-      console.error('İçerik yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -54,7 +53,6 @@ export default function AdminAboutPage() {
       await setDoc(doc(db, 'settings', 'about'), content);
       alert('İçerik başarıyla kaydedildi! ✅');
     } catch (error) {
-      console.error('Kaydetme hatası:', error);
       alert('Bir hata oluştu!');
     } finally {
       setSaving(false);

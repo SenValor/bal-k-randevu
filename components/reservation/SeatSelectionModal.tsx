@@ -56,7 +56,6 @@ export default function SeatSelectionModal({
         const boat: Boat = JSON.parse(selectedBoatData);
         setSeatLayout(boat.seatLayout || 'single');
       } catch (error) {
-        console.error('Tekne verisi parse edilemedi:', error);
       }
     }
   }, [isOpen]);
@@ -106,7 +105,6 @@ export default function SeatSelectionModal({
       
       localStorage.setItem('reservationData', JSON.stringify(reservationData));
       
-      console.log('💾 Rezervasyon verileri kaydedildi:', reservationData);
       
       // Tur tipini kontrol et
       const tourTypeData = localStorage.getItem('selectedTourType');
@@ -114,11 +112,9 @@ export default function SeatSelectionModal({
       
       if (isPrivateTour) {
         // Kapalı turda ekipman seçimini atla, direkt onay sayfasına git
-        console.log('🔒 Kapalı tur - Ekipman seçimi atlanıyor');
         window.location.href = '/rezervasyon/step-four';
       } else {
         // Normal turda ekipman seçimine git
-        console.log('🎣 Normal tur - Ekipman seçimine yönlendiriliyor');
         window.location.href = '/rezervasyon/step-equipment';
       }
     }

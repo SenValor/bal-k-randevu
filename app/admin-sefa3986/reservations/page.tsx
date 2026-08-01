@@ -132,7 +132,6 @@ export default function AdminReservationsPage() {
       });
       setBoats(boatsList);
     } catch (error) {
-      console.error('Tekneler alınamadı:', error);
     }
   };
 
@@ -150,7 +149,6 @@ export default function AdminReservationsPage() {
         date.setDate(date.getDate() - 30);
         // Tarih formatı YYYY-MM-DD string olarak tutuluyor
         const dateStr = date.toISOString().split('T')[0];
-        console.log('📅 Şundan sonraki rezervasyonlar getiriliyor:', dateStr);
         q = query(collection(db, 'reservations'), where('date', '>=', dateStr));
       }
 
@@ -172,14 +170,9 @@ export default function AdminReservationsPage() {
         return dateB.getTime() - dateA.getTime();
       });
 
-      console.log('📋 Admin rezervasyonlar yüklendi:', {
-        total: reservationsList.length,
-        showingAll: showAllHistory
-      });
 
       setReservations(reservationsList);
     } catch (error) {
-      console.error('Rezervasyonlar alınamadı:', error);
     } finally {
       setLoading(false);
     }
@@ -213,8 +206,6 @@ export default function AdminReservationsPage() {
 
     // Saat dilimi filtresi
     if (timeSlotFilter !== 'all') {
-      console.log('🔍 Saat dilimi filtresi aktif:', timeSlotFilter);
-      console.log('📋 Filtrelenecek rezervasyon sayısı:', filtered.length);
       
       filtered = filtered.filter((res) => {
         const timeSlotDisplay = res.timeSlotDisplay || '';
@@ -222,20 +213,12 @@ export default function AdminReservationsPage() {
         // Filtredeki saat aralığını normalize et (13:00-19:00)
         const filterTime = timeSlotFilter.replace(/\s/g, '');
         
-        console.log('🔎 Rezervasyon kontrol ediliyor:', {
-          id: res.id,
-          date: res.date,
-          timeSlotId: res.timeSlotId,
-          timeSlotDisplay: res.timeSlotDisplay,
-          filterTime: filterTime
-        });
         
         // timeSlotDisplay'den saat aralığını çıkar - birden fazla format dene
         // Format 1: "Öğle Turu (13:00 - 19:00)"
         const match1 = timeSlotDisplay.match(/\((\d{2}:\d{2}\s*-\s*\d{2}:\d{2})\)/);
         if (match1) {
           const displayTime = match1[1].replace(/\s/g, '');
-          console.log('  ✓ Format 1 eşleşti:', displayTime, '==', filterTime, '?', displayTime === filterTime);
           if (displayTime === filterTime) return true;
         }
         
@@ -243,7 +226,6 @@ export default function AdminReservationsPage() {
         const match2 = timeSlotDisplay.match(/^(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})$/);
         if (match2) {
           const displayTime = match2[1].replace(/\s/g, '');
-          console.log('  ✓ Format 2 eşleşti:', displayTime, '==', filterTime, '?', displayTime === filterTime);
           if (displayTime === filterTime) return true;
         }
         
@@ -251,7 +233,6 @@ export default function AdminReservationsPage() {
         const match3 = timeSlotDisplay.match(/(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
         if (match3) {
           const displayTime = match3[1].replace(/\s/g, '');
-          console.log('  ✓ Format 3 eşleşti:', displayTime, '==', filterTime, '?', displayTime === filterTime);
           if (displayTime === filterTime) return true;
         }
         
@@ -262,21 +243,14 @@ export default function AdminReservationsPage() {
         );
         
         if (selectedSlotIndex >= 0) {
-          console.log('  ✓ Index kontrolü:', {
-            selectedSlotIndex,
-            resTimeSlotId: res.timeSlotId,
-            match: res.timeSlotId === selectedSlotIndex.toString() || res.timeSlotId === `${selectedSlotIndex}`
-          });
           // timeSlotId string index olabilir ("0", "1", "2")
           if (res.timeSlotId === selectedSlotIndex.toString()) return true;
           if (res.timeSlotId === `${selectedSlotIndex}`) return true;
         }
         
-        console.log('  ❌ Hiçbir format eşleşmedi');
         return false;
       });
       
-      console.log('✅ Filtreleme sonrası rezervasyon sayısı:', filtered.length);
     }
 
     // Spesifik tarih filtresi (date picker)
@@ -317,7 +291,6 @@ export default function AdminReservationsPage() {
               }),
             });
           } catch (waError) {
-            console.error('WhatsApp mesajı gönderilemedi:', waError);
           }
         }
       }
@@ -330,7 +303,6 @@ export default function AdminReservationsPage() {
         r.id === id ? { ...r, status: newStatus } : r
       ));
     } catch (error) {
-      console.error('Durum güncelleme hatası:', error);
       alert('Durum güncellenirken bir hata oluştu');
     }
   };
@@ -370,7 +342,6 @@ export default function AdminReservationsPage() {
       setSelectedReservations([]);
       alert(`${selectedReservations.length} rezervasyon başarıyla onaylandı!`);
     } catch (error) {
-      console.error('Toplu onay hatası:', error);
       alert('Toplu onay sırasında bir hata oluştu');
     } finally {
       setBulkApproving(false);
@@ -401,7 +372,6 @@ export default function AdminReservationsPage() {
       
       alert('✅ Rezervasyon başarıyla silindi.');
     } catch (error) {
-      console.error('Silme hatası:', error);
       alert('❌ Rezervasyon silinirken bir hata oluştu.');
     }
   };
@@ -426,7 +396,6 @@ export default function AdminReservationsPage() {
       const docs: Reservation[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation));
       setArchivePreview({ count: docs.length, docs });
     } catch (err) {
-      console.error(err);
       alert('Veriler alınamadı.');
     } finally {
       setArchiving(false);
@@ -503,7 +472,6 @@ export default function AdminReservationsPage() {
       // Listeyi yenile
       fetchReservations();
     } catch (err) {
-      console.error(err);
       alert('❌ Silme işlemi sırasında hata oluştu.');
     } finally {
       setArchiving(false);
@@ -596,7 +564,6 @@ export default function AdminReservationsPage() {
       setShowEditModal(false);
       setEditingReservation(null);
     } catch (error) {
-      console.error('Güncelleme hatası:', error);
       alert('❌ Rezervasyon güncellenirken bir hata oluştu.');
     } finally {
       setEditSaving(false);
@@ -696,12 +663,6 @@ export default function AdminReservationsPage() {
     const locationLink = (reservation as any).timeSlotMapsLink || reservation.boatMapsLink || "";
     const realTimeSlot = getRealTimeSlotDisplay(reservation);
     
-    console.log('📍 WhatsApp Mesaj Konum Debug:', {
-      timeSlotMapsLink: (reservation as any).timeSlotMapsLink,
-      boatMapsLink: reservation.boatMapsLink,
-      finalLocationLink: locationLink,
-      reservationId: reservation.id
-    });
 
     const message = `🐟 Balık Sefası
 

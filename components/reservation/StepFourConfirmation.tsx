@@ -58,7 +58,6 @@ export default function StepFourConfirmation() {
     if (resData) {
       const data = JSON.parse(resData);
       setReservationData(data);
-      console.log('📦 Rezervasyon verileri yüklendi:', data);
     }
 
     // Üye değilse misafir formu göster
@@ -79,11 +78,9 @@ export default function StepFourConfirmation() {
         const userData = userDoc.docs[0].data();
         if (userData.phone) {
           setMemberPhone(userData.phone);
-          console.log('📞 Telefon numarası yüklendi:', userData.phone);
         }
       }
     } catch (error) {
-      console.error('Telefon numarası alınamadı:', error);
     }
   };
 
@@ -134,14 +131,11 @@ export default function StepFourConfirmation() {
       // ⚠️ KARA LİSTE KONTROLÜ
       const phoneToCheck = user ? memberPhone : guestPhone;
       
-      console.log('🔍 Kara liste kontrolü başlıyor...');
-      console.log('📞 Kontrol edilecek telefon:', phoneToCheck);
       
       const isBlacklisted = await isPhoneBlacklisted(phoneToCheck);
       
       if (isBlacklisted) {
         const blacklistInfo = await getBlacklistInfo(phoneToCheck);
-        console.log('❌ KARA LİSTEDE BULUNDU!', blacklistInfo);
         
         setError(
           t('confirm.blacklisted') +
@@ -152,7 +146,6 @@ export default function StepFourConfirmation() {
         return;
       }
       
-      console.log('✅ Kara listede değil, rezervasyon devam ediyor...');
 
       // Tarihi düzgün formata çevir - SADECE "YYYY-MM-DD" formatında
       let reservationDate = '';
@@ -179,28 +172,7 @@ export default function StepFourConfirmation() {
       const randomNum = Math.floor(1000 + Math.random() * 9000); // 1000-9999 arası
       const reservationNumber = `RV-${dateForNumber}-${randomNum}`;
 
-      console.log('📅 Tarih dönüşümü:', {
-        original: reservationData.date,
-        originalType: typeof reservationData.date,
-        originalISO: reservationData.date instanceof Date ? reservationData.date.toISOString() : 'N/A',
-        converted: reservationDate,
-        year: reservationData.date instanceof Date ? reservationData.date.getFullYear() : 'N/A',
-        month: reservationData.date instanceof Date ? reservationData.date.getMonth() + 1 : 'N/A',
-        day: reservationData.date instanceof Date ? reservationData.date.getDate() : 'N/A'
-      });
 
-      console.log('🔍 Rezervasyon oluşturuluyor:', {
-        reservationNumber,
-        boatId: boat.id,
-        boatName: boat.name,
-        date: reservationDate,
-        timeSlotId: reservationData.tour?.id.toString(),
-        timeSlotDisplay: `${reservationData.tour?.title || ''} (${reservationData.tour?.time || ''})`,
-        seats: reservationData.seats,
-        userId: user?.uid || 'guest',
-        tourId: tourType.id,
-        tourName: tourType.name,
-      });
 
       // Ekipman seçimini al
       const equipmentData = localStorage.getItem('equipmentSelection');
@@ -239,21 +211,7 @@ export default function StepFourConfirmation() {
       // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
       const timeSlotMapsLink = selectedTimeSlot?.mapsLink || boat.mapsLink || '';
       
-      console.log('🗓️ Rezervasyon tarihi:', reservationDate);
-      console.log('📅 Boat scheduledTimeSlots:', boat.scheduledTimeSlots);
-      console.log('📅 Boat timeSlots:', boat.timeSlots);
-      console.log('⏰ Aktif saat dilimleri (getTimeSlotsForDate sonucu):', activeTimeSlots);
-      console.log('🔢 Seçili tour ID:', selectedTourId, 'Tour title:', tourTitle);
-      console.log('🎯 Seçili saat dilimi:', selectedTimeSlot);
-      console.log('📍 Seçili saat dilimi mapsLink:', selectedTimeSlot?.mapsLink);
-      console.log('📍 Boat mapsLink:', boat.mapsLink);
-      console.log('� Final timeSlotMapsLink:', timeSlotMapsLink);
 
-      console.log('�📦 Raw reservationData:', reservationData);
-      console.log('🚢 Boat data:', boat);
-      console.log('🎫 Tour type:', tourType);
-      console.log('🎣 Equipment data:', equipmentSelection);
-      console.log('⚠️ Bait warning:', hasBaitWarning);
 
       // Kapalı tur kontrolü
       const isPrivateTour = tourType.category === 'private';
@@ -305,7 +263,6 @@ export default function StepFourConfirmation() {
         } : null,
       };
 
-      console.log('Firestore\'a kaydedilecek rezervasyon:', reservation);
 
       // ⚠️ SERVER-SIDE KOLTUK KONTROLÜ — yazma öncesi son doğrulama
       const timeSlotStart  = selectedTimeSlot?.start  || '';
@@ -331,7 +288,6 @@ export default function StepFourConfirmation() {
 
       const result = await addReservation(reservation);
       
-      console.log('Rezervasyon sonucu:', result);
 
       if (result.success) {
         // Kampanya kodu kullanımını artır
@@ -348,7 +304,6 @@ export default function StepFourConfirmation() {
         setError(result.error || t('confirm.generalError'));
       }
     } catch (err) {
-      console.error('Rezervasyon hatası:', err);
       setError(t('confirm.generalError'));
     } finally {
       setLoading(false);

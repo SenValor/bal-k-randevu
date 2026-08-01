@@ -46,12 +46,6 @@ export default function PeopleSection({
       setAdultPrice(basePrice);
       setChildPrice(Math.round(basePrice * 0.5)); // %50 indirim
       
-      console.log('💰 Fiyatlar yüklendi:', {
-        tourName: tourType.name,
-        basePrice,
-        adultPrice: basePrice,
-        childPrice: Math.round(basePrice * 0.5)
-      });
       
       // Özel tur ise otomatik 12 yetişkin yap
       if (isPrivate) {

@@ -41,7 +41,6 @@ export async function sendVerificationCode(
     // Telefonu formatla
     const formattedPhone = formatPhoneForWhatsApp(phoneNumber);
     
-    console.log('📱 Doğrulama kodu gönderiliyor:', formattedPhone);
     
     // Son 1 dakikada gönderilmiş kod var mı kontrol et (spam önleme)
     const oneMinuteAgo = new Date(Date.now() - 60000);
@@ -53,7 +52,6 @@ export async function sendVerificationCode(
     const recentDocs = await getDocs(recentQuery);
     
     if (!recentDocs.empty) {
-      console.log('⏱️ Rate limit: 1 dakika beklenmeli');
       return { 
         success: false, 
         error: 'Lütfen 1 dakika bekleyin' 
@@ -62,7 +60,6 @@ export async function sendVerificationCode(
     
     // Yeni kod üret
     const code = generateVerificationCode();
-    console.log('🔢 Üretilen kod:', code);
     
     // Firestore'a kaydet
     const expiresAt = new Date(Date.now() + 5 * 60000); // 5 dakika
@@ -75,7 +72,6 @@ export async function sendVerificationCode(
       attempts: 0,
     });
     
-    console.log('💾 Kod Firestore\'a kaydedildi');
     
     // WhatsApp API'ye gönder
     const response = await fetch('/api/send-verification', {
@@ -89,14 +85,11 @@ export async function sendVerificationCode(
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('❌ WhatsApp API hatası:', errorData);
       return { success: false, error: 'WhatsApp mesajı gönderilemedi' };
     }
     
-    console.log('✅ WhatsApp mesajı gönderildi');
     return { success: true };
   } catch (error) {
-    console.error('❌ Doğrulama kodu gönderme hatası:', error);
     return { success: false, error: 'Bir hata oluştu' };
   }
 }
@@ -111,7 +104,6 @@ export async function verifyCode(
   try {
     const formattedPhone = formatPhoneForWhatsApp(phoneNumber);
     
-    console.log('🔍 Kod doğrulanıyor:', { phone: formattedPhone, code });
     
     // Kodu bul
     const q = query(
@@ -124,7 +116,6 @@ export async function verifyCode(
     const snapshot = await getDocs(q);
     
     if (snapshot.empty) {
-      console.log('❌ Kod bulunamadı veya zaten kullanılmış');
       return { success: false, error: 'Geçersiz kod' };
     }
     
@@ -136,13 +127,11 @@ export async function verifyCode(
     const expiresAt = docData.expiresAt.toDate();
     
     if (now > expiresAt) {
-      console.log('⏰ Kod süresi dolmuş');
       return { success: false, error: 'Kod süresi dolmuş. Lütfen yeni kod isteyin.' };
     }
     
     // Çok fazla deneme yapılmış mı?
     if (docData.attempts >= 3) {
-      console.log('🚫 Çok fazla hatalı deneme');
       return { success: false, error: 'Çok fazla hatalı deneme. Lütfen yeni kod isteyin.' };
     }
     
@@ -152,10 +141,8 @@ export async function verifyCode(
       usedAt: Timestamp.now(),
     });
     
-    console.log('✅ Kod başarıyla doğrulandı');
     return { success: true };
   } catch (error) {
-    console.error('❌ Kod doğrulama hatası:', error);
     return { success: false, error: 'Bir hata oluştu' };
   }
 }
@@ -186,9 +173,7 @@ export async function incrementAttempts(
         attempts: currentAttempts + 1,
       });
       
-      console.log('📊 Hatalı deneme kaydedildi:', currentAttempts + 1);
     }
   } catch (error) {
-    console.error('❌ Attempts güncelleme hatası:', error);
   }
 }

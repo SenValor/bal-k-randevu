@@ -153,9 +153,7 @@ export default function BoatFormModal({
       setFormData({ ...formData, imageUrl: downloadURL });
       setImagePreview(downloadURL);
       
-      console.log('✅ Resim yüklendi:', downloadURL);
     } catch (error) {
-      console.error('❌ Resim yükleme hatası:', error);
       setError('Resim yüklenirken bir hata oluştu');
     } finally {
       setUploadingImage(false);
@@ -206,7 +204,6 @@ export default function BoatFormModal({
         setError(result.error || 'Bir hata oluştu');
       }
     } catch (err) {
-      console.error('Form submit hatası:', err);
       setError('Beklenmeyen bir hata oluştu');
     } finally {
       setLoading(false);

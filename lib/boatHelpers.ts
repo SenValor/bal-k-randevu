@@ -102,7 +102,6 @@ export async function addBoat(
 
     return { success: true, id: docRef.id };
   } catch (error: any) {
-    console.error('Tekne ekleme hatası:', error);
     return { success: false, error: 'Tekne eklenirken bir hata oluştu' };
   }
 }
@@ -123,7 +122,6 @@ export async function updateBoat(
 
     return { success: true };
   } catch (error: any) {
-    console.error('Tekne güncelleme hatası:', error);
     return { success: false, error: 'Tekne güncellenirken bir hata oluştu' };
   }
 }
@@ -138,7 +136,6 @@ export async function deleteBoat(
     await deleteDoc(doc(db, 'boats', id));
     return { success: true };
   } catch (error: any) {
-    console.error('Tekne silme hatası:', error);
     return { success: false, error: 'Tekne silinirken bir hata oluştu' };
   }
 }
@@ -159,7 +156,6 @@ export async function toggleBoatStatus(
 
     return { success: true };
   } catch (error: any) {
-    console.error('Durum güncelleme hatası:', error);
     return { success: false, error: 'Durum güncellenirken bir hata oluştu' };
   }
 }
@@ -185,7 +181,6 @@ export function subscribeToBoats(
       callback(boats);
     },
     (error) => {
-      console.error('Tekneler dinlenirken hata:', error);
     }
   );
 

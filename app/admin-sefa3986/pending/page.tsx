@@ -60,7 +60,6 @@ export default function PendingReservationsPage() {
       setReservations(data);
       setFilteredReservations(data);
     } catch (error) {
-      console.error('Rezervasyonlar yüklenirken hata:', error);
     } finally {
       setLoading(false);
     }
@@ -105,7 +104,6 @@ export default function PendingReservationsPage() {
             body: JSON.stringify({ type: 'approval', reservation }),
           });
         } catch (waError) {
-          console.error('WhatsApp mesajı gönderilemedi:', waError);
         }
       }
 
@@ -113,7 +111,6 @@ export default function PendingReservationsPage() {
       setReservations((prev) => prev.filter((r) => r.id !== reservationId));
       alert('✅ Rezervasyon onaylandı ve WhatsApp mesajı gönderildi.');
     } catch (error) {
-      console.error('Onaylama hatası:', error);
       alert('❌ Rezervasyon onaylanırken bir hata oluştu.');
     } finally {
       setProcessingId(null);
@@ -135,7 +132,6 @@ export default function PendingReservationsPage() {
       setReservations((prev) => prev.filter((r) => r.id !== reservationId));
       alert('❌ Rezervasyon iptal edildi.');
     } catch (error) {
-      console.error('İptal hatası:', error);
       alert('❌ Rezervasyon iptal edilirken bir hata oluştu.');
     } finally {
       setProcessingId(null);
@@ -171,7 +167,6 @@ export default function PendingReservationsPage() {
               body: JSON.stringify({ type: 'approval', reservation }),
             });
           } catch (waError) {
-            console.error('WhatsApp mesajı gönderilemedi:', waError);
           }
         }
       });
@@ -182,7 +177,6 @@ export default function PendingReservationsPage() {
       setSelectedReservations([]);
       alert(`✅ ${selectedReservations.length} rezervasyon onaylandı ve WhatsApp mesajları gönderildi.`);
     } catch (error) {
-      console.error('Toplu onaylama hatası:', error);
       alert('❌ Rezervasyonlar onaylanırken bir hata oluştu.');
     } finally {
       setBulkProcessing(false);
@@ -215,7 +209,6 @@ export default function PendingReservationsPage() {
       setSelectedReservations([]);
       alert(`❌ ${selectedReservations.length} rezervasyon iptal edildi.`);
     } catch (error) {
-      console.error('Toplu iptal hatası:', error);
       alert('❌ Rezervasyonlar iptal edilirken bir hata oluştu.');
     } finally {
       setBulkProcessing(false);

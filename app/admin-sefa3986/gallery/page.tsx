@@ -49,7 +49,6 @@ export default function AdminGalleryPage() {
       items.sort((a, b) => a.order - b.order);
       setGalleryItems(items);
     } catch (error) {
-      console.error('Galeri yüklenirken hata:', error);
     } finally {
       setLoading(false);
     }
@@ -128,7 +127,6 @@ export default function AdminGalleryPage() {
       setPreviewUrls([]);
       fetchGalleryItems();
     } catch (error) {
-      console.error('Çoklu yükleme hatası:', error);
       alert('Bir hata oluştu!');
     } finally {
       setUploading(false);
@@ -170,7 +168,6 @@ export default function AdminGalleryPage() {
       setPreviewUrl('');
       fetchGalleryItems();
     } catch (error) {
-      console.error('Kaydetme hatası:', error);
       alert('Bir hata oluştu!');
     } finally {
       setUploading(false);
@@ -184,7 +181,6 @@ export default function AdminGalleryPage() {
       await deleteDoc(doc(db, 'gallery', id));
       fetchGalleryItems();
     } catch (error) {
-      console.error('Silme hatası:', error);
       alert('Silme işlemi başarısız!');
     }
   };

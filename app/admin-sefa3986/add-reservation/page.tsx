@@ -127,7 +127,6 @@ export default function AdminAddReservationPage() {
 
       setLoading(false);
     } catch (error) {
-      console.error('Veri yükleme hatası:', error);
       setLoading(false);
     }
   };
@@ -151,13 +150,6 @@ export default function AdminAddReservationPage() {
       startDate.toISOString().split('T')[0]
     );
 
-    console.log('📅 Doluluk verisi yükleniyor:', {
-      boatId: selectedBoatId,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
-      capacity: boat.capacity,
-      timeSlots: timeSlotsForDate.length
-    });
 
     const fullnessMap = await getCalendarFullness(
       selectedBoatId,
@@ -167,10 +159,6 @@ export default function AdminAddReservationPage() {
       timeSlotsForDate.length
     );
 
-    console.log('✅ Doluluk verisi yüklendi:', {
-      mapSize: fullnessMap.size,
-      data: Array.from(fullnessMap.entries()).slice(0, 5)
-    });
 
     setCalendarFullness(fullnessMap);
   };
@@ -200,15 +188,6 @@ export default function AdminAddReservationPage() {
         const slotIdFromIndex = index.toString(); // Müşteri tarafında "0", "1", "2", "3" olarak kaydediliyor
         const slotLabel = (slot as any).label || (slot as any).displayName || `${(slot as any).start} - ${(slot as any).end}`;
         
-        console.log('🔍 Admin: Slot kontrol ediliyor:', {
-          index,
-          slotIdFromFormat,
-          slotIdFromIndex,
-          slotLabel,
-          boatId: selectedBoat.id,
-          date: selectedDate,
-          slot: slot
-        });
         
         // Önce index formatında dene (müşteri tarafı bu formatı kullanıyor)
         let reservations = await getReservationsByBoatDateSlot(
@@ -219,7 +198,6 @@ export default function AdminAddReservationPage() {
 
         // Eğer bulunamazsa start-end formatında dene
         if (reservations.length === 0) {
-          console.log('⚠️ Index formatında bulunamadı, start-end formatında deneniyor...');
           reservations = await getReservationsByBoatDateSlot(
             selectedBoat.id,
             selectedDate,
@@ -227,17 +205,6 @@ export default function AdminAddReservationPage() {
           );
         }
 
-        console.log('📋 Admin: Bulunan rezervasyonlar:', {
-          slotIdFromIndex,
-          slotIdFromFormat,
-          count: reservations.length,
-          reservations: reservations.map(r => ({
-            id: r.id,
-            timeSlotId: r.timeSlotId,
-            seats: r.selectedSeats,
-            date: r.date
-          }))
-        });
 
         const occupiedSeats = reservations.reduce((acc, res) => {
           if (res.selectedSeats && Array.isArray(res.selectedSeats)) {
@@ -248,12 +215,6 @@ export default function AdminAddReservationPage() {
 
         const fullness = occupiedSeats.length / selectedBoat.capacity;
 
-        console.log('📊 Admin: Doluluk hesaplandı:', {
-          slotIdFromIndex,
-          occupiedSeats: occupiedSeats.length,
-          capacity: selectedBoat.capacity,
-          fullness: Math.round(fullness * 100) + '%'
-        });
 
         slotsWithFullness.push({
           id: slotIdFromIndex, // Index formatını kullan (müşteri tarafı ile uyumlu)
@@ -267,7 +228,6 @@ export default function AdminAddReservationPage() {
 
       setTimeSlots(slotsWithFullness);
     } catch (error) {
-      console.error('Saat dilimleri yüklenirken hata:', error);
     } finally {
       setLoadingTimeSlots(false);
     }
@@ -379,7 +339,6 @@ export default function AdminAddReservationPage() {
       alert(`✅ Rezervasyon onaylandı! Rezervasyon No: ${reservationNumber}`);
       router.push('/admin-sefa3986/reservations');
     } catch (error) {
-      console.error('Rezervasyon ekleme hatası:', error);
       alert('❌ Bir hata oluştu!');
     } finally {
       setSubmitting(false);

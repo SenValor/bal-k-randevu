@@ -137,7 +137,6 @@ export default function DoubleSeatLayout({
       setOccupiedSeats([...new Set(allOccupied)]);
       setLoading(false);
     }, (error) => {
-      console.error('Dolu koltuklar dinlenirken hata:', error);
       setLoading(false);
     });
 

@@ -45,7 +45,6 @@ export async function addTour(
 
     return { success: true, id: docRef.id };
   } catch (error: any) {
-    console.error('Tur ekleme hatası:', error);
     return { success: false, error: 'Tur eklenirken bir hata oluştu' };
   }
 }
@@ -66,7 +65,6 @@ export async function updateTour(
 
     return { success: true };
   } catch (error: any) {
-    console.error('Tur güncelleme hatası:', error);
     return { success: false, error: 'Tur güncellenirken bir hata oluştu' };
   }
 }
@@ -81,7 +79,6 @@ export async function deleteTour(
     await deleteDoc(doc(db, 'tours', id));
     return { success: true };
   } catch (error: any) {
-    console.error('Tur silme hatası:', error);
     return { success: false, error: 'Tur silinirken bir hata oluştu' };
   }
 }
@@ -102,7 +99,6 @@ export async function toggleTourStatus(
 
     return { success: true };
   } catch (error: any) {
-    console.error('Durum güncelleme hatası:', error);
     return { success: false, error: 'Durum güncellenirken bir hata oluştu' };
   }
 }
@@ -128,7 +124,6 @@ export function subscribeToTours(
       callback(tours);
     },
     (error) => {
-      console.error('Turlar dinlenirken hata:', error);
     }
   );
 

@@ -158,13 +158,11 @@ export async function addReservation(
   } catch (error: any) {
     if (error?.message?.startsWith('SEAT_CONFLICT:')) {
       const seats = error.message.replace('SEAT_CONFLICT:', '');
-      console.warn('⚠️ addReservation: Transaction koltuk çakışması:', seats);
       return {
         success: false,
         error: `Seçtiğiniz koltuklar (${seats}) az önce başkası tarafından alındı. Lütfen geri dönüp farklı koltuk seçin.`,
       };
     }
-    console.error('Rezervasyon ekleme hatası:', error);
     return { success: false, error: 'Rezervasyon eklenirken bir hata oluştu' };
   }
 }
@@ -184,14 +182,6 @@ export async function getReservationsByBoatDateSlot(
   timeSlotDisplayName?: string
 ): Promise<Reservation[]> {
   try {
-    console.log('🔍 Rezervasyonlar çekiliyor:', { 
-      boatId, 
-      date, 
-      timeSlotId,
-      timeSlotStart,
-      timeSlotEnd,
-      timeSlotIdType: typeof timeSlotId
-    });
 
     // Yeni format için query - sadece boatId'ye göre çek, filtrelemeyi sonra yap
     // Çünkü timeSlotId değişebilir, ama timeSlotDisplay içindeki saat aralığı sabit kalır
@@ -216,8 +206,6 @@ export async function getReservationsByBoatDateSlot(
 
     const reservations: Reservation[] = [];
 
-    console.log(`✅ Yeni format rezervasyon: ${snapshot.size}`);
-    console.log(`✅ Eski format rezervasyon: ${snapshotOld.size}`);
 
     // Saat aralığı eşleştirme için yardımcı fonksiyon
     const extractTimeRange = (timeSlotDisplay: string): string | null => {
@@ -272,45 +260,19 @@ export async function getReservationsByBoatDateSlot(
           // Yöntem 1: Tur adı bazlı eşleştirme (saat değişse bile çalışır)
           if (targetTourName && reservationTourName) {
             timeMatches = reservationTourName === targetTourName;
-            console.log('🏷️ Tur adı eşleştirme:', {
-              targetTourName,
-              reservationTourName,
-              matches: timeMatches
-            });
           }
           
           // Yöntem 2: Saat aralığı bazlı eşleştirme (tur adı eşleşmezse)
           if (!timeMatches && targetTimeRange && reservationTimeRange) {
             timeMatches = reservationTimeRange === targetTimeRange;
-            console.log('🕐 Saat eşleştirme:', {
-              target: targetTimeRange,
-              reservation: reservationTimeRange,
-              matches: timeMatches
-            });
           }
           
           // Yöntem 3: timeSlotId bazlı eşleştirme (diğerleri eşleşmezse)
           if (!timeMatches) {
             timeMatches = data.timeSlotId === timeSlotId;
-            console.log('🔢 TimeSlotId eşleştirme:', {
-              target: timeSlotId,
-              reservation: data.timeSlotId,
-              matches: timeMatches
-            });
           }
           
           if (timeMatches) {
-            console.log('📋 Yeni rezervasyon bulundu:', {
-              id: doc.id,
-              boatId: data.boatId,
-              date: data.date,
-              normalizedDate: reservationDate,
-              timeSlotId: data.timeSlotId,
-              timeSlotDisplay: data.timeSlotDisplay,
-              tourName: reservationTourName,
-              seats: data.selectedSeats,
-              status: data.status
-            });
             
             reservations.push({
               id: doc.id,
@@ -342,15 +304,6 @@ export async function getReservationsByBoatDateSlot(
         }).filter(n => n > 0);
       }
 
-      console.log('📋 Eski rezervasyon:', {
-        id: doc.id,
-        selectedBoat: data.selectedBoat,
-        selectedDate: data.selectedDate,
-        selectedTime: data.selectedTime,
-        selectedSeats: data.selectedSeats,
-        convertedSeats: seatNumbers,
-        status: data.status
-      });
 
       // Eski formatı yeni formata dönüştür
       reservations.push({
@@ -377,18 +330,11 @@ export async function getReservationsByBoatDateSlot(
     });
 
     if (reservations.length === 0) {
-      console.warn('⚠️ Hiç rezervasyon bulunamadı! Query parametreleri:', {
-        boatId,
-        date,
-        timeSlotId
-      });
     } else {
-      console.log(`✅ Toplam ${reservations.length} rezervasyon bulundu`);
     }
 
     return reservations;
   } catch (error) {
-    console.error('❌ Rezervasyonlar getirilirken hata:', error);
     return [];
   }
 }
@@ -420,7 +366,6 @@ export async function getReservationsByBoatDate(
 
     return reservations;
   } catch (error) {
-    console.error('Rezervasyonlar getirilirken hata:', error);
     return [];
   }
 }
@@ -435,13 +380,6 @@ export async function getReservationsByBoatDateRange(
 ): Promise<Reservation[]> {
   try {
     const today = new Date();
-  console.log('📅 Tarih aralığında rezervasyon çekiliyor:', { 
-    boatId, 
-    startDate, 
-    endDate,
-    bugün: today.toISOString().split('T')[0],
-    localDate: today.toLocaleDateString('tr-TR')
-  });
 
     // Yeni format için query
     const q = query(
@@ -466,19 +404,10 @@ export async function getReservationsByBoatDateRange(
 
     const reservations: Reservation[] = [];
 
-    console.log(`✅ Yeni format (range): ${snapshot.size}`);
-    console.log(`✅ Eski format (all): ${snapshotOld.size}`);
 
     // Yeni format rezervasyonlar
     snapshot.forEach((doc) => {
       const data = doc.data();
-      console.log('📋 Rezervasyon (range):', {
-        id: doc.id,
-        date: data.date,
-        dateType: typeof data.date,
-        timeSlotId: data.timeSlotId,
-        selectedSeats: data.selectedSeats
-      });
       reservations.push({
         id: doc.id,
         ...data,
@@ -523,12 +452,6 @@ export async function getReservationsByBoatDateRange(
 
         const dateStr = reservationDate.toISOString().split('T')[0];
 
-        console.log('📋 Eski rezervasyon (range):', {
-          id: doc.id,
-          selectedDate: data.selectedDate,
-          convertedDate: dateStr,
-          seats: seatNumbers
-        });
 
         reservations.push({
           id: doc.id,
@@ -554,11 +477,9 @@ export async function getReservationsByBoatDateRange(
       }
     });
 
-    console.log(`✅ Toplam ${reservations.length} rezervasyon bulundu (range)`);
 
     return reservations;
   } catch (error) {
-    console.error('❌ Rezervasyonlar getirilirken hata:', error);
     return [];
   }
 }
@@ -612,12 +533,6 @@ export async function getTimeSlotFullness(
   );
   const fullness = calculateFullness(reservations, boatCapacity);
   
-  console.log(`Saat doluluk - ${date} ${timeSlotDisplayName || timeSlotStart || timeSlotId}:`, {
-    rezervasyonSayisi: reservations.length,
-    doluKoltuklar: getOccupiedSeats(reservations),
-    kapasite: boatCapacity,
-    doluluk: fullness
-  });
   
   return fullness;
 }
@@ -665,28 +580,11 @@ export async function getCalendarFullness(
   const reservations = await getReservationsByBoatDateRange(boatId, startDate, endDate);
   const fullnessMap = new Map<string, number>();
 
-  console.log('📅 Takvim doluluk hesaplanıyor:', {
-    boatId,
-    startDate,
-    endDate,
-    boatCapacity,
-    timeSlotCount,
-    rezervasyonSayisi: reservations.length
-  });
   
   if (reservations.length === 0) {
-    console.warn('⚠️ HİÇ REZERVASYON BULUNAMADI! Tüm günler yeşil olacak.');
     return fullnessMap;
   }
   
-  console.log('🔍 İlk 3 rezervasyon:', reservations.slice(0, 3).map(r => ({
-    date: r.date,
-    timeSlotId: r.timeSlotId,
-    timeSlotDisplay: r.timeSlotDisplay,
-    selectedSeats: r.selectedSeats,
-    boatId: r.boatId,
-    status: r.status
-  })));
 
   // Rezervasyonları tarihe göre grupla
   const reservationsByDate = new Map<string, Reservation[]>();
@@ -731,7 +629,6 @@ export async function getCalendarFullness(
         fullSlotCount++;
       }
       
-      console.log(`  ${date} ${timeSlotId}: ${occupiedSeats}/${boatCapacity} = ${slotFullness.toFixed(2)}`);
     });
 
     // O tarihe özgü aktif saat sayısını hesapla (scheduledTimeSlots varsa kullan)
@@ -749,15 +646,12 @@ export async function getCalendarFullness(
     if (activeSlotCount > 0 && fullSlotCount >= activeSlotCount) {
       // Tüm aktif saatler tamamen dolu
       dayFullness = 1;
-      console.log(`📊 ${date}: TÜM SAATLER DOLU (${fullSlotCount}/${activeSlotCount}) → KIRMIZI`);
     } else if (hasAnyReservation) {
       // En az 1 rezervasyon var ama tüm saatler dolu değil
       dayFullness = 0.5;
-      console.log(`📊 ${date}: REZERVASYON VAR (${fullSlotCount}/${activeSlotCount} dolu) → SARI`);
     } else {
       // Hiç rezervasyon yok
       dayFullness = 0;
-      console.log(`📊 ${date}: TÜM SAATLER BOŞ → YEŞİL`);
     }
 
     fullnessMap.set(date, dayFullness);
@@ -791,7 +685,6 @@ export async function getReservationByNumber(
 
     return { success: true, reservation };
   } catch (error: any) {
-    console.error('Rezervasyon sorgulama hatası:', error);
     return { success: false, error: 'Rezervasyon sorgulanırken bir hata oluştu' };
   }
 }
@@ -812,7 +705,6 @@ export async function getReservationsByPhone(
       return { success: false, error: 'Geçerli bir telefon numarası girin' };
     }
 
-    console.log('🔍 Telefon ile rezervasyon aranıyor:', cleanPhone);
 
     // Hem 0'lı hem 0'sız versiyonları oluştur
     let phoneWithZero = cleanPhone;
@@ -824,10 +716,6 @@ export async function getReservationsByPhone(
       phoneWithZero = '0' + cleanPhone;
     }
 
-    console.log('🔍 Aranacak telefon versiyonları:', {
-      withZero: phoneWithZero,
-      withoutZero: phoneWithoutZero
-    });
 
     // Her iki versiyonu da ara
     const q = query(
@@ -838,7 +726,6 @@ export async function getReservationsByPhone(
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
-      console.log('❌ Rezervasyon bulunamadı');
       return { success: false, error: 'Bu telefon numarası ile kayıtlı rezervasyon bulunamadı' };
     }
 
@@ -852,59 +739,32 @@ export async function getReservationsByPhone(
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-    console.log('✅ Bulunan rezervasyon sayısı:', reservations.length);
 
     return { success: true, reservations };
   } catch (error: any) {
-    console.error('Telefon ile rezervasyon sorgulama hatası:', error);
     return { success: false, error: 'Rezervasyon sorgulanırken bir hata oluştu' };
   }
 }
 
 /**
- * Rezervasyon numarası ve telefon ile rezervasyon iptal eder
- * @param reservationNumber - Rezervasyon numarası
- * @param phone - Telefon numarası (doğrulama için)
- * @returns Başarı durumu
+ * Rezervasyon numarası ve telefon ile rezervasyon iptal eder.
+ * İptal işlemi sunucu tarafında /api/cancel-reservation üzerinden yapılır;
+ * bu sayede Firestore kuralları bypass edilmeden ve telefon tam olarak doğrulanarak iptal gerçekleşir.
  */
 export async function cancelReservationByNumber(
   reservationNumber: string,
   phone: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Önce rezervasyonu bul
-    const result = await getReservationByNumber(reservationNumber);
-    
-    if (!result.success || !result.reservation) {
-      return { success: false, error: result.error || 'Rezervasyon bulunamadı' };
-    }
-
-    const reservation = result.reservation;
-
-    // Telefon numarasını doğrula (sadece rakamları karşılaştır)
-    const cleanInputPhone = phone.replace(/\D/g, '');
-    const cleanReservationPhone = reservation.userPhone.replace(/\D/g, '');
-
-    if (!cleanReservationPhone.includes(cleanInputPhone) && !cleanInputPhone.includes(cleanReservationPhone)) {
-      return { success: false, error: 'Telefon numarası eşleşmiyor' };
-    }
-
-    // Rezervasyon zaten iptal edilmiş mi?
-    if (reservation.status === 'cancelled') {
-      return { success: false, error: 'Bu rezervasyon zaten iptal edilmiş' };
-    }
-
-    // Rezervasyonu iptal et
-    const docRef = doc(db, 'reservations', reservation.id);
-    await updateDoc(docRef, {
-      status: 'cancelled',
-      updatedAt: new Date().toISOString(),
-      cancelledAt: new Date().toISOString(),
+    const response = await fetch('/api/cancel-reservation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reservationNumber, phone }),
     });
 
-    return { success: true };
+    const data = await response.json();
+    return data;
   } catch (error: any) {
-    console.error('Rezervasyon iptal hatası:', error);
     return { success: false, error: 'Rezervasyon iptal edilirken bir hata oluştu' };
   }
 }

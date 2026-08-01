@@ -33,7 +33,6 @@ export default function PressSection() {
         setPressItems(items.sort((a, b) => a.order - b.order));
       }
     } catch (error) {
-      console.error('Basında Biz yükleme hatası:', error);
     } finally {
       setLoading(false);
     }

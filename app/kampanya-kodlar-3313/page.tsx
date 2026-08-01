@@ -109,7 +109,6 @@ export default function StaffPromoPage() {
 
       setResults(filtered);
     } catch (err) {
-      console.error(err);
       setResults([]);
     } finally {
       setLoading(false);

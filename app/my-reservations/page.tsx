@@ -25,7 +25,6 @@ export default function MyReservationsPage() {
       }
 
       try {
-        console.log('Rezervasyonlar çekiliyor, userId:', user.uid);
 
         const q = query(
           collection(db, 'reservations'),
@@ -35,11 +34,9 @@ export default function MyReservationsPage() {
         const snapshot = await getDocs(q);
         const reservationsList: Reservation[] = [];
 
-        console.log('Bulunan rezervasyon sayısı:', snapshot.size);
 
         snapshot.forEach((doc) => {
           const data = doc.data();
-          console.log('Rezervasyon:', doc.id, data);
           reservationsList.push({
             id: doc.id,
             ...data,
@@ -55,7 +52,6 @@ export default function MyReservationsPage() {
 
         setReservations(reservationsList);
       } catch (error) {
-        console.error('Rezervasyonlar alınamadı:', error);
       } finally {
         setLoading(false);
       }
