@@ -1,7 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Users, Minus, Plus } from 'lucide-react';
+import { Users, Minus, Plus, UserRound, Baby } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 
@@ -31,8 +32,12 @@ export default function PeopleSection({
   const { t } = useLanguage();
   const [isPrivateTour, setIsPrivateTour] = useState(false);
   const [adultPrice, setAdultPrice] = useState(0);
-  const [childPrice, setChildPrice] = useState(0);
-  
+
+  // Çocuk kategorisi kaldırıldı, childCount her zaman 0
+  useEffect(() => {
+    setChildCount(0);
+  }, [setChildCount]);
+
   // Özel tur kontrolü ve fiyat yükleme
   useEffect(() => {
     const tourTypeData = localStorage.getItem('selectedTourType');
@@ -40,14 +45,10 @@ export default function PeopleSection({
       const tourType = JSON.parse(tourTypeData);
       const isPrivate = tourType.category === 'private';
       setIsPrivateTour(isPrivate);
-      
-      // Tur fiyatını al
+
       const basePrice = tourType.price || 0;
       setAdultPrice(basePrice);
-      setChildPrice(Math.round(basePrice * 0.5)); // %50 indirim
-      
-      
-      // Özel tur ise otomatik 12 yetişkin yap
+
       if (isPrivate) {
         setAdultCount(12);
         setChildCount(0);
@@ -56,14 +57,13 @@ export default function PeopleSection({
     }
   }, [setAdultCount, setChildCount, setBabyCount]);
 
-  const totalPeople = adultCount + childCount + babyCount;
-  // Kapalı turda fiyat sabit (kişi sayısıyla çarpılmaz), normal turda kişi başı hesaplanır
-  const totalPrice = isPrivateTour ? adultPrice : (adultCount * adultPrice + childCount * childPrice);
+  const totalPeople = adultCount + babyCount;
+  const totalPrice = isPrivateTour ? adultPrice : adultCount * adultPrice;
   const MAX_CAPACITY = maxCapacity ?? DEFAULT_MAX_CAPACITY;
 
-  const categories = [
+  const categories: { icon: LucideIcon; title: string; subtitle: string; price: string; priceLabel: string; count: number; setCount: (n: number) => void; minCount: number }[] = [
     {
-      emoji: '👨',
+      icon: UserRound,
       title: t('people.adult'),
       subtitle: t('people.adultAge'),
       price: adultPrice > 0 ? `₺${adultPrice}` : t('people.loading'),
@@ -73,17 +73,7 @@ export default function PeopleSection({
       minCount: 1,
     },
     {
-      emoji: '👶',
-      title: t('people.child'),
-      subtitle: t('people.childAge'),
-      price: childPrice > 0 ? `₺${childPrice}` : t('people.loading'),
-      priceLabel: t('people.childLabel'),
-      count: childCount,
-      setCount: setChildCount,
-      minCount: 0,
-    },
-    {
-      emoji: '🍼',
+      icon: Baby,
       title: t('people.baby'),
       subtitle: t('people.babyAge'),
       price: t('people.babyPrice'),
@@ -123,7 +113,7 @@ export default function PeopleSection({
             className="bg-[#6B9BC3]/10 border border-[#6B9BC3]/30 rounded-xl p-4 mb-6"
           >
             <p className="text-[#6B9BC3] text-sm text-center font-medium">
-              ⭐ Özel Tur: Tüm tekne sizin! Otomatik olarak 12 kişilik kapasite seçilmiştir.
+              Özel Tur: Tüm tekne sizin! Otomatik olarak 12 kişilik kapasite seçilmiştir.
             </p>
           </motion.div>
         )}
@@ -140,7 +130,9 @@ export default function PeopleSection({
             >
               {/* Left: Info */}
               <div className="flex items-center gap-4">
-                <div className="text-4xl">{category.emoji}</div>
+                <div className="w-10 h-10 rounded-full bg-[#6B9BC3]/10 border border-[#6B9BC3]/30 flex items-center justify-center shrink-0">
+                  <category.icon className="w-5 h-5 text-[#6B9BC3]" />
+                </div>
                 <div>
                   <h3 className="text-[#0D2847] font-semibold text-lg">{category.title}</h3>
                   <p className="text-[#1B3A5C]/70 text-sm">{category.subtitle}</p>
@@ -214,7 +206,7 @@ export default function PeopleSection({
             className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-6"
           >
             <p className="text-yellow-400 text-sm text-center">
-              ⚠️ Maksimum kapasiteye ulaşıldı ({MAX_CAPACITY} kişi)
+              Maksimum kapasiteye ulaşıldı ({MAX_CAPACITY} kişi)
             </p>
           </motion.div>
         )}
