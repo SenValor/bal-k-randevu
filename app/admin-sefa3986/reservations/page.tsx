@@ -28,7 +28,6 @@ import { collection, query, getDocs, doc, updateDoc, orderBy, deleteDoc, where, 
 import { db } from '@/lib/firebaseClient';
 import { Reservation } from '@/lib/reservationHelpers';
 import { useRouter } from 'next/navigation';
-import jsPDF from 'jspdf';
 import { getTimeSlotsForDate } from '@/lib/boatHelpers';
 
 export default function AdminReservationsPage() {
@@ -56,6 +55,7 @@ export default function AdminReservationsPage() {
   const [exportBoat, setExportBoat] = useState<string>('all');
   const [exportTimeSlots, setExportTimeSlots] = useState<string[]>([]);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<any[]>([]);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   // Archive Modal
   const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -276,24 +276,6 @@ export default function AdminReservationsPage() {
         status: newStatus,
         updatedAt: new Date().toISOString(),
       });
-
-      // WhatsApp mesajı gönder (onay veya iptal)
-      if (newStatus === 'confirmed' || newStatus === 'cancelled') {
-        const reservation = reservations.find(r => r.id === id);
-        if (reservation?.userPhone) {
-          try {
-            await fetch('/api/send-whatsapp', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                type: newStatus === 'confirmed' ? 'approval' : 'cancellation',
-                reservation,
-              }),
-            });
-          } catch (waError) {
-          }
-        }
-      }
 
       // Yerel state'i güncelle
       setReservations(reservations.map(r => 
@@ -662,7 +644,8 @@ export default function AdminReservationsPage() {
     // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
     const locationLink = (reservation as any).timeSlotMapsLink || reservation.boatMapsLink || "";
     const realTimeSlot = getRealTimeSlotDisplay(reservation);
-    
+    const responsibleName = (reservation as any).boatResponsibleName || "";
+    const responsiblePhone = (reservation as any).boatResponsiblePhone || "";
 
     const message = `🐟 Balık Sefası
 
@@ -676,6 +659,8 @@ Rezervasyonunuz onaylandı! 🎉
 ⛵ Tekne: ${reservation.boatName || "BALIK SEFASI"}
 💺 Koltuklar: ${seats}
 ${locationLink ? `📍 Konum: ${locationLink}` : ''}
+${responsibleName ? `👤 Sorumlu: ${responsibleName}` : ''}
+${responsiblePhone ? `📞 Sorumlu Tel: ${responsiblePhone}` : ''}
 
 Teşekkürler, iyi avlar dileriz ⚓
 
@@ -746,7 +731,7 @@ www.baliksefasi.com`;
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!exportDate) {
       alert('Lütfen bir tarih seçin');
       return;
@@ -786,196 +771,201 @@ www.baliksefasi.com`;
     }, {});
 
     // PDF oluştur ve WhatsApp'a gönder
-    generatePDFAndShareWhatsApp(exportData, groupedByTime);
+    await generatePDFAndShareWhatsApp(exportData, groupedByTime);
   };
 
-  const generatePDFAndShareWhatsApp = (data: Reservation[], groupedByTime: any) => {
-    // Türkçe karakter dönüştürme fonksiyonu
-    const toAscii = (text: string) => {
-      const charMap: { [key: string]: string } = {
-        'ç': 'c', 'Ç': 'C',
-        'ğ': 'g', 'Ğ': 'G',
-        'ı': 'i', 'İ': 'I',
-        'ö': 'o', 'Ö': 'O',
-        'ş': 's', 'Ş': 'S',
-        'ü': 'u', 'Ü': 'U'
-      };
-      return text.replace(/[çÇğĞıİöÖşŞüÜ]/g, (char) => charMap[char] || char);
-    };
-
-    const selectedBoat = boats.find(b => b.id === exportBoat);
-    const boatName = selectedBoat ? toAscii(selectedBoat.name) : 'Tum Tekneler';
-    const formattedDate = new Date(exportDate).toLocaleDateString('tr-TR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-    
-    // Seçilen saat dilimlerinin sadece saat aralıklarını al
-    const selectedTimeSlotNames = exportTimeSlots.map(slotId => {
-      const index = parseInt(slotId);
-      const slot = availableTimeSlots[index];
-      return slot ? `${slot.start} - ${slot.end}` : '';
-    }).filter(name => name).join(', ');
-
-    // PDF oluştur
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    let yPos = 20;
-    const lineHeight = 7;
-    const margin = 15;
-
-    // Başlık
-    pdf.setFontSize(18);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(toAscii('BALIK SEFASI - Randevu Listesi'), pageWidth / 2, yPos, { align: 'center' });
-    yPos += 12;
-
-
-    yPos += 5;
-
-    // Bilgiler
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(0, 0, 0);
-    pdf.text(toAscii(`Tarih: ${formattedDate}`), margin, yPos);
-    yPos += 6;
-    pdf.text(toAscii(`Tekne: ${boatName}`), margin, yPos);
-    yPos += 6;
-    pdf.text(toAscii(`Saat Dilimleri: ${selectedTimeSlotNames}`), margin, yPos);
-    yPos += 6;
-    pdf.text(toAscii(`Toplam Randevu: ${data.length}`), margin, yPos);
-    yPos += 10;
-
-    // Randevuları saat dilimlerine göre ekle
-    Object.keys(groupedByTime).sort().forEach(timeSlot => {
-      const reservations = groupedByTime[timeSlot];
-      
-      // Yeni sayfa kontrolü
-      if (yPos > pageHeight - 40) {
-        pdf.addPage();
-        yPos = 20;
-      }
-
-      // Saat dilimi başlığı - sadece saat aralığını göster
-      const timeSlotMatch = timeSlot.match(/(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
-      const timeSlotDisplay = timeSlotMatch ? timeSlotMatch[1] : timeSlot;
-      
-      pdf.setFillColor(0, 169, 165);
-      pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(toAscii(`${timeSlotDisplay} (${reservations.length})`), margin + 2, yPos);
-      pdf.setTextColor(0, 0, 0);
-      yPos += 10;
-
-      // Her randevu için
-      reservations.forEach((reservation: Reservation, index: number) => {
-        // Yeni sayfa kontrolü
-        if (yPos > pageHeight - 50) {
-          pdf.addPage();
-          yPos = 20;
-        }
-
-        // Rezervasyon numarası ve isim
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(toAscii(`${index + 1}. ${reservation.userName || 'Isimsiz'}`), margin, yPos);
-        yPos += 5;
-
-        // Bilgiler - daha düzenli tablo formatı
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(9);
-        
-        const phone = (reservation as any).userPhone || '-';
-        const people = `${reservation.totalPeople} (${reservation.adultCount}Y, ${reservation.childCount || 0}C)`;
-        const seats = reservation.selectedSeats && reservation.selectedSeats.length > 0 
-          ? reservation.selectedSeats.join(', ') 
-          : '-';
-        const statusText = getStatusText(reservation.status);
-        
-        pdf.text(toAscii(`   Tel: ${phone}`), margin, yPos);
-        yPos += 4;
-        pdf.text(toAscii(`   Kisi: ${people}`), margin, yPos);
-        yPos += 4;
-        pdf.text(toAscii(`   Koltuklar: ${seats}`), margin, yPos);
-        yPos += 4;
-        pdf.text(toAscii(`   Durum: ${statusText}`), margin, yPos);
-        yPos += 6;
-
-        // Ayırıcı çizgi
-        pdf.setDrawColor(220, 220, 220);
-        pdf.line(margin + 5, yPos, pageWidth - margin - 5, yPos);
-        yPos += 4;
-      });
-
-      yPos += 5;
+  const generatePDFAndShareWhatsApp = async (data: Reservation[], groupedByTime: any) => {
+    // Sadece aktif (iptal edilmemiş) rezervasyonlar
+    const activeData = data.filter(r => r.status !== 'cancelled');
+    const activeGrouped: any = {};
+    Object.keys(groupedByTime).forEach(key => {
+      const active = groupedByTime[key].filter((r: Reservation) => r.status !== 'cancelled');
+      if (active.length > 0) activeGrouped[key] = active;
     });
 
-    // Özet istatistikler
-    const totalPeople = data.reduce((sum, r) => sum + r.totalPeople, 0);
-    const confirmedCount = data.filter(r => r.status === 'confirmed').length;
-
-    if (yPos > pageHeight - 40) {
-      pdf.addPage();
-      yPos = 20;
+    if (activeData.length === 0) {
+      alert('Aktif randevu bulunamadı.');
+      return;
     }
 
-    pdf.setFillColor(248, 249, 250);
-    pdf.rect(margin, yPos, pageWidth - 2 * margin, 25, 'F');
-    yPos += 8;
+    const selectedBoat = boats.find(b => b.id === exportBoat);
+    const boatName = selectedBoat ? selectedBoat.name : 'Tüm Tekneler';
 
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(toAscii('OZET ISTATISTIKLER'), pageWidth / 2, yPos, { align: 'center' });
-    yPos += 8;
+    const formattedDate = new Date(exportDate + 'T12:00:00').toLocaleDateString('tr-TR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    });
 
-    pdf.setFontSize(9);
-    pdf.setFont('helvetica', 'normal');
-    const statsX = margin + 10;
-    pdf.text(toAscii(`Toplam Randevu: ${data.length}`), statsX, yPos);
-    pdf.text(toAscii(`Onaylanmis: ${confirmedCount}`), statsX + 50, yPos);
-    yPos += 5;
-    pdf.text(toAscii(`Toplam Kisi: ${totalPeople}`), statsX, yPos);
+    const totalPeople  = activeData.reduce((s, r) => s + (r.totalPeople  || 0), 0);
+    const totalAdults  = activeData.reduce((s, r) => s + (r.adultCount   || 0), 0);
+    const totalChildren = activeData.reduce((s, r) => s + (r.childCount  || 0), 0);
 
-    // PDF'i blob olarak al
-    const pdfBlob = pdf.output('blob');
-    const pdfUrl = URL.createObjectURL(pdfBlob);
+    const cap = (str: string) => (str || '')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
 
-    // Dosya adı oluştur
+    const generatedAt = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+
+    // ── Saat dilimi blokları ──────────────────────────────────────────────
+    let slotsHTML = '';
+    Object.keys(activeGrouped).sort().forEach(timeKey => {
+      const slotRes: Reservation[] = activeGrouped[timeKey];
+      const timeMatch = timeKey.match(/(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
+      const timeDisplay = timeMatch ? timeMatch[1] : timeKey;
+      const slotPeople = slotRes.reduce((s, r) => s + (r.totalPeople || 0), 0);
+
+      let rows = '';
+      slotRes.forEach((res, i) => {
+        const bg = i % 2 === 0 ? '#ffffff' : '#f5fffe';
+        const seats = res.selectedSeats?.join(', ') || '-';
+        const peopleStr = `${res.totalPeople || 0} (${res.adultCount || 0}Y${(res.childCount || 0) > 0 ? ` + ${res.childCount}C` : ''})`;
+        const promoTag = res.promoCode?.code
+          ? `<span style="display:inline-block;background:#fff3cd;color:#856404;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;border:1px solid #ffc107;">% ${res.promoCode.code}</span>`
+          : '';
+        rows += `
+          <tr style="background:${bg};">
+            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-weight:700;color:#00A9A5;font-size:13px;">${i + 1}</td>
+            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:13px;color:#001F3F;font-weight:600;">${cap(res.userName || 'Bilinmiyor')}${promoTag}</td>
+            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:12px;color:#444;">${res.userPhone || '-'}</td>
+            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:10px;color:#888;">${res.reservationNumber || '-'}</td>
+            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:12px;color:#444;">${peopleStr}</td>
+            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:12px;color:#444;">${seats}</td>
+          </tr>`;
+      });
+
+      slotsHTML += `
+        <div style="margin-bottom:24px;">
+          <table style="width:100%;border-collapse:collapse;background:#00A9A5;border-radius:10px 10px 0 0;">
+            <tr>
+              <td style="padding:12px 16px;color:white;font-size:14px;font-weight:700;">${timeDisplay}</td>
+              <td style="padding:12px 16px;color:white;font-size:12px;text-align:right;">${slotRes.length} randevu · ${slotPeople} kisi</td>
+            </tr>
+          </table>
+          <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;border-top:none;">
+            <thead>
+              <tr style="background:#eafafa;">
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">#</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Isim</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Telefon</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Rez. No</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Kisi</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Koltuklar</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    });
+
+    // ── HTML şablonu ──────────────────────────────────────────────────────
+    const htmlContent = `<div style="width:794px;padding:36px 40px 32px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;background:#ffffff;color:#222;">
+
+  <!-- HEADER -->
+  <table style="width:100%;border-collapse:collapse;background:#001F3F;border-radius:14px;margin-bottom:24px;">
+    <tr>
+      <td style="padding:24px 28px;vertical-align:middle;">
+        <div style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:1px;margin-bottom:4px;">BALIK SEFASI</div>
+        <div style="font-size:12px;color:#00A9A5;">Tekne Kiralama ve Balik Avi Turlari</div>
+      </td>
+      <td style="padding:24px 28px;vertical-align:middle;text-align:right;">
+        <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:6px;">www.baliksefasi.com</div>
+        <div style="font-size:18px;font-weight:700;color:#00A9A5;letter-spacing:1px;">RANDEVU LISTESI</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- BİLGİ KARTLARI -->
+  <table style="width:100%;border-collapse:separate;border-spacing:10px;margin-bottom:24px;margin-left:-10px;margin-right:-10px;">
+    <tr>
+      <td style="background:#f7f8fa;border:1px solid #e4e6e8;border-top:3px solid #00A9A5;border-radius:10px;padding:14px 16px;width:25%;vertical-align:top;">
+        <div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">TARIH</div>
+        <div style="font-size:11px;font-weight:700;color:#001F3F;line-height:1.4;">${formattedDate}</div>
+      </td>
+      <td style="background:#f7f8fa;border:1px solid #e4e6e8;border-top:3px solid #00A9A5;border-radius:10px;padding:14px 16px;width:25%;vertical-align:top;">
+        <div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">TEKNE</div>
+        <div style="font-size:13px;font-weight:700;color:#001F3F;line-height:1.4;">${boatName}</div>
+      </td>
+      <td style="background:#f7f8fa;border:1px solid #e4e6e8;border-top:3px solid #00A9A5;border-radius:10px;padding:14px 16px;width:25%;vertical-align:top;">
+        <div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">TOPLAM RANDEVU</div>
+        <div style="font-size:28px;font-weight:700;color:#00A9A5;line-height:1.2;">${activeData.length}</div>
+      </td>
+      <td style="background:#f7f8fa;border:1px solid #e4e6e8;border-top:3px solid #00A9A5;border-radius:10px;padding:14px 16px;width:25%;vertical-align:top;">
+        <div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">TOPLAM KISI</div>
+        <div style="font-size:28px;font-weight:700;color:#00A9A5;line-height:1.2;">${totalPeople}</div>
+        <div style="font-size:10px;color:#bbb;margin-top:4px;">${totalAdults} Yetiskin · ${totalChildren} Cocuk</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- SAAT DİLİMLERİ -->
+  ${slotsHTML}
+
+  <!-- FOOTER -->
+  <table style="width:100%;border-collapse:collapse;margin-top:10px;border-top:1px solid #ebebeb;">
+    <tr>
+      <td style="padding-top:12px;font-size:10px;color:#ccc;">Balik Sefasi Rezervasyon Sistemi · baliksefasi.com</td>
+      <td style="padding-top:12px;font-size:10px;color:#ccc;text-align:right;">Olusturulma: ${generatedAt}</td>
+    </tr>
+  </table>
+
+</div>`;
+
+    // ── PDF oluştur ve indir ──────────────────────────────────────────────
     const fileName = `Randevu_${boatName.replace(/\s+/g, '_')}_${exportDate}.pdf`;
 
-    // WhatsApp Web için metin oluştur
-    const whatsappText = `*BALIK SEFASI - Randevu Listesi*%0A%0A` +
-      `📅 Tarih: ${formattedDate}%0A` +
-      `🚢 Tekne: ${boatName}%0A` +
-      `⏰ Saat: ${selectedTimeSlotNames}%0A` +
-      `📊 Toplam: ${data.length} randevu%0A%0A` +
-      `PDF dosyası tarayıcınızdan indirildi.%0A` +
-      `Lütfen indirilen PDF'i WhatsApp'a manuel olarak ekleyin.`;
+    setIsGeneratingPDF(true);
 
-    // PDF'i indir
-    const link = document.createElement('a');
-    link.href = pdfUrl;
-    link.download = fileName;
-    link.click();
+    // React'ın yükleniyor durumunu render etmesi için bir frame bekle
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    await new Promise(resolve => setTimeout(resolve, 50));
 
-    // WhatsApp Web'i aç
-    setTimeout(() => {
-      const whatsappUrl = `https://web.whatsapp.com/send?text=${whatsappText}`;
-      window.open(whatsappUrl, '_blank');
-      
-      // Modal'ı kapat
+    const el = document.createElement('div');
+    el.innerHTML = htmlContent;
+    el.style.cssText = 'position:fixed;top:0;left:0;width:794px;z-index:0;pointer-events:none;';
+    document.body.appendChild(el);
+
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const targetEl = el.firstElementChild as HTMLElement;
+
+      const canvas = await html2canvas(targetEl, {
+        scale: 1.5,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 794,
+        logging: false,
+      });
+
+      document.body.removeChild(el);
+
+      const { default: jsPDF } = await import('jspdf');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = 210;
+      const pageHeight = 297;
+      const totalImgHeightMm = (canvas.height * pdfWidth) / canvas.width;
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+      let renderedMm = 0;
+      let pageIndex = 0;
+      while (renderedMm < totalImgHeightMm) {
+        if (pageIndex > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, -renderedMm, pdfWidth, totalImgHeightMm);
+        renderedMm += pageHeight;
+        pageIndex++;
+      }
+
+      pdf.save(fileName);
+
       setShowExportModal(false);
-      
-      // Kullanıcıya bilgi ver
-      alert(`✅ PDF indirildi: ${fileName}\n\n📱 WhatsApp Web açıldı.\nLütfen indirilen PDF dosyasını WhatsApp sohbetine manuel olarak ekleyin.`);
-    }, 500);
-
-    // Cleanup
-    setTimeout(() => URL.revokeObjectURL(pdfUrl), 10000);
+    } catch (err) {
+      if (document.body.contains(el)) document.body.removeChild(el);
+      console.error('PDF hatası:', err);
+      alert('PDF oluşturulurken hata oluştu. Lütfen tekrar deneyin.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const stats = {
@@ -1734,10 +1724,20 @@ www.baliksefasi.com`;
               </button>
               <button
                 onClick={handleExport}
-                disabled={!exportDate || exportTimeSlots.length === 0}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-[#00A9A5] to-[#008B87] hover:from-[#008B87] hover:to-[#00A9A5] text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!exportDate || exportTimeSlots.length === 0 || isGeneratingPDF}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-[#00A9A5] to-[#008B87] hover:from-[#008B87] hover:to-[#00A9A5] text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                İndir {exportTimeSlots.length > 0 && `(${exportTimeSlots.length} Saat)`}
+                {isGeneratingPDF ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    PDF Oluşturuluyor...
+                  </>
+                ) : (
+                  <>İndir {exportTimeSlots.length > 0 && `(${exportTimeSlots.length} Saat)`}</>
+                )}
               </button>
             </div>
           </motion.div>

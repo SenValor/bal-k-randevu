@@ -35,6 +35,8 @@ export default function BoatFormModal({
     code: '',
     description: '',
     mapsLink: '',
+    responsibleName: '',
+    responsiblePhone: '',
     capacity: 10,
     imageUrl: '',
     seatLayout: 'single',
@@ -69,6 +71,8 @@ export default function BoatFormModal({
         description: boat.description,
         description_en: boat.description_en || '',
         mapsLink: boat.mapsLink || '',
+        responsibleName: boat.responsibleName || '',
+        responsiblePhone: boat.responsiblePhone || '',
         capacity: boat.capacity,
         imageUrl: boat.imageUrl,
         seatLayout: boat.seatLayout,
@@ -93,6 +97,8 @@ export default function BoatFormModal({
         description: '',
         description_en: '',
         mapsLink: '',
+        responsibleName: '',
+        responsiblePhone: '',
         capacity: 10,
         imageUrl: '',
         seatLayout: 'single',
@@ -434,6 +440,37 @@ export default function BoatFormModal({
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50"
                 />
                 <p className="text-white/40 text-xs mt-1">Teknenin kalkış noktasının Google Maps linki</p>
+              </div>
+
+              {/* Tekne Sorumlusu */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-white/80 text-sm font-medium mb-2">
+                    👤 Sorumlu Adı Soyadı
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.responsibleName || ''}
+                    onChange={(e) => setFormData({ ...formData, responsibleName: e.target.value })}
+                    disabled={loading}
+                    placeholder="Örn: Ahmet Yılmaz"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-white/80 text-sm font-medium mb-2">
+                    📞 Sorumlu Telefonu
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.responsiblePhone || ''}
+                    onChange={(e) => setFormData({ ...formData, responsiblePhone: e.target.value })}
+                    disabled={loading}
+                    placeholder="05xx xxx xx xx"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-[#00A9A5] focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                  />
+                  <p className="text-white/40 text-xs mt-1">Onay mesajında müşteriye gönderilir</p>
+                </div>
               </div>
 
               {/* Kapasite & Koltuk Düzeni */}

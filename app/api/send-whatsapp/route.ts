@@ -63,6 +63,8 @@ export async function POST(request: NextRequest) {
     const timeSlotDisplay = reservation.timeSlotDisplay || "Belirtilmemiş";
     const boatName = reservation.boatName || "BALIK SEFASI";
     const seats = reservation.selectedSeats?.join(", ") || "";
+    const responsibleName = reservation.boatResponsibleName || "";
+    const responsiblePhone = reservation.boatResponsiblePhone || "";
 
     let message = "";
 
@@ -79,6 +81,8 @@ Rezervasyonunuz onaylandı! 🎉
 🕐 Saat: ${timeSlotDisplay}
 ⛵ Tekne: ${boatName}
 💺 Koltuklar: ${seats}
+${responsibleName ? `👤 Sorumlu: ${responsibleName}` : ''}
+${responsiblePhone ? `📞 Sorumlu Tel: ${responsiblePhone}` : ''}
 
 Teşekkürler, iyi avlar dileriz ⚓
 

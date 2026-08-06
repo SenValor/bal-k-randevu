@@ -67,17 +67,6 @@ export default function PriceSummaryBox({ breakdown, totalPrice }: PriceSummaryB
         </motion.span>
       </div>
 
-      {/* Info */}
-      {breakdown.length > 0 && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="text-xs text-[#1B3A5C]/60 mt-4 text-center"
-        >
-          {t('price.vat')}
-        </motion.p>
-      )}
     </div>
   );
 }

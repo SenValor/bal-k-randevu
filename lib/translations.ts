@@ -178,7 +178,6 @@ export const translations = {
     'price.summary': 'Fiyat Özeti',
     'price.noSelection': 'Henüz seçim yapılmadı',
     'price.total': 'Toplam Tutar',
-    'price.vat': '💡 Fiyatlar KDV dahildir',
     'price.perPerson': 'kişi',
 
     // StepFourEquipment
@@ -421,7 +420,6 @@ export const translations = {
     'price.summary': 'Price Summary',
     'price.noSelection': 'No selection yet',
     'price.total': 'Total Amount',
-    'price.vat': '💡 Prices include VAT',
     'price.perPerson': 'person',
 
     // StepFourEquipment

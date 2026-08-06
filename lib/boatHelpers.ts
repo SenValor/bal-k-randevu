@@ -64,6 +64,8 @@ export interface Boat {
   description: string;
   description_en?: string;
   mapsLink?: string; // Google Maps konumu
+  responsibleName?: string; // Tekne sorumlusunun adı soyadı
+  responsiblePhone?: string; // Tekne sorumlusunun telefon numarası
   startDate: string; // YYYY-MM-DD formatında
   endDate: string;   // YYYY-MM-DD formatında
   seatLayout: 'single' | 'double';

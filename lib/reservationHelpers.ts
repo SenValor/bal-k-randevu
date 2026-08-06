@@ -21,6 +21,8 @@ export interface Reservation {
   boatName: string;
   boatMapsLink?: string; // Teknenin Google Maps konumu
   timeSlotMapsLink?: string; // Saat dilimine özel Google Maps konumu
+  boatResponsibleName?: string; // Tekne sorumlusunun adı soyadı
+  boatResponsiblePhone?: string; // Tekne sorumlusunun telefon numarası
   userId: string;
   userName: string;
   userEmail: string;
@@ -39,6 +41,13 @@ export interface Reservation {
   status: 'pending' | 'confirmed' | 'cancelled';
   createdAt: string;
   updatedAt?: string;
+  promoCode?: {
+    id: string;
+    code: string;
+    discountType: string;
+    discountValue: number;
+    description?: string;
+  } | null;
 }
 
 export type ReservationFormData = Omit<Reservation, 'id' | 'createdAt' | 'updatedAt' | 'reservationNumber'>;

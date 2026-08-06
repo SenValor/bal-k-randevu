@@ -110,14 +110,19 @@ exports.onReservationApproved = functions
       const formattedPhone = formatPhoneNumber(userPhone);
       const formattedDate = formatDateTurkish(date);
 
+      const {
+        boatResponsibleName = "",
+        boatResponsiblePhone = "",
+      } = after;
+
       console.log(`📱 Formatlanmış telefon: +${formattedPhone}`);
 
       // 🚀 TEMPLATE mesajı gönder - Token'ı dinamik al
       const currentToken = getAccessToken();
       const currentPhoneId = getPhoneId();
-      
+
       console.log("🔑 Token ilk 20 karakter:", currentToken?.substring(0, 20));
-      
+
       const apiUrl = `https://graph.facebook.com/v22.0/${currentPhoneId}/messages`;
 
       const response = await fetch(apiUrl, {
@@ -131,7 +136,7 @@ exports.onReservationApproved = functions
           to: formattedPhone,
           type: "template",
           template: {
-            name: "reservation_confirmation", // ✅ Onay şablonu adı
+            name: "reservation_confirmation",
             language: { code: "tr" },
             components: [
               {
@@ -143,6 +148,8 @@ exports.onReservationApproved = functions
                   { type: "text", text: boatName },
                   { type: "text", text: reservationNumber },
                   { type: "text", text: locationLink || "Konum bilgisi bulunamadı" },
+                  { type: "text", text: boatResponsibleName || "-" },
+                  { type: "text", text: boatResponsiblePhone || "-" },
                 ],
               },
             ],

@@ -234,6 +234,8 @@ export default function StepFourConfirmation() {
         boatName: boat.name,
         boatMapsLink: boat.mapsLink || '',
         timeSlotMapsLink: timeSlotMapsLink, // Saat dilimine özel konum (varsa)
+        boatResponsibleName: boat.responsibleName || '',
+        boatResponsiblePhone: boat.responsiblePhone || '',
         userId: user?.uid || 'guest',
         userName: user ? user.displayName || user.email || 'Üye' : `${guestName} ${guestSurname}`,
         userEmail: user ? user.email || '' : guestEmail,
