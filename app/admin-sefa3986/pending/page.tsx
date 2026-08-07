@@ -241,21 +241,21 @@ export default function PendingReservationsPage() {
             Geri Dön
           </button>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-                <Clock className="w-10 h-10 text-yellow-400" />
+              <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2 flex items-center gap-2 md:gap-3">
+                <Clock className="w-7 h-7 md:w-10 md:h-10 text-yellow-400 shrink-0" />
                 Bekleyen Randevular
               </h1>
-              <p className="text-white/60 text-lg">
+              <p className="text-white/60 text-sm md:text-lg">
                 Onay bekleyen rezervasyonları görüntüleyin ve yönetin
               </p>
             </div>
 
             {/* Stats Badge */}
-            <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-xl px-6 py-4">
-              <p className="text-yellow-400/60 text-sm mb-1">Bekleyen</p>
-              <p className="text-4xl font-bold text-yellow-400">{filteredReservations.length}</p>
+            <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-xl px-4 py-3 md:px-6 md:py-4 self-start md:self-auto">
+              <p className="text-yellow-400/60 text-xs md:text-sm mb-1">Bekleyen</p>
+              <p className="text-3xl md:text-4xl font-bold text-yellow-400">{filteredReservations.length}</p>
             </div>
           </div>
         </div>
@@ -358,7 +358,7 @@ export default function PendingReservationsPage() {
                     : 'border-yellow-500/30'
                 }`}
               >
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
                   {/* Checkbox */}
                   <div className="flex items-start gap-4">
                     <input
@@ -427,11 +427,11 @@ export default function PendingReservationsPage() {
                   </div>
 
                   {/* Right: Actions */}
-                  <div className="flex lg:flex-col gap-3">
+                  <div className="flex md:flex-col gap-3">
                     <button
                       onClick={() => handleApprove(reservation.id)}
                       disabled={processingId === reservation.id}
-                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {processingId === reservation.id ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
@@ -445,7 +445,7 @@ export default function PendingReservationsPage() {
                     <button
                       onClick={() => handleReject(reservation.id)}
                       disabled={processingId === reservation.id}
-                      className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 text-white hover:text-red-400 font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 text-white hover:text-red-400 font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {processingId === reservation.id ? (
                         <Loader2 className="w-5 h-5 animate-spin" />

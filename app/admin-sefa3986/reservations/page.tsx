@@ -989,38 +989,41 @@ www.baliksefasi.com`;
             Geri Dön
           </button>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2">
+              <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">
                 Randevu Yönetimi 📅
               </h1>
-              <p className="text-white/60 text-lg">
+              <p className="text-white/60 text-sm md:text-lg">
                 Tüm rezervasyonları görüntüleyin ve yönetin
               </p>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => router.push('/admin-sefa3986/add-reservation')}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-purple-500/30"
+                className="flex items-center gap-1.5 px-3 py-2 md:px-6 md:py-3 text-sm md:text-base bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-purple-500/30"
               >
-                <Plus className="w-5 h-5" />
-                Randevu Ekle
+                <Plus className="w-4 h-4 md:w-5 md:h-5" />
+                <span className="hidden sm:inline">Randevu Ekle</span>
+                <span className="sm:hidden">Ekle</span>
               </button>
               <button
                 onClick={() => setShowExportModal(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#00A9A5] to-[#008B87] hover:from-[#008B87] hover:to-[#00A9A5] text-white font-semibold rounded-xl transition-all shadow-lg shadow-[#00A9A5]/30"
+                className="flex items-center gap-1.5 px-3 py-2 md:px-6 md:py-3 text-sm md:text-base bg-gradient-to-r from-[#00A9A5] to-[#008B87] hover:from-[#008B87] hover:to-[#00A9A5] text-white font-semibold rounded-xl transition-all shadow-lg shadow-[#00A9A5]/30"
               >
-                <Download className="w-5 h-5" />
-                Günlük Liste İndir
+                <Download className="w-4 h-4 md:w-5 md:h-5" />
+                <span className="hidden sm:inline">Günlük Liste İndir</span>
+                <span className="sm:hidden">Liste</span>
               </button>
               <button
                 onClick={() => { setShowArchiveModal(true); setArchivePreview(null); setArchiveMonth(''); }}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-orange-500/30"
+                className="flex items-center gap-1.5 px-3 py-2 md:px-6 md:py-3 text-sm md:text-base bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-orange-500/30"
               >
-                <Archive className="w-5 h-5" />
-                Aylık Arşiv
+                <Archive className="w-4 h-4 md:w-5 md:h-5" />
+                <span className="hidden sm:inline">Aylık Arşiv</span>
+                <span className="sm:hidden">Arşiv</span>
               </button>
             </div>
           </div>
@@ -1313,9 +1316,9 @@ www.baliksefasi.com`;
                 transition={{ delay: index * 0.05 }}
                 className="bg-white/5 border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all"
               >
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   {/* Left: Compact Info */}
-                  <div className="lg:col-span-3 space-y-3">
+                  <div className="md:col-span-3 space-y-3">
                     {/* Status & Reservation Number */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -1476,7 +1479,7 @@ www.baliksefasi.com`;
                   {/* Right: Actions */}
                   <div className="flex flex-col justify-center">
                     {/* Actions - Compact */}
-                    <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 md:grid-cols-1 gap-1.5">
                       {/* Bekliyor Butonu */}
                       <button
                         onClick={() => updateReservationStatus(reservation.id, 'pending')}
@@ -1556,7 +1559,7 @@ www.baliksefasi.com`;
                       <button
                         onClick={() => sendCancellationMessage(reservation)}
                         disabled={!reservation.userPhone}
-                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="col-span-2 md:col-span-1 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-400 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="WhatsApp İptal Mesajı Gönder"
                       >
                         <Send className="w-4 h-4" />

@@ -69,7 +69,7 @@ export default function ToursAdminPage() {
       {/* Header */}
       <div className="relative overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 bg-gradient-to-r from-[#00A9A5]/10 to-transparent" />
-        <div className="container mx-auto px-4 py-12 relative">
+        <div className="container mx-auto px-4 py-6 md:py-12 relative">
           <button
             onClick={() => router.push('/admin-sefa3986')}
             className="mb-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all flex items-center gap-2"
@@ -80,17 +80,17 @@ export default function ToursAdminPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="flex items-center justify-between"
+            className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00A9A5] to-[#008B87] flex items-center justify-center">
-                <Compass className="w-8 h-8 text-white" />
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-[#00A9A5] to-[#008B87] flex items-center justify-center shrink-0">
+                <Compass className="w-6 h-6 md:w-8 md:h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
+                <h1 className="text-2xl md:text-4xl font-bold text-white mb-0.5 md:mb-2">
                   Tur Yönetimi
                 </h1>
-                <p className="text-white/60 text-lg">
+                <p className="text-white/60 text-sm md:text-lg">
                   Turları yönetin ve düzenleyin
                 </p>
               </div>
@@ -104,7 +104,7 @@ export default function ToursAdminPage() {
               }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="px-6 py-3 bg-gradient-to-r from-[#00A9A5] to-[#008B87] text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-[#00A9A5]/30 transition-all flex items-center gap-2"
+              className="px-4 py-2.5 md:px-6 md:py-3 bg-gradient-to-r from-[#00A9A5] to-[#008B87] text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-[#00A9A5]/30 transition-all flex items-center gap-2 self-start sm:self-auto"
             >
               <Plus className="w-5 h-5" />
               Yeni Tur Ekle
