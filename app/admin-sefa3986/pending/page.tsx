@@ -84,8 +84,6 @@ export default function PendingReservationsPage() {
   };
 
   const handleApprove = async (reservationId: string) => {
-    if (!confirm('Bu rezervasyonu onaylamak istediğinize emin misiniz?')) return;
-
     try {
       setProcessingId(reservationId);
       const reservationRef = doc(db, 'reservations', reservationId);
@@ -94,9 +92,7 @@ export default function PendingReservationsPage() {
         updatedAt: new Date().toISOString(),
       });
 
-      // Listeyi güncelle
       setReservations((prev) => prev.filter((r) => r.id !== reservationId));
-      alert('✅ Rezervasyon onaylandı.');
     } catch (error) {
       alert('❌ Rezervasyon onaylanırken bir hata oluştu.');
     } finally {
@@ -105,8 +101,6 @@ export default function PendingReservationsPage() {
   };
 
   const handleReject = async (reservationId: string) => {
-    if (!confirm('Bu rezervasyonu iptal etmek istediğinize emin misiniz?')) return;
-
     try {
       setProcessingId(reservationId);
       const reservationRef = doc(db, 'reservations', reservationId);
@@ -115,9 +109,7 @@ export default function PendingReservationsPage() {
         updatedAt: new Date().toISOString(),
       });
 
-      // Listeyi güncelle
       setReservations((prev) => prev.filter((r) => r.id !== reservationId));
-      alert('❌ Rezervasyon iptal edildi.');
     } catch (error) {
       alert('❌ Rezervasyon iptal edilirken bir hata oluştu.');
     } finally {
