@@ -775,7 +775,6 @@ www.baliksefasi.com`;
   };
 
   const generatePDFAndShareWhatsApp = async (data: Reservation[], groupedByTime: any) => {
-    // Sadece aktif (iptal edilmemiş) rezervasyonlar
     const activeData = data.filter(r => r.status !== 'cancelled');
     const activeGrouped: any = {};
     Object.keys(groupedByTime).forEach(key => {
@@ -790,179 +789,230 @@ www.baliksefasi.com`;
 
     const selectedBoat = boats.find(b => b.id === exportBoat);
     const boatName = selectedBoat ? selectedBoat.name : 'Tüm Tekneler';
+    const totalPeople   = activeData.reduce((s, r) => s + (r.totalPeople  || 0), 0);
+    const totalAdults   = activeData.reduce((s, r) => s + (r.adultCount   || 0), 0);
+    const totalChildren = activeData.reduce((s, r) => s + (r.childCount   || 0), 0);
 
     const formattedDate = new Date(exportDate + 'T12:00:00').toLocaleDateString('tr-TR', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     });
-
-    const totalPeople  = activeData.reduce((s, r) => s + (r.totalPeople  || 0), 0);
-    const totalAdults  = activeData.reduce((s, r) => s + (r.adultCount   || 0), 0);
-    const totalChildren = activeData.reduce((s, r) => s + (r.childCount  || 0), 0);
-
-    const cap = (str: string) => (str || '')
-      .split(' ')
-      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ');
-
     const generatedAt = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
-
-    // ── Saat dilimi blokları ──────────────────────────────────────────────
-    let slotsHTML = '';
-    Object.keys(activeGrouped).sort().forEach(timeKey => {
-      const slotRes: Reservation[] = activeGrouped[timeKey];
-      const timeMatch = timeKey.match(/(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
-      const timeDisplay = timeMatch ? timeMatch[1] : timeKey;
-      const slotPeople = slotRes.reduce((s, r) => s + (r.totalPeople || 0), 0);
-
-      let rows = '';
-      slotRes.forEach((res, i) => {
-        const bg = i % 2 === 0 ? '#ffffff' : '#f5fffe';
-        const seats = res.selectedSeats?.join(', ') || '-';
-        const peopleStr = `${res.totalPeople || 0} (${res.adultCount || 0}Y${(res.childCount || 0) > 0 ? ` + ${res.childCount}C` : ''})`;
-        const promoTag = res.promoCode?.code
-          ? `<span style="display:inline-block;background:#fff3cd;color:#856404;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px;border:1px solid #ffc107;">% ${res.promoCode.code}</span>`
-          : '';
-        rows += `
-          <tr style="background:${bg};">
-            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-weight:700;color:#00A9A5;font-size:13px;">${i + 1}</td>
-            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:13px;color:#001F3F;font-weight:600;">${cap(res.userName || 'Bilinmiyor')}${promoTag}</td>
-            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:12px;color:#444;">${res.userPhone || '-'}</td>
-            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:10px;color:#888;">${res.reservationNumber || '-'}</td>
-            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:12px;color:#444;">${peopleStr}</td>
-            <td style="padding:9px 12px;border-bottom:1px solid #eef0f0;font-size:12px;color:#444;">${seats}</td>
-          </tr>`;
-      });
-
-      slotsHTML += `
-        <div style="margin-bottom:24px;">
-          <table style="width:100%;border-collapse:collapse;background:#00A9A5;border-radius:10px 10px 0 0;">
-            <tr>
-              <td style="padding:12px 16px;color:white;font-size:14px;font-weight:700;">${timeDisplay}</td>
-              <td style="padding:12px 16px;color:white;font-size:12px;text-align:right;">${slotRes.length} randevu · ${slotPeople} kisi</td>
-            </tr>
-          </table>
-          <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;border-top:none;">
-            <thead>
-              <tr style="background:#eafafa;">
-                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">#</th>
-                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Isim</th>
-                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Telefon</th>
-                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Rez. No</th>
-                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Kisi</th>
-                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#00A9A5;border-bottom:2px solid #00A9A5;text-transform:uppercase;">Koltuklar</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>`;
-    });
-
-    // ── HTML şablonu ──────────────────────────────────────────────────────
-    const htmlContent = `<div style="width:794px;padding:36px 40px 32px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;background:#ffffff;color:#222;">
-
-  <!-- HEADER -->
-  <table style="width:100%;border-collapse:collapse;background:#001F3F;border-radius:14px;margin-bottom:24px;">
-    <tr>
-      <td style="padding:24px 28px;vertical-align:middle;">
-        <div style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:1px;margin-bottom:4px;">BALIK SEFASI</div>
-        <div style="font-size:12px;color:#00A9A5;">Tekne Kiralama ve Balik Avi Turlari</div>
-      </td>
-      <td style="padding:24px 28px;vertical-align:middle;text-align:right;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:6px;">www.baliksefasi.com</div>
-        <div style="font-size:18px;font-weight:700;color:#00A9A5;letter-spacing:1px;">RANDEVU LISTESI</div>
-      </td>
-    </tr>
-  </table>
-
-  <!-- BİLGİ KARTLARI -->
-  <table style="width:100%;border-collapse:separate;border-spacing:10px;margin-bottom:24px;margin-left:-10px;margin-right:-10px;">
-    <tr>
-      <td style="background:#f7f8fa;border:1px solid #e4e6e8;border-top:3px solid #00A9A5;border-radius:10px;padding:14px 16px;width:25%;vertical-align:top;">
-        <div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">TARIH</div>
-        <div style="font-size:11px;font-weight:700;color:#001F3F;line-height:1.4;">${formattedDate}</div>
-      </td>
-      <td style="background:#f7f8fa;border:1px solid #e4e6e8;border-top:3px solid #00A9A5;border-radius:10px;padding:14px 16px;width:25%;vertical-align:top;">
-        <div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">TEKNE</div>
-        <div style="font-size:13px;font-weight:700;color:#001F3F;line-height:1.4;">${boatName}</div>
-      </td>
-      <td style="background:#f7f8fa;border:1px solid #e4e6e8;border-top:3px solid #00A9A5;border-radius:10px;padding:14px 16px;width:25%;vertical-align:top;">
-        <div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">TOPLAM RANDEVU</div>
-        <div style="font-size:28px;font-weight:700;color:#00A9A5;line-height:1.2;">${activeData.length}</div>
-      </td>
-      <td style="background:#f7f8fa;border:1px solid #e4e6e8;border-top:3px solid #00A9A5;border-radius:10px;padding:14px 16px;width:25%;vertical-align:top;">
-        <div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">TOPLAM KISI</div>
-        <div style="font-size:28px;font-weight:700;color:#00A9A5;line-height:1.2;">${totalPeople}</div>
-        <div style="font-size:10px;color:#bbb;margin-top:4px;">${totalAdults} Yetiskin · ${totalChildren} Cocuk</div>
-      </td>
-    </tr>
-  </table>
-
-  <!-- SAAT DİLİMLERİ -->
-  ${slotsHTML}
-
-  <!-- FOOTER -->
-  <table style="width:100%;border-collapse:collapse;margin-top:10px;border-top:1px solid #ebebeb;">
-    <tr>
-      <td style="padding-top:12px;font-size:10px;color:#ccc;">Balik Sefasi Rezervasyon Sistemi · baliksefasi.com</td>
-      <td style="padding-top:12px;font-size:10px;color:#ccc;text-align:right;">Olusturulma: ${generatedAt}</td>
-    </tr>
-  </table>
-
-</div>`;
-
-    // ── PDF oluştur ve indir ──────────────────────────────────────────────
     const fileName = `Randevu_${boatName.replace(/\s+/g, '_')}_${exportDate}.pdf`;
 
-    setIsGeneratingPDF(true);
+    // Türkçe karakter → ASCII (jsPDF built-in font uyumluluğu)
+    const tr = (s: any) => String(s ?? '')
+      .replace(/ş/g,'s').replace(/Ş/g,'S')
+      .replace(/ğ/g,'g').replace(/Ğ/g,'G')
+      .replace(/ı/g,'i').replace(/İ/g,'I')
+      .replace(/ü/g,'u').replace(/Ü/g,'U')
+      .replace(/ö/g,'o').replace(/Ö/g,'O')
+      .replace(/ç/g,'c').replace(/Ç/g,'C');
 
-    // React'ın yükleniyor durumunu render etmesi için bir frame bekle
-    await new Promise(resolve => requestAnimationFrame(resolve));
+    const cap = (s: string) => tr(s).split(' ')
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+    setIsGeneratingPDF(true);
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    const el = document.createElement('div');
-    el.innerHTML = htmlContent;
-    el.style.cssText = 'position:fixed;top:0;left:0;width:794px;z-index:0;pointer-events:none;';
-    document.body.appendChild(el);
-
     try {
-      const { default: html2canvas } = await import('html2canvas');
-      const targetEl = el.firstElementChild as HTMLElement;
-
-      const canvas = await html2canvas(targetEl, {
-        scale: 1.5,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: 794,
-        logging: false,
-      });
-
-      document.body.removeChild(el);
-
       const { default: jsPDF } = await import('jspdf');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = 210;
-      const pageHeight = 297;
-      const totalImgHeightMm = (canvas.height * pdfWidth) / canvas.width;
-      const imgData = canvas.toDataURL('image/jpeg', 0.92);
 
-      let renderedMm = 0;
-      let pageIndex = 0;
-      while (renderedMm < totalImgHeightMm) {
-        if (pageIndex > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, -renderedMm, pdfWidth, totalImgHeightMm);
-        renderedMm += pageHeight;
-        pageIndex++;
-      }
+      const W = 210;
+      const M = 10;           // margin
+      const CW = W - M * 2;   // content width = 190mm
+      let y = M;
+
+      const nextPage = (need: number) => {
+        if (y + need > 284) { pdf.addPage(); y = M; }
+      };
+
+      // ── HEADER ────────────────────────────────────────────────────────
+      pdf.setFillColor(0, 31, 63);
+      pdf.rect(0, 0, W, 26, 'F');
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(18);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('BALIK SEFASI', M, 11);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(0, 169, 165);
+      pdf.text('Tekne Kiralama ve Balik Avi Turlari', M, 17);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(13);
+      pdf.setTextColor(0, 169, 165);
+      pdf.text('RANDEVU LISTESI', W - M, 11, { align: 'right' });
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(160, 160, 160);
+      pdf.text('www.baliksefasi.com', W - M, 17, { align: 'right' });
+
+      y = 32;
+
+      // ── BİLGİ KARTI SATIRI ───────────────────────────────────────────
+      const cW = (CW - 6) / 4;
+      const cardData = [
+        { label: 'TARIH',          value: tr(formattedDate), big: false },
+        { label: 'TEKNE',          value: tr(boatName),      big: false },
+        { label: 'TOPLAM RANDEVU', value: String(activeData.length), big: true },
+        { label: 'TOPLAM KISI',    value: String(totalPeople),       big: true,
+          sub: `${totalAdults} Yetiskin  ${totalChildren} Cocuk` },
+      ];
+
+      cardData.forEach((c, i) => {
+        const cx = M + i * (cW + 2);
+        pdf.setFillColor(247, 248, 250);
+        pdf.roundedRect(cx, y, cW, 20, 1.5, 1.5, 'F');
+        pdf.setFillColor(0, 169, 165);
+        pdf.rect(cx, y, cW, 1.2, 'F');
+
+        pdf.setFontSize(6.5);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(c.label, cx + 3, y + 5.5);
+
+        if (c.big) {
+          pdf.setFontSize(15);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(0, 169, 165);
+          pdf.text(c.value, cx + 3, y + 15);
+        } else {
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(0, 31, 63);
+          const lines = pdf.splitTextToSize(c.value, cW - 6) as string[];
+          pdf.text(lines.slice(0, 2), cx + 3, y + 10);
+        }
+
+        if (c.sub) {
+          pdf.setFontSize(6);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(170, 170, 170);
+          pdf.text(c.sub, cx + 3, y + 18.5);
+        }
+      });
+
+      y += 26;
+
+      // ── SAAT DİLİMİ BLOKLARI ─────────────────────────────────────────
+      // Kolon genişlikleri: # | İsim | Telefon | Rez.No | Kişi | Koltuklar
+      const cols = [8, 48, 30, 34, 18, CW - 8 - 48 - 30 - 34 - 18]; // toplam = 190
+      const colX = cols.reduce<number[]>((acc, w, i) => {
+        acc.push(i === 0 ? M : acc[i - 1] + cols[i - 1]);
+        return acc;
+      }, []);
+      const ROW_H = 7;
+
+      Object.keys(activeGrouped).sort().forEach(timeKey => {
+        const slotRes: Reservation[] = activeGrouped[timeKey];
+        const timeMatch = timeKey.match(/(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
+        const timeDisplay = timeMatch ? timeMatch[1] : timeKey;
+        const slotPeople = slotRes.reduce((s, r) => s + (r.totalPeople || 0), 0);
+
+        // Slot başlık çubuğu
+        nextPage(8 + 6 + ROW_H * 2);
+        pdf.setFillColor(0, 169, 165);
+        pdf.rect(M, y, CW, 8, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(timeDisplay, M + 3, y + 5.5);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(`${slotRes.length} randevu · ${slotPeople} kisi`, W - M - 3, y + 5.5, { align: 'right' });
+        y += 8;
+
+        // Kolon başlıkları
+        pdf.setFillColor(234, 250, 250);
+        pdf.rect(M, y, CW, 6, 'F');
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(0, 169, 165);
+        ['#', 'ISIM', 'TELEFON', 'REZ. NO', 'KISI', 'KOLTUKLAR'].forEach((h, i) => {
+          pdf.text(h, colX[i] + 2, y + 4.2);
+        });
+        pdf.setDrawColor(0, 169, 165);
+        pdf.setLineWidth(0.3);
+        pdf.line(M, y + 6, M + CW, y + 6);
+        y += 6;
+
+        // Satırlar
+        slotRes.forEach((res, ri) => {
+          nextPage(ROW_H + 2);
+
+          if (ri % 2 === 0) {
+            pdf.setFillColor(255, 255, 255);
+          } else {
+            pdf.setFillColor(245, 255, 254);
+          }
+          pdf.rect(M, y, CW, ROW_H, 'F');
+
+          // #
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(0, 169, 165);
+          pdf.text(String(ri + 1), colX[0] + 2, y + 4.8);
+
+          // İsim (+ promo kod varsa yıldız)
+          const nameText = cap(res.userName || 'Bilinmiyor').substring(0, 26);
+          const promoSuffix = (res as any).promoCode?.code ? ` [${(res as any).promoCode.code}]` : '';
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(0, 31, 63);
+          pdf.text(nameText + promoSuffix, colX[1] + 2, y + 4.8);
+
+          // Telefon
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(60, 60, 60);
+          pdf.text(tr((res as any).userPhone || '-'), colX[2] + 2, y + 4.8);
+
+          // Rez. No
+          pdf.setFontSize(7);
+          pdf.setTextColor(120, 120, 120);
+          pdf.text(tr(res.reservationNumber || '-'), colX[3] + 2, y + 4.8);
+
+          // Kişi
+          pdf.setFontSize(8);
+          pdf.setTextColor(60, 60, 60);
+          const pStr = `${res.totalPeople||0}(${res.adultCount||0}Y${(res.childCount||0)>0?`+${res.childCount}C`:''})`;
+          pdf.text(pStr, colX[4] + 2, y + 4.8);
+
+          // Koltuklar
+          const seatStr = (res.selectedSeats || []).join(', ') || '-';
+          pdf.setFontSize(7.5);
+          pdf.text(seatStr.substring(0, 22), colX[5] + 2, y + 4.8);
+
+          // Alt çizgi
+          pdf.setDrawColor(225, 240, 240);
+          pdf.setLineWidth(0.15);
+          pdf.line(M, y + ROW_H, M + CW, y + ROW_H);
+
+          y += ROW_H;
+        });
+
+        y += 5;
+      });
+
+      // ── FOOTER ────────────────────────────────────────────────────────
+      nextPage(8);
+      pdf.setDrawColor(210, 210, 210);
+      pdf.setLineWidth(0.25);
+      pdf.line(M, y, M + CW, y);
+      y += 4;
+      pdf.setFontSize(7);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(160, 160, 160);
+      pdf.text('Balik Sefasi Rezervasyon Sistemi · baliksefasi.com', M, y);
+      pdf.text(`Olusturulma: ${generatedAt}`, W - M, y, { align: 'right' });
 
       pdf.save(fileName);
-
       setShowExportModal(false);
     } catch (err) {
-      if (document.body.contains(el)) document.body.removeChild(el);
       console.error('PDF hatası:', err);
-      alert('PDF oluşturulurken hata oluştu. Lütfen tekrar deneyin.');
+      alert('PDF oluşturulurken hata oluştu.');
     } finally {
       setIsGeneratingPDF(false);
     }
