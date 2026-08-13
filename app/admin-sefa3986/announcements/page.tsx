@@ -15,6 +15,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage } from '@/lib/firebaseClient';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { useAdmin } from '@/context/AdminContext';
 
 interface Announcement {
   id: string;
@@ -31,6 +32,7 @@ const EMOJI_OPTIONS = ['📢', '⚓', '🎣', '🐟', '🌊', '⛵', '🎉', '�
 
 export default function AnnouncementsPage() {
   const router = useRouter();
+  const { logAction } = useAdmin();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -132,13 +134,17 @@ export default function AnnouncementsPage() {
         setUploadProgress(false);
       }
 
-      await addDoc(collection(db, 'announcements'), {
+      const annRef = await addDoc(collection(db, 'announcements'), {
         title: title.trim(),
         body: body.trim(),
         emoji,
         ...(imageUrl && { imageUrl, storagePath }),
         isActive: true,
         createdAt: new Date().toISOString(),
+      });
+      await logAction('announcement_added', {
+        targetId: annRef.id,
+        extra: { title: title.trim() },
       });
 
       resetForm();
@@ -152,6 +158,10 @@ export default function AnnouncementsPage() {
 
   const toggleActive = async (id: string, current: boolean) => {
     await updateDoc(doc(db, 'announcements', id), { isActive: !current });
+    await logAction('announcement_toggled', {
+      targetId: id,
+      extra: { newState: !current ? 'active' : 'inactive' },
+    });
   };
 
   const handleDelete = async (ann: Announcement) => {
@@ -160,6 +170,10 @@ export default function AnnouncementsPage() {
       try { await deleteObject(ref(storage, ann.storagePath)); } catch {}
     }
     await deleteDoc(doc(db, 'announcements', ann.id));
+    await logAction('announcement_deleted', {
+      targetId: ann.id,
+      extra: { title: ann.title },
+    });
   };
 
   return (

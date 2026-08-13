@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Anchor, Users, FileText, Clock, BarChart3, Calendar, Compass, Image, HelpCircle, Settings, Megaphone, Tag } from 'lucide-react';
+import { Anchor, Users, FileText, Clock, BarChart3, Calendar, Compass, Image, HelpCircle, Settings, Megaphone, Tag, ClipboardList, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminDashboard() {
@@ -123,6 +123,24 @@ export default function AdminDashboard() {
       icon: Settings,
       color: 'from-gray-500 to-gray-600',
       path: '/admin-sefa3986/settings',
+      available: true,
+    },
+    {
+      id: 'admins',
+      title: 'Admin Yönetimi',
+      description: 'Admin kullanıcıları ekle ve yönet',
+      icon: Shield,
+      color: 'from-[#00A9A5] to-teal-700',
+      path: '/admin-sefa3986/admins',
+      available: true,
+    },
+    {
+      id: 'logs',
+      title: 'İşlem Logları',
+      description: 'Kim ne yaptı? Tüm admin işlemleri',
+      icon: ClipboardList,
+      color: 'from-violet-500 to-violet-700',
+      path: '/admin-sefa3986/logs',
       available: true,
     },
   ];

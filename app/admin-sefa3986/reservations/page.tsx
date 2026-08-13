@@ -29,9 +29,11 @@ import { db } from '@/lib/firebaseClient';
 import { Reservation } from '@/lib/reservationHelpers';
 import { useRouter } from 'next/navigation';
 import { getTimeSlotsForDate } from '@/lib/boatHelpers';
+import { useAdmin } from '@/context/AdminContext';
 
 export default function AdminReservationsPage() {
   const router = useRouter();
+  const { logAction, adminName } = useAdmin();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [filteredReservations, setFilteredReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -272,17 +274,29 @@ export default function AdminReservationsPage() {
 
   const updateReservationStatus = async (id: string, newStatus: 'pending' | 'confirmed' | 'cancelled') => {
     try {
+      const reservation = reservations.find(r => r.id === id);
+      const prevStatus = reservation?.status;
+      const now = new Date().toISOString();
       await updateDoc(doc(db, 'reservations', id), {
         status: newStatus,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
+        statusUpdatedByName: adminName,
+        statusUpdatedAt: now,
+      });
+
+      const action = newStatus === 'confirmed' ? 'reservation_approved' : 'reservation_cancelled';
+      await logAction(action, {
+        targetId: id,
+        reservationNumber: reservation?.reservationNumber,
+        extra: { prevStatus, newStatus },
       });
 
       // Yerel state'i güncelle
-      setReservations(reservations.map(r => 
-        r.id === id ? { ...r, status: newStatus } : r
+      setReservations(reservations.map(r =>
+        r.id === id ? { ...r, status: newStatus, statusUpdatedByName: adminName, statusUpdatedAt: now } as any : r
       ));
-      setFilteredReservations(filteredReservations.map(r => 
-        r.id === id ? { ...r, status: newStatus } : r
+      setFilteredReservations(filteredReservations.map(r =>
+        r.id === id ? { ...r, status: newStatus, statusUpdatedByName: adminName, statusUpdatedAt: now } as any : r
       ));
     } catch (error) {
       alert('Durum güncellenirken bir hata oluştu');
@@ -303,21 +317,32 @@ export default function AdminReservationsPage() {
     
     try {
       // Tüm seçili rezervasyonları onayla
-      const promises = selectedReservations.map(id => 
+      const bulkNow = new Date().toISOString();
+      const promises = selectedReservations.map(id =>
         updateDoc(doc(db, 'reservations', id), {
           status: 'confirmed',
-          updatedAt: new Date().toISOString(),
+          updatedAt: bulkNow,
+          statusUpdatedByName: adminName,
+          statusUpdatedAt: bulkNow,
         })
       );
 
       await Promise.all(promises);
 
+      const numbers = reservations
+        .filter(r => selectedReservations.includes(r.id))
+        .map(r => r.reservationNumber)
+        .filter(Boolean);
+      await logAction('bulk_approved', {
+        extra: { count: selectedReservations.length, reservationNumbers: numbers },
+      });
+
       // Yerel state'i güncelle
-      setReservations(reservations.map(r => 
-        selectedReservations.includes(r.id) ? { ...r, status: 'confirmed' } : r
+      setReservations(reservations.map(r =>
+        selectedReservations.includes(r.id) ? { ...r, status: 'confirmed', statusUpdatedByName: adminName, statusUpdatedAt: bulkNow } as any : r
       ));
-      setFilteredReservations(filteredReservations.map(r => 
-        selectedReservations.includes(r.id) ? { ...r, status: 'confirmed' } : r
+      setFilteredReservations(filteredReservations.map(r =>
+        selectedReservations.includes(r.id) ? { ...r, status: 'confirmed', statusUpdatedByName: adminName, statusUpdatedAt: bulkNow } as any : r
       ));
 
       // Seçimi temizle
@@ -347,11 +372,12 @@ export default function AdminReservationsPage() {
 
     try {
       await deleteDoc(doc(db, 'reservations', id));
-      
+      await logAction('reservation_deleted', { targetId: id, reservationNumber });
+
       // Yerel state'ten kaldır
       setReservations(prev => prev.filter(r => r.id !== id));
       setFilteredReservations(prev => prev.filter(r => r.id !== id));
-      
+
       alert('✅ Rezervasyon başarıyla silindi.');
     } catch (error) {
       alert('❌ Rezervasyon silinirken bir hata oluştu.');
@@ -447,6 +473,9 @@ export default function AdminReservationsPage() {
         });
         await batch.commit();
       }
+      await logAction('archive_deleted', {
+        extra: { month: archiveMonth, count: archivePreview.count },
+      });
       alert(`✅ ${archivePreview.count} rezervasyon başarıyla silindi.`);
       setShowArchiveModal(false);
       setArchivePreview(null);
@@ -530,14 +559,27 @@ export default function AdminReservationsPage() {
         updatedAt: new Date().toISOString(),
       });
 
+      await logAction('reservation_edited', {
+        targetId: editingReservation.id,
+        reservationNumber: editingReservation.reservationNumber,
+        extra: {
+          prevUserName: editingReservation.userName,
+          newUserName: editUserName.trim(),
+          prevPeople: editingReservation.totalPeople,
+          newPeople: editPeopleCount,
+          prevPhone: editingReservation.userPhone,
+          newPhone: editPhoneNumber.trim(),
+        },
+      });
+
       // Yerel state'i güncelle
-      setReservations(prev => prev.map(r => 
-        r.id === editingReservation.id 
+      setReservations(prev => prev.map(r =>
+        r.id === editingReservation.id
           ? { ...r, userName: editUserName.trim(), totalPeople: editPeopleCount, selectedSeats: editSelectedSeats, userPhone: editPhoneNumber.trim() } as any
           : r
       ));
-      setFilteredReservations(prev => prev.map(r => 
-        r.id === editingReservation.id 
+      setFilteredReservations(prev => prev.map(r =>
+        r.id === editingReservation.id
           ? { ...r, userName: editUserName.trim(), totalPeople: editPeopleCount, selectedSeats: editSelectedSeats, userPhone: editPhoneNumber.trim() } as any
           : r
       ));
@@ -1524,6 +1566,38 @@ www.baliksefasi.com`;
                         </div>
                       )}
                     </div>
+
+                    {/* Kim onayladı / iptal etti */}
+                    {(reservation as any).statusUpdatedByName && reservation.status !== 'pending' && (
+                      <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border mt-1 ${
+                        reservation.status === 'confirmed'
+                          ? 'bg-green-500/8 border-green-500/20 text-green-400'
+                          : 'bg-red-500/8 border-red-500/20 text-red-400'
+                      }`}>
+                        <span className="text-base leading-none">
+                          {reservation.status === 'confirmed' ? '✅' : '❌'}
+                        </span>
+                        <span className="font-medium">
+                          {reservation.status === 'confirmed' ? 'Onaylayan:' : 'İptal Eden:'}
+                        </span>
+                        <span className="font-bold">{(reservation as any).statusUpdatedByName}</span>
+                        {(reservation as any).statusUpdatedAt && (
+                          <>
+                            <span className="text-white/20 mx-0.5">•</span>
+                            <span className="opacity-70">
+                              {new Date((reservation as any).statusUpdatedAt).toLocaleDateString('tr-TR', {
+                                day: '2-digit', month: 'short', year: 'numeric',
+                              })}
+                            </span>
+                            <span className="opacity-70">
+                              {new Date((reservation as any).statusUpdatedAt).toLocaleTimeString('tr-TR', {
+                                hour: '2-digit', minute: '2-digit',
+                              })}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Right: Actions */}

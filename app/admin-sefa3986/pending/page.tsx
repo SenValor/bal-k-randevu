@@ -21,9 +21,11 @@ import { collection, query, getDocs, doc, updateDoc, where, orderBy } from 'fire
 import { db } from '@/lib/firebaseClient';
 import { Reservation } from '@/lib/reservationHelpers';
 import { useRouter } from 'next/navigation';
+import { useAdmin } from '@/context/AdminContext';
 
 export default function PendingReservationsPage() {
   const router = useRouter();
+  const { logAction, adminName } = useAdmin();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [filteredReservations, setFilteredReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,10 +88,19 @@ export default function PendingReservationsPage() {
   const handleApprove = async (reservationId: string) => {
     try {
       setProcessingId(reservationId);
+      const reservation = reservations.find(r => r.id === reservationId);
+      const now = new Date().toISOString();
       const reservationRef = doc(db, 'reservations', reservationId);
       await updateDoc(reservationRef, {
         status: 'confirmed',
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
+        statusUpdatedByName: adminName,
+        statusUpdatedAt: now,
+      });
+      await logAction('reservation_approved', {
+        targetId: reservationId,
+        reservationNumber: reservation?.reservationNumber,
+        extra: { prevStatus: 'pending', newStatus: 'confirmed' },
       });
 
       setReservations((prev) => prev.filter((r) => r.id !== reservationId));
@@ -103,10 +114,19 @@ export default function PendingReservationsPage() {
   const handleReject = async (reservationId: string) => {
     try {
       setProcessingId(reservationId);
+      const reservation = reservations.find(r => r.id === reservationId);
+      const now = new Date().toISOString();
       const reservationRef = doc(db, 'reservations', reservationId);
       await updateDoc(reservationRef, {
         status: 'cancelled',
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
+        statusUpdatedByName: adminName,
+        statusUpdatedAt: now,
+      });
+      await logAction('reservation_cancelled', {
+        targetId: reservationId,
+        reservationNumber: reservation?.reservationNumber,
+        extra: { prevStatus: 'pending', newStatus: 'cancelled' },
       });
 
       setReservations((prev) => prev.filter((r) => r.id !== reservationId));
@@ -128,17 +148,27 @@ export default function PendingReservationsPage() {
 
     try {
       setBulkProcessing(true);
-      
+
+      const bulkNow = new Date().toISOString();
       const promises = selectedReservations.map(async (id) => {
         const reservationRef = doc(db, 'reservations', id);
         await updateDoc(reservationRef, {
           status: 'confirmed',
-          updatedAt: new Date().toISOString(),
+          updatedAt: bulkNow,
+          statusUpdatedByName: adminName,
+          statusUpdatedAt: bulkNow,
         });
-
       });
 
       await Promise.all(promises);
+
+      const numbers = reservations
+        .filter(r => selectedReservations.includes(r.id))
+        .map(r => r.reservationNumber)
+        .filter(Boolean);
+      await logAction('bulk_approved', {
+        extra: { count: selectedReservations.length, reservationNumbers: numbers },
+      });
 
       setReservations((prev) => prev.filter((r) => !selectedReservations.includes(r.id)));
       setSelectedReservations([]);
@@ -161,16 +191,27 @@ export default function PendingReservationsPage() {
 
     try {
       setBulkProcessing(true);
-      
+
+      const bulkNow = new Date().toISOString();
       const promises = selectedReservations.map(async (id) => {
         const reservationRef = doc(db, 'reservations', id);
         await updateDoc(reservationRef, {
           status: 'cancelled',
-          updatedAt: new Date().toISOString(),
+          updatedAt: bulkNow,
+          statusUpdatedByName: adminName,
+          statusUpdatedAt: bulkNow,
         });
       });
 
       await Promise.all(promises);
+
+      const numbers = reservations
+        .filter(r => selectedReservations.includes(r.id))
+        .map(r => r.reservationNumber)
+        .filter(Boolean);
+      await logAction('bulk_cancelled', {
+        extra: { count: selectedReservations.length, reservationNumbers: numbers },
+      });
 
       setReservations((prev) => prev.filter((r) => !selectedReservations.includes(r.id)));
       setSelectedReservations([]);

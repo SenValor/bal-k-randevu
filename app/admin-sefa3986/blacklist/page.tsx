@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import { UserX, Plus, Trash2, Phone, User, Calendar, AlertCircle } from 'lucide-react';
+import { useAdmin } from '@/context/AdminContext';
 
 interface BlacklistEntry {
   id: string;
@@ -16,6 +17,7 @@ interface BlacklistEntry {
 }
 
 export default function BlacklistPage() {
+  const { logAction } = useAdmin();
   const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -75,12 +77,16 @@ export default function BlacklistPage() {
       setSubmitting(true);
       
       // AYNEN KAYDET - 0 ile başlıyorsa 0 ile, başlamıyorsa öyle kaydet
-      await addDoc(collection(db, 'blacklist'), {
+      const docRef = await addDoc(collection(db, 'blacklist'), {
         phone: cleanPhone,
         name: newEntry.name.trim(),
         reason: newEntry.reason.trim() || 'Belirtilmemiş',
         addedAt: new Date().toISOString(),
         addedBy: 'admin',
+      });
+      await logAction('blacklist_added', {
+        targetId: docRef.id,
+        extra: { phone: cleanPhone, name: newEntry.name.trim(), reason: newEntry.reason.trim() || 'Belirtilmemiş' },
       });
 
       alert('✅ Kara listeye eklendi: ' + cleanPhone);
@@ -101,7 +107,12 @@ export default function BlacklistPage() {
     }
 
     try {
+      const entry = blacklist.find(e => e.id === id);
       await deleteDoc(doc(db, 'blacklist', id));
+      await logAction('blacklist_removed', {
+        targetId: id,
+        extra: { phone: entry?.phone, name },
+      });
       alert('✅ Kara listeden çıkarıldı');
       fetchBlacklist();
     } catch (error) {

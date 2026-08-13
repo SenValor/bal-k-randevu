@@ -63,12 +63,10 @@ export default function ChatWidget() {
   const pathname = usePathname();
   const { language } = useLanguage();
   const isEn = language === "en";
-
-  if (
+  const isAdminPath =
     pathname?.startsWith('/admin-sefa3986') ||
     pathname?.startsWith('/kampanya-kodlar-3313') ||
-    pathname?.startsWith('/tamay-3313')
-  ) return null;
+    pathname?.startsWith('/tamay-3313');
 
   const greeting = isEn
     ? "Hello! I'm the Balık Sefası assistant. Ask me about our boats, tours, pricing or reservations."
@@ -220,6 +218,8 @@ export default function ChatWidget() {
   };
 
   const quickSuggestions = isEn ? QUICK_SUGGESTIONS.en : QUICK_SUGGESTIONS.tr;
+
+  if (isAdminPath) return null;
 
   return (
     <>
