@@ -6,18 +6,12 @@ const META_PHONE_ID = process.env.META_PHONE_ID!;
 // Telefon numarasını WhatsApp formatına çevirir
 function formatPhoneNumber(phone: string): string {
   if (!phone) return "";
-  
+  if (phone.trim().startsWith("+")) return phone.replace(/\D/g, "");
   const cleaned = phone.replace(/\D/g, "");
-  
-  if (cleaned.startsWith("90")) {
-    return cleaned;
-  }
-  
-  if (cleaned.startsWith("0")) {
-    return "90" + cleaned.substring(1);
-  }
-  
-  return "90" + cleaned;
+  if (cleaned.startsWith("90")) return cleaned;
+  if (cleaned.startsWith("0")) return "90" + cleaned.substring(1);
+  if (cleaned.length === 10) return "90" + cleaned;
+  return cleaned;
 }
 
 // Tarihi Türkçe formatla
@@ -81,12 +75,13 @@ Rezervasyonunuz onaylandı! 🎉
 🕐 Saat: ${timeSlotDisplay}
 ⛵ Tekne: ${boatName}
 💺 Koltuklar: ${seats}
-${responsibleName ? `👤 Sorumlu: ${responsibleName}` : ''}
-${responsiblePhone ? `📞 Sorumlu Tel: ${responsiblePhone}` : ''}
+${responsibleName ? `👤 Tekne Sorumlusu: ${responsibleName}` : ''}
+${responsiblePhone ? `📞 Tekne Sorumlusu Tel: ${responsiblePhone}` : ''}
+${responsiblePhone ? `⚠️ Bu numara yalnızca tekne ile ilgili konular içindir. Rezervasyon işlemleri için www.baliksefasi.com adresini kullanınız.` : ''}
 
 Teşekkürler, iyi avlar dileriz ⚓
 
-Bu numarayı kullanarak rezervasyonunuzu sorgulayabilir veya iptal edebilirsiniz.
+Rezervasyonunuzu sorgulamak veya iptal etmek için:
 www.baliksefasi.com`;
     } else if (type === 'cancellation') {
       // İptal Mesajı

@@ -479,13 +479,10 @@ export default function StepFourConfirmation() {
                     type="tel"
                     value={guestPhone}
                     onChange={(e) => {
-                      const value = e.target.value;
-                      const cleaned = value.replace(/\D/g, '');
-                      const formatted = cleaned && !cleaned.startsWith('0') ? '0' + cleaned : cleaned;
-                      setGuestPhone(formatted.slice(0, 11));
+                      setGuestPhone(e.target.value);
                     }}
-                    placeholder="05331234567"
-                    maxLength={11}
+                    placeholder="+49 123 456789 veya 05331234567"
+                    maxLength={20}
                     className="w-full bg-white border-2 border-[#6B9BC3]/30 rounded-xl pl-12 pr-4 py-3 text-[#0D2847] placeholder-[#1B3A5C]/40 focus:border-[#6B9BC3] focus:bg-white outline-none transition-all"
                     required
                   />

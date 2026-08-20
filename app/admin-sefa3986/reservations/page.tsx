@@ -627,10 +627,12 @@ export default function AdminReservationsPage() {
   // Telefon numarasını formatla
   const formatPhoneForWhatsApp = (phone: string): string => {
     if (!phone) return "";
+    if (phone.trim().startsWith("+")) return phone.replace(/\D/g, "");
     const cleaned = phone.replace(/\D/g, "");
     if (cleaned.startsWith("90")) return cleaned;
     if (cleaned.startsWith("0")) return "90" + cleaned.substring(1);
-    return "90" + cleaned;
+    if (cleaned.length === 10) return "90" + cleaned;
+    return cleaned;
   };
 
   // Gerçek zamanlı saat bilgisini al (planlı saat değişikliği desteği)
@@ -701,12 +703,13 @@ Rezervasyonunuz onaylandı! 🎉
 ⛵ Tekne: ${reservation.boatName || "BALIK SEFASI"}
 💺 Koltuklar: ${seats}
 ${locationLink ? `📍 Konum: ${locationLink}` : ''}
-${responsibleName ? `👤 Sorumlu: ${responsibleName}` : ''}
-${responsiblePhone ? `📞 Sorumlu Tel: ${responsiblePhone}` : ''}
+${responsibleName ? `👤 Tekne Sorumlusu: ${responsibleName}` : ''}
+${responsiblePhone ? `📞 Tekne Sorumlusu Tel: ${responsiblePhone}` : ''}
+${responsiblePhone ? `⚠️ Bu numara yalnızca tekne ile ilgili konular içindir. Rezervasyon işlemleri için www.baliksefasi.com adresini kullanınız.` : ''}
 
 Teşekkürler, iyi avlar dileriz ⚓
 
-Bu numarayı kullanarak rezervasyonunuzu sorgulayabilir veya iptal edebilirsiniz.
+Rezervasyonunuzu sorgulamak veya iptal etmek için:
 www.baliksefasi.com`;
 
     // WhatsApp Web'e yönlendir

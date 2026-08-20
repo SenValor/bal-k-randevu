@@ -35,12 +35,17 @@ const sendWhatsAppMessage = async (
     }
 
     // Telefon numarasını temizle (sadece rakamlar)
-    const cleanPhone = phoneNumber.replace(/\D/g, '');
-    
-    // Türkiye için +90 ekle (eğer yoksa)
-    const formattedPhone = cleanPhone.startsWith('90') 
-      ? cleanPhone 
-      : `90${cleanPhone}`;
+    const cleanPhone = phoneNumber.trim().startsWith('+')
+      ? phoneNumber.replace(/\D/g, '')
+      : phoneNumber.replace(/\D/g, '');
+
+    const formattedPhone = cleanPhone.startsWith('90')
+      ? cleanPhone
+      : cleanPhone.startsWith('0')
+        ? '90' + cleanPhone.substring(1)
+        : cleanPhone.length === 10
+          ? '90' + cleanPhone
+          : cleanPhone;
 
     console.log(`📱 WhatsApp mesajı gönderiliyor: +${formattedPhone}`);
 
