@@ -705,7 +705,7 @@ Rezervasyonunuz onaylandı! 🎉
 ${locationLink ? `📍 Konum: ${locationLink}` : ''}
 ${responsibleName ? `👤 Tekne Sorumlusu: ${responsibleName}` : ''}
 ${responsiblePhone ? `📞 Tekne Sorumlusu Tel: ${responsiblePhone}` : ''}
-${responsiblePhone ? `⚠️ Bu numara yalnızca tekne ile ilgili konular içindir. Rezervasyon işlemleri için www.baliksefasi.com adresini kullanınız.` : ''}
+${responsiblePhone ? `⚠️ Bu numara yalnızca tur günü ve saatinde tekneyi bulamadığınız durumda aranabilir.` : ''}
 
 Teşekkürler, iyi avlar dileriz ⚓
 
