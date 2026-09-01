@@ -7,48 +7,62 @@ import PriceSummaryBox from '@/components/reservation/PriceSummaryBox';
 import StepNavigation from '@/components/reservation/StepNavigation';
 import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
 
-const PRICES = {
-  adultWithGear: 1500,
-  adultOwnGear: 1250,
-  childWithGear: 750, // %50 indirim
-  childOwnGear: 625,
-};
-
 export default function StepEquipment() {
-  // localStorage'dan kişi sayılarını al
   const [totalAdults, setTotalAdults] = useState(0);
   const [totalChildren, setTotalChildren] = useState(0);
+
+  // Fiyatlar adminin Firestore'a girdiği tur fiyatından gelir
+  const [prices, setPrices] = useState({
+    adultWithGear: 0,
+    adultOwnGear: 0,
+    childWithGear: 0,
+    childOwnGear: 0,
+  });
 
   const [adultGear, setAdultGear] = useState({ with: 0, own: 0 });
   const [childGear, setChildGear] = useState({ with: 0, own: 0 });
   const [totalPrice, setTotalPrice] = useState(0);
 
   useEffect(() => {
-    // localStorage'dan rezervasyon verilerini al
+    // Tüm fiyatlar adminin Firestore'a girdiği değerlerden gelir
+    const tourData = localStorage.getItem('selectedTourType');
+    if (tourData) {
+      const tour = JSON.parse(tourData);
+      const adultWith  = tour.price         || 0;
+      const adultOwn   = tour.priceOwnGear  || adultWith; // girilmediyse ekipman dahil fiyatı
+      const childWith  = tour.childPrice    || Math.round(adultWith * 0.5);
+      const childOwn   = tour.childPriceOwnGear || Math.round(adultOwn * 0.5);
+
+      setPrices({
+        adultWithGear: adultWith,
+        adultOwnGear:  adultOwn,
+        childWithGear: childWith,
+        childOwnGear:  childOwn,
+      });
+    }
+
+    // Kişi sayılarını al
     const reservationData = localStorage.getItem('reservationData');
     if (reservationData) {
       const data = JSON.parse(reservationData);
       const adults = data.adultCount || 0;
       const children = data.childCount || 0;
-      
+
       setTotalAdults(adults);
       setTotalChildren(children);
-      
-      // Başlangıçta tüm yetişkinleri "Ekipman Dahil" olarak ayarla
       setAdultGear({ with: adults, own: 0 });
-      // Başlangıçta tüm çocukları "Ekipman Dahil" olarak ayarla
       setChildGear({ with: children, own: 0 });
     }
   }, []);
 
   useEffect(() => {
     const total =
-      adultGear.with * PRICES.adultWithGear +
-      adultGear.own * PRICES.adultOwnGear +
-      childGear.with * PRICES.childWithGear +
-      childGear.own * PRICES.childOwnGear;
+      adultGear.with * prices.adultWithGear +
+      adultGear.own * prices.adultOwnGear +
+      childGear.with * prices.childWithGear +
+      childGear.own * prices.childOwnGear;
     setTotalPrice(total);
-  }, [adultGear, childGear]);
+  }, [adultGear, childGear, prices]);
 
   const handleAdultWithIncrement = () => {
     if (adultGear.with + adultGear.own < totalAdults) {
@@ -103,42 +117,36 @@ export default function StepEquipment() {
   };
 
   const handleContinue = () => {
-    // Olta seçimlerini localStorage'a kaydet
     const equipmentData = {
       adultGear,
       childGear,
       totalPrice,
-      breakdown: priceBreakdown
+      breakdown: priceBreakdown,
     };
     localStorage.setItem('equipmentSelection', JSON.stringify(equipmentData));
-    
-    
-    // Rezervasyon özetine geç
     window.location.href = '/rezervasyon/step-four';
   };
 
   const priceBreakdown = [
     ...(adultGear.with > 0
-      ? [{ label: `${adultGear.with} Yetişkin (Ekipman Dahil)`, price: adultGear.with * PRICES.adultWithGear }]
+      ? [{ label: `${adultGear.with} Yetişkin (Ekipman Dahil)`, price: adultGear.with * prices.adultWithGear }]
       : []),
     ...(adultGear.own > 0
-      ? [{ label: `${adultGear.own} Yetişkin (Kendi Ekipmanı)`, price: adultGear.own * PRICES.adultOwnGear }]
+      ? [{ label: `${adultGear.own} Yetişkin (Kendi Ekipmanı)`, price: adultGear.own * prices.adultOwnGear }]
       : []),
     ...(childGear.with > 0
-      ? [{ label: `${childGear.with} Çocuk (Ekipman Dahil)`, price: childGear.with * PRICES.childWithGear }]
+      ? [{ label: `${childGear.with} Çocuk (Ekipman Dahil)`, price: childGear.with * prices.childWithGear }]
       : []),
     ...(childGear.own > 0
-      ? [{ label: `${childGear.own} Çocuk (Kendi Ekipmanı)`, price: childGear.own * PRICES.childOwnGear }]
+      ? [{ label: `${childGear.own} Çocuk (Kendi Ekipmanı)`, price: childGear.own * prices.childOwnGear }]
       : []),
   ];
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-32 px-4">
-      {/* Yılbaşı Teması */}
       <ReservationNewYearDecor />
-      
+
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -167,7 +175,7 @@ export default function StepEquipment() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <EquipmentOptionCard
                 title="Ekipman Dahil"
-                price={PRICES.adultWithGear}
+                price={prices.adultWithGear}
                 count={adultGear.with}
                 onIncrement={handleAdultWithIncrement}
                 onDecrement={handleAdultWithDecrement}
@@ -175,7 +183,7 @@ export default function StepEquipment() {
               />
               <EquipmentOptionCard
                 title="Kendi Ekipmanı"
-                price={PRICES.adultOwnGear}
+                price={prices.adultOwnGear}
                 count={adultGear.own}
                 onIncrement={handleAdultOwnIncrement}
                 onDecrement={handleAdultOwnDecrement}
@@ -199,7 +207,7 @@ export default function StepEquipment() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <EquipmentOptionCard
                 title="Ekipman Dahil"
-                price={PRICES.childWithGear}
+                price={prices.childWithGear}
                 count={childGear.with}
                 onIncrement={handleChildWithIncrement}
                 onDecrement={handleChildWithDecrement}
@@ -207,7 +215,7 @@ export default function StepEquipment() {
               />
               <EquipmentOptionCard
                 title="Kendi Ekipmanı"
-                price={PRICES.childOwnGear}
+                price={prices.childOwnGear}
                 count={childGear.own}
                 onIncrement={handleChildOwnIncrement}
                 onDecrement={handleChildOwnDecrement}

@@ -29,6 +29,9 @@ export default function TourFormModal({
     description: '',
     description_en: '',
     price: 0,
+    priceOwnGear: 0,
+    childPrice: 0,
+    childPriceOwnGear: 0,
     includes: [],
     includes_en: [],
     excludes: [],
@@ -62,6 +65,9 @@ export default function TourFormModal({
         description: tour.description,
         description_en: tour.description_en || '',
         price: tour.price,
+        priceOwnGear: tour.priceOwnGear || 0,
+        childPrice: tour.childPrice || 0,
+        childPriceOwnGear: tour.childPriceOwnGear || 0,
         includes: tour.includes,
         includes_en: tour.includes_en || [],
         excludes: tour.excludes,
@@ -321,21 +327,77 @@ export default function TourFormModal({
                 </div>
               </div>
 
-              {/* Fiyat */}
-              <div>
-                <label className="block text-white/80 text-sm font-medium mb-2">
-                  Fiyat (₺) *
-                </label>
-                <input
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) || 0 })}
-                  disabled={loading}
-                  min="0"
-                  placeholder="2500"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-emerald-500 focus:bg-white/10 outline-none transition-all disabled:opacity-50"
-                />
-              </div>
+              {/* Fiyatlar */}
+              {formData.category === 'normal-with-equipment' ? (
+                <div className="space-y-3">
+                  <label className="block text-white/80 text-sm font-medium">Fiyatlar (₺) *</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-white/50 text-xs mb-1">Yetişkin — Ekipman Dahil</label>
+                      <input
+                        type="number"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) || 0 })}
+                        disabled={loading}
+                        min="0"
+                        placeholder="2000"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-emerald-500 focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-white/50 text-xs mb-1">Yetişkin — Kendi Ekipmanı</label>
+                      <input
+                        type="number"
+                        value={formData.priceOwnGear}
+                        onChange={(e) => setFormData({ ...formData, priceOwnGear: parseInt(e.target.value) || 0 })}
+                        disabled={loading}
+                        min="0"
+                        placeholder="1500"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-emerald-500 focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-white/50 text-xs mb-1">Çocuk — Ekipman Dahil</label>
+                      <input
+                        type="number"
+                        value={formData.childPrice}
+                        onChange={(e) => setFormData({ ...formData, childPrice: parseInt(e.target.value) || 0 })}
+                        disabled={loading}
+                        min="0"
+                        placeholder="1000"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-emerald-500 focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-white/50 text-xs mb-1">Çocuk — Kendi Ekipmanı</label>
+                      <input
+                        type="number"
+                        value={formData.childPriceOwnGear}
+                        onChange={(e) => setFormData({ ...formData, childPriceOwnGear: parseInt(e.target.value) || 0 })}
+                        disabled={loading}
+                        min="0"
+                        placeholder="750"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-emerald-500 focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-white/80 text-sm font-medium mb-2">
+                    Fiyat (₺) *
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) || 0 })}
+                    disabled={loading}
+                    min="0"
+                    placeholder="2000"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:border-emerald-500 focus:bg-white/10 outline-none transition-all disabled:opacity-50"
+                  />
+                </div>
+              )}
 
               {/* Kategori */}
               <div>

@@ -9,7 +9,7 @@ import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { Tour } from '@/lib/tourHelpers';
 import { isPhoneBlacklisted, getBlacklistInfo } from '@/lib/blacklistHelpers';
 import { validatePromoCode, incrementPromoCodeUsage, PromoCode } from '@/lib/promoCodeHelpers';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
 import { useLanguage } from '@/context/LanguageContext';
@@ -54,10 +54,16 @@ export default function StepFourConfirmation() {
     const resData = localStorage.getItem('reservationData');
 
     if (boatData) setBoat(JSON.parse(boatData));
-    if (tourData) setTourType(JSON.parse(tourData));
     if (resData) {
       const data = JSON.parse(resData);
       setReservationData(data);
+    }
+
+    // Tur fiyatını her zaman Firestore'dan taze çek — localStorage'daki fiyat güncel olmayabilir
+    if (tourData) {
+      const cachedTour: Tour = JSON.parse(tourData);
+      setTourType(cachedTour); // önce cached'i göster
+      fetchFreshTourPrice(cachedTour);
     }
 
     // Üye değilse misafir formu göster
@@ -68,6 +74,20 @@ export default function StepFourConfirmation() {
       fetchUserPhone();
     }
   }, [user]);
+
+  const fetchFreshTourPrice = async (cachedTour: Tour) => {
+    try {
+      const tourDoc = await getDoc(doc(db, 'tours', cachedTour.id));
+      if (tourDoc.exists()) {
+        const freshData = tourDoc.data();
+        setTourType({ ...cachedTour, price: freshData.price });
+        // localStorage'ı da güncel fiyatla yaz
+        localStorage.setItem('selectedTourType', JSON.stringify({ ...cachedTour, price: freshData.price }));
+      }
+    } catch {
+      // Firestore'dan alınamazsa cached fiyatla devam et
+    }
+  };
 
   const fetchUserPhone = async () => {
     if (!user?.uid) return;

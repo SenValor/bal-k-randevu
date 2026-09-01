@@ -119,7 +119,22 @@ export default function TamayToursPage() {
                     </div>
                     <p className="text-white font-semibold text-base">{tour.name}</p>
                     <p className="text-white/50 text-sm mt-0.5 line-clamp-2">{tour.description}</p>
-                    <p className="text-[#00A9A5] font-bold text-lg mt-2">₺{tour.price}</p>
+                    {tour.category === 'normal-with-equipment' ? (
+                      <div className="mt-2 space-y-0.5">
+                        <p className="text-[#00A9A5] font-bold text-base">₺{tour.price} <span className="text-white/40 text-xs font-normal">Yetişkin (Ekipman Dahil)</span></p>
+                        {(tour.priceOwnGear ?? 0) > 0 && (
+                          <p className="text-[#00A9A5]/80 text-sm">₺{tour.priceOwnGear} <span className="text-white/40 text-xs font-normal">Yetişkin (Kendi Ekipmanı)</span></p>
+                        )}
+                        {(tour.childPrice ?? 0) > 0 && (
+                          <p className="text-[#00A9A5]/80 text-sm">₺{tour.childPrice} <span className="text-white/40 text-xs font-normal">Çocuk (Ekipman Dahil)</span></p>
+                        )}
+                        {(tour.childPriceOwnGear ?? 0) > 0 && (
+                          <p className="text-[#00A9A5]/80 text-sm">₺{tour.childPriceOwnGear} <span className="text-white/40 text-xs font-normal">Çocuk (Kendi Ekipmanı)</span></p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[#00A9A5] font-bold text-lg mt-2">₺{tour.price}</p>
+                    )}
                   </div>
 
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">

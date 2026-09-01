@@ -16,7 +16,10 @@ export interface Tour {
   name_en?: string;
   description: string;
   description_en?: string;
-  price: number;
+  price: number;          // Yetişkin — ekipman dahil
+  priceOwnGear?: number;  // Yetişkin — kendi ekipmanı
+  childPrice?: number;    // Çocuk — ekipman dahil
+  childPriceOwnGear?: number; // Çocuk — kendi ekipmanı
   includes: string[];
   includes_en?: string[];
   excludes: string[];
