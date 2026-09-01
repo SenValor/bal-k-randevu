@@ -12,14 +12,16 @@ import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDec
 export default function StepEquipment() {
   const [totalAdults, setTotalAdults] = useState(0);
   const [totalChildren, setTotalChildren] = useState(0);
+  const [tourCategory, setTourCategory] = useState<string>('');
 
-  // Fiyatlar adminin Firestore'a girdiği tur fiyatından gelir
   const [prices, setPrices] = useState({
     adultWithGear: 0,
     adultOwnGear: 0,
     childWithGear: 0,
     childOwnGear: 0,
   });
+  // priceOwnGear admin tarafından açıkça girildi mi?
+  const [hasOwnGearPrice, setHasOwnGearPrice] = useState(false);
 
   const [adultGear, setAdultGear] = useState({ with: 0, own: 0 });
   const [childGear, setChildGear] = useState({ with: 0, own: 0 });
@@ -28,10 +30,15 @@ export default function StepEquipment() {
   useEffect(() => {
     const applyTourPrices = (tour: any) => {
       const adultWith = tour.price || 0;
-      const adultOwn  = tour.priceOwnGear  || adultWith;
-      const childWith = tour.childPrice    || Math.round(adultWith * 0.5);
-      const childOwn  = tour.childPriceOwnGear || Math.round(adultOwn * 0.5);
+      // priceOwnGear admin tarafından girilmişse ve farklıysa kullan
+      const ownGearSet = tour.priceOwnGear > 0 && tour.priceOwnGear !== adultWith;
+      const adultOwn  = ownGearSet ? tour.priceOwnGear : adultWith;
+      const childWith = tour.childPrice > 0 ? tour.childPrice : Math.round(adultWith * 0.5);
+      const childOwn  = tour.childPriceOwnGear > 0 ? tour.childPriceOwnGear : Math.round(adultOwn * 0.5);
+
+      setHasOwnGearPrice(ownGearSet);
       setPrices({ adultWithGear: adultWith, adultOwnGear: adultOwn, childWithGear: childWith, childOwnGear: childOwn });
+      setTourCategory(tour.category || '');
     };
 
     const tourData = localStorage.getItem('selectedTourType');
@@ -39,7 +46,6 @@ export default function StepEquipment() {
       const cached = JSON.parse(tourData);
       applyTourPrices(cached);
 
-      // Firestore'dan taze fiyat çek (localStorage stale olabilir)
       if (cached.id) {
         getDoc(doc(db, 'tours', cached.id)).then((snap) => {
           if (snap.exists()) {
@@ -64,6 +70,37 @@ export default function StepEquipment() {
     }
   }, []);
 
+  // EKİPMANSIZ TUR veya ekipman seçimi gereksizse otomatik geç
+  useEffect(() => {
+    if (!tourCategory) return;
+    if (tourCategory !== 'normal-with-equipment') {
+      // Tüm kişiler "kendi ekipmanı" olarak işaretle, sayfayı atla
+      const tourData = localStorage.getItem('selectedTourType');
+      const reservationData = localStorage.getItem('reservationData');
+      if (!tourData || !reservationData) return;
+
+      const tour = JSON.parse(tourData);
+      const data = JSON.parse(reservationData);
+      const adults   = data.adultCount   || 0;
+      const children = data.childCount   || 0;
+      const price    = tour.price || 0;
+      const childPr  = tour.childPrice > 0 ? tour.childPrice : Math.round(price * 0.5);
+      const total    = adults * price + children * childPr;
+
+      const equipmentData = {
+        adultGear:  { with: 0, own: adults },
+        childGear:  { with: 0, own: children },
+        totalPrice: total,
+        breakdown: [
+          ...(adults   > 0 ? [{ label: `${adults} Yetişkin`, price: adults * price }]     : []),
+          ...(children > 0 ? [{ label: `${children} Çocuk`,  price: children * childPr }] : []),
+        ],
+      };
+      localStorage.setItem('equipmentSelection', JSON.stringify(equipmentData));
+      window.location.replace('/rezervasyon/step-four');
+    }
+  }, [tourCategory]);
+
   useEffect(() => {
     const total =
       adultGear.with * prices.adultWithGear +
@@ -78,78 +115,56 @@ export default function StepEquipment() {
       setAdultGear({ ...adultGear, with: adultGear.with + 1 });
     }
   };
-
   const handleAdultWithDecrement = () => {
-    if (adultGear.with > 0) {
-      setAdultGear({ ...adultGear, with: adultGear.with - 1 });
-    }
+    if (adultGear.with > 0) setAdultGear({ ...adultGear, with: adultGear.with - 1 });
   };
-
   const handleAdultOwnIncrement = () => {
     if (adultGear.with + adultGear.own < totalAdults) {
       setAdultGear({ ...adultGear, own: adultGear.own + 1 });
     }
   };
-
   const handleAdultOwnDecrement = () => {
-    if (adultGear.own > 0) {
-      setAdultGear({ ...adultGear, own: adultGear.own - 1 });
-    }
+    if (adultGear.own > 0) setAdultGear({ ...adultGear, own: adultGear.own - 1 });
   };
-
   const handleChildWithIncrement = () => {
     if (childGear.with + childGear.own < totalChildren) {
       setChildGear({ ...childGear, with: childGear.with + 1 });
     }
   };
-
   const handleChildWithDecrement = () => {
-    if (childGear.with > 0) {
-      setChildGear({ ...childGear, with: childGear.with - 1 });
-    }
+    if (childGear.with > 0) setChildGear({ ...childGear, with: childGear.with - 1 });
   };
-
   const handleChildOwnIncrement = () => {
     if (childGear.with + childGear.own < totalChildren) {
       setChildGear({ ...childGear, own: childGear.own + 1 });
     }
   };
-
   const handleChildOwnDecrement = () => {
-    if (childGear.own > 0) {
-      setChildGear({ ...childGear, own: childGear.own - 1 });
-    }
+    if (childGear.own > 0) setChildGear({ ...childGear, own: childGear.own - 1 });
   };
 
-  const handleBack = () => {
-    window.history.back();
-  };
+  const handleBack = () => { window.history.back(); };
+
+  const priceBreakdown = [
+    ...(adultGear.with > 0 ? [{ label: `${adultGear.with} Yetişkin (Ekipman Dahil)`, price: adultGear.with * prices.adultWithGear }] : []),
+    ...(adultGear.own > 0  ? [{ label: `${adultGear.own} Yetişkin (Kendi Ekipmanı)`,  price: adultGear.own * prices.adultOwnGear }]  : []),
+    ...(childGear.with > 0 ? [{ label: `${childGear.with} Çocuk (Ekipman Dahil)`,    price: childGear.with * prices.childWithGear }] : []),
+    ...(childGear.own > 0  ? [{ label: `${childGear.own} Çocuk (Kendi Ekipmanı)`,     price: childGear.own * prices.childOwnGear }]  : []),
+  ];
 
   const handleContinue = () => {
-    const equipmentData = {
-      adultGear,
-      childGear,
-      totalPrice,
-      breakdown: priceBreakdown,
-    };
-    localStorage.setItem('equipmentSelection', JSON.stringify(equipmentData));
+    localStorage.setItem('equipmentSelection', JSON.stringify({ adultGear, childGear, totalPrice, breakdown: priceBreakdown }));
     window.location.href = '/rezervasyon/step-four';
   };
 
-  const priceBreakdown = [
-    ...(adultGear.with > 0
-      ? [{ label: `${adultGear.with} Yetişkin (Ekipman Dahil)`, price: adultGear.with * prices.adultWithGear }]
-      : []),
-    ...(adultGear.own > 0
-      ? [{ label: `${adultGear.own} Yetişkin (Kendi Ekipmanı)`, price: adultGear.own * prices.adultOwnGear }]
-      : []),
-    ...(childGear.with > 0
-      ? [{ label: `${childGear.with} Çocuk (Ekipman Dahil)`, price: childGear.with * prices.childWithGear }]
-      : []),
-    ...(childGear.own > 0
-      ? [{ label: `${childGear.own} Çocuk (Kendi Ekipmanı)`, price: childGear.own * prices.childOwnGear }]
-      : []),
-  ];
+  // EKİPMANSIZ / özel tur → otomatik yönlendirme yapılıyor, boş sayfa gösterme
+  if (tourCategory && tourCategory !== 'normal-with-equipment') {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#6B9BC3] border-t-transparent rounded-full animate-spin" />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#E8F4F8] via-[#D5E9F0] to-[#F5FAFB] pt-24 pb-32 px-4">
@@ -181,7 +196,7 @@ export default function StepEquipment() {
             <h2 className="text-xl font-semibold text-[#0D2847] mb-4">
               Yetişkinler ({totalAdults} kişi)
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 ${hasOwnGearPrice ? 'md:grid-cols-2' : ''} gap-4`}>
               <EquipmentOptionCard
                 title="Ekipman Dahil"
                 price={prices.adultWithGear}
@@ -190,14 +205,16 @@ export default function StepEquipment() {
                 onDecrement={handleAdultWithDecrement}
                 isActive={adultGear.with > 0}
               />
-              <EquipmentOptionCard
-                title="Kendi Ekipmanı"
-                price={prices.adultOwnGear}
-                count={adultGear.own}
-                onIncrement={handleAdultOwnIncrement}
-                onDecrement={handleAdultOwnDecrement}
-                isActive={adultGear.own > 0}
-              />
+              {hasOwnGearPrice && (
+                <EquipmentOptionCard
+                  title="Kendi Ekipmanı"
+                  price={prices.adultOwnGear}
+                  count={adultGear.own}
+                  onIncrement={handleAdultOwnIncrement}
+                  onDecrement={handleAdultOwnDecrement}
+                  isActive={adultGear.own > 0}
+                />
+              )}
             </div>
           </motion.section>
         )}
@@ -213,7 +230,7 @@ export default function StepEquipment() {
             <h2 className="text-xl font-semibold text-[#0D2847] mb-4">
               Çocuklar ({totalChildren} kişi)
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 ${hasOwnGearPrice ? 'md:grid-cols-2' : ''} gap-4`}>
               <EquipmentOptionCard
                 title="Ekipman Dahil"
                 price={prices.childWithGear}
@@ -222,19 +239,20 @@ export default function StepEquipment() {
                 onDecrement={handleChildWithDecrement}
                 isActive={childGear.with > 0}
               />
-              <EquipmentOptionCard
-                title="Kendi Ekipmanı"
-                price={prices.childOwnGear}
-                count={childGear.own}
-                onIncrement={handleChildOwnIncrement}
-                onDecrement={handleChildOwnDecrement}
-                isActive={childGear.own > 0}
-              />
+              {hasOwnGearPrice && (
+                <EquipmentOptionCard
+                  title="Kendi Ekipmanı"
+                  price={prices.childOwnGear}
+                  count={childGear.own}
+                  onIncrement={handleChildOwnIncrement}
+                  onDecrement={handleChildOwnDecrement}
+                  isActive={childGear.own > 0}
+                />
+              )}
             </div>
           </motion.section>
         )}
 
-        {/* Price Summary */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -244,7 +262,6 @@ export default function StepEquipment() {
           <PriceSummaryBox breakdown={priceBreakdown} totalPrice={totalPrice} />
         </motion.div>
 
-        {/* Navigation */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
