@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebaseClient';
 import EquipmentOptionCard from '@/components/reservation/EquipmentOptionCard';
 import PriceSummaryBox from '@/components/reservation/PriceSummaryBox';
 import StepNavigation from '@/components/reservation/StepNavigation';
@@ -24,30 +26,37 @@ export default function StepEquipment() {
   const [totalPrice, setTotalPrice] = useState(0);
 
   useEffect(() => {
-    // Tüm fiyatlar adminin Firestore'a girdiği değerlerden gelir
+    const applyTourPrices = (tour: any) => {
+      const adultWith = tour.price || 0;
+      const adultOwn  = tour.priceOwnGear  || adultWith;
+      const childWith = tour.childPrice    || Math.round(adultWith * 0.5);
+      const childOwn  = tour.childPriceOwnGear || Math.round(adultOwn * 0.5);
+      setPrices({ adultWithGear: adultWith, adultOwnGear: adultOwn, childWithGear: childWith, childOwnGear: childOwn });
+    };
+
     const tourData = localStorage.getItem('selectedTourType');
     if (tourData) {
-      const tour = JSON.parse(tourData);
-      const adultWith  = tour.price         || 0;
-      const adultOwn   = tour.priceOwnGear  || adultWith; // girilmediyse ekipman dahil fiyatı
-      const childWith  = tour.childPrice    || Math.round(adultWith * 0.5);
-      const childOwn   = tour.childPriceOwnGear || Math.round(adultOwn * 0.5);
+      const cached = JSON.parse(tourData);
+      applyTourPrices(cached);
 
-      setPrices({
-        adultWithGear: adultWith,
-        adultOwnGear:  adultOwn,
-        childWithGear: childWith,
-        childOwnGear:  childOwn,
-      });
+      // Firestore'dan taze fiyat çek (localStorage stale olabilir)
+      if (cached.id) {
+        getDoc(doc(db, 'tours', cached.id)).then((snap) => {
+          if (snap.exists()) {
+            const fresh = snap.data();
+            const updated = { ...cached, ...fresh, id: cached.id };
+            applyTourPrices(updated);
+            localStorage.setItem('selectedTourType', JSON.stringify(updated));
+          }
+        }).catch(() => {});
+      }
     }
 
-    // Kişi sayılarını al
     const reservationData = localStorage.getItem('reservationData');
     if (reservationData) {
       const data = JSON.parse(reservationData);
-      const adults = data.adultCount || 0;
-      const children = data.childCount || 0;
-
+      const adults   = data.adultCount   || 0;
+      const children = data.childCount   || 0;
       setTotalAdults(adults);
       setTotalChildren(children);
       setAdultGear({ with: adults, own: 0 });
