@@ -80,9 +80,15 @@ export default function StepFourConfirmation() {
       const tourDoc = await getDoc(doc(db, 'tours', cachedTour.id));
       if (tourDoc.exists()) {
         const freshData = tourDoc.data();
-        setTourType({ ...cachedTour, price: freshData.price });
-        // localStorage'ı da güncel fiyatla yaz
-        localStorage.setItem('selectedTourType', JSON.stringify({ ...cachedTour, price: freshData.price }));
+        const updated = {
+          ...cachedTour,
+          price: freshData.price,
+          priceOwnGear: freshData.priceOwnGear ?? cachedTour.priceOwnGear,
+          childPrice: freshData.childPrice ?? cachedTour.childPrice,
+          childPriceOwnGear: freshData.childPriceOwnGear ?? cachedTour.childPriceOwnGear,
+        };
+        setTourType(updated);
+        localStorage.setItem('selectedTourType', JSON.stringify(updated));
       }
     } catch {
       // Firestore'dan alınamazsa cached fiyatla devam et

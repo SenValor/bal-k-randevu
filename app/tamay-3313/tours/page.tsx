@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Plus, Compass, Loader2, Edit, Trash2, ChevronLeft } from 'lucide-react';
-import { Tour, subscribeToTours, toggleTourStatus, deleteTour } from '@/lib/tourHelpers';
+import { Tour, subscribeToTours } from '@/lib/tourHelpers';
 import TourFormModal from '@/components/admin/tours/TourFormModal';
 
 export default function TamayToursPage() {
@@ -25,13 +25,21 @@ export default function TamayToursPage() {
 
   const handleToggle = async (tour: Tour) => {
     setTogglingId(tour.id);
-    await toggleTourStatus(tour.id, !tour.isActive);
+    await fetch('/api/admin/manage-tour', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle', id: tour.id, data: { isActive: !tour.isActive } }),
+    });
     setTogglingId(null);
   };
 
   const handleDelete = async (tour: Tour) => {
     if (!confirm(`"${tour.name}" turunu silmek istediğinize emin misiniz?`)) return;
-    await deleteTour(tour.id);
+    await fetch('/api/admin/manage-tour', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id: tour.id }),
+    });
   };
 
   const getCategoryLabel = (category: string) => {
@@ -179,6 +187,7 @@ export default function TamayToursPage() {
         onClose={() => setIsFormModalOpen(false)}
         tour={selectedTour}
         onSuccess={() => {}}
+        useApiRoute={true}
       />
     </div>
   );

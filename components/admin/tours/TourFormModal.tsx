@@ -11,6 +11,7 @@ interface TourFormModalProps {
   onClose: () => void;
   tour: Tour | null;
   onSuccess: () => void;
+  useApiRoute?: boolean;
 }
 
 export default function TourFormModal({
@@ -18,6 +19,7 @@ export default function TourFormModal({
   onClose,
   tour,
   onSuccess,
+  useApiRoute = false,
 }: TourFormModalProps) {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -123,11 +125,18 @@ export default function TourFormModal({
 
     try {
       let result;
-      if (tour) {
-        // Güncelleme
+
+      if (useApiRoute) {
+        const action = tour ? 'update' : 'add';
+        const res = await fetch('/api/admin/manage-tour', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, id: tour?.id, data: formData }),
+        });
+        result = await res.json();
+      } else if (tour) {
         result = await updateTour(tour.id, formData);
       } else {
-        // Yeni ekleme
         result = await addTour(formData);
       }
 
