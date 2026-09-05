@@ -1,14 +1,15 @@
 import { db } from './firebaseClient';
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs, 
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
   updateDoc,
   doc,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
+import { isPhoneBlacklisted } from './blacklistHelpers';
 
 /**
  * 6 haneli rastgele doğrulama kodu üret
@@ -38,10 +39,18 @@ export async function sendVerificationCode(
   phoneNumber: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const blacklisted = await isPhoneBlacklisted(phoneNumber);
+    if (blacklisted) {
+      return {
+        success: false,
+        error:
+          '⛔ Bu numara sistemimizden kalıcı olarak engellenmiştir. Rezervasyon yapamazsınız.',
+      };
+    }
+
     // Telefonu formatla
     const formattedPhone = formatPhoneForWhatsApp(phoneNumber);
-    
-    
+
     // Son 1 dakikada gönderilmiş kod var mı kontrol et (spam önleme)
     const oneMinuteAgo = new Date(Date.now() - 60000);
     const recentQuery = query(

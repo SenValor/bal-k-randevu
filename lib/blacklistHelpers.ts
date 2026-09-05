@@ -1,13 +1,17 @@
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebaseClient';
 
-/**
- * Telefon numarasının kara listede olup olmadığını kontrol eder
- * Hem 0'lı hem 0'sız versiyonları kontrol eder
- * @param phone - Kontrol edilecek telefon numarası
- * @returns true ise kara listede, false ise değil
- */
+// Kesin yasak — Firestore'dan bağımsız, hiçbir koşulda rezervasyon alamazlar
+const PERMANENT_BAN_PHONES = ['05394208108', '5394208108', '05423872269', '5423872269'];
+
+function isPermanentlyBanned(phone: string): boolean {
+  const clean = phone.replace(/\D/g, '');
+  return PERMANENT_BAN_PHONES.includes(clean);
+}
+
 export async function isPhoneBlacklisted(phone: string): Promise<boolean> {
+  if (isPermanentlyBanned(phone)) return true;
+
   try {
     // Telefon numarasını temizle (sadece rakamlar)
     const cleanPhone = phone.replace(/\D/g, '');
@@ -62,6 +66,17 @@ export async function getBlacklistInfo(phone: string): Promise<{
   reason: string;
   addedAt: string;
 } | null> {
+  if (isPermanentlyBanned(phone)) {
+    return {
+      name: 'Yasaklı Kullanıcı',
+      reason:
+        'Geçmişteki olumsuz davranışlarınız nedeniyle sistemimizden kalıcı olarak engellendiniz. ' +
+        'Tekrar rezervasyon yapma girişimleriniz kayıt altına alınmaktadır. ' +
+        'İtiraz için lütfen bizimle yüz yüze iletişime geçin.',
+      addedAt: '',
+    };
+  }
+
   try {
     const cleanPhone = phone.replace(/\D/g, '');
     
