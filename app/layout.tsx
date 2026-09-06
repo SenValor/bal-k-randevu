@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import NavbarWrapper from "@/components/ui/NavbarWrapper";
 import ChatWidget from "@/components/ui/ChatWidget";
@@ -30,6 +31,12 @@ export default function RootLayout({
             <ChatWidget />
           </LanguageProvider>
         </AuthProvider>
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7477507850508281"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
