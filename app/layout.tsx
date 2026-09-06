@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import "./globals.css";
 import NavbarWrapper from "@/components/ui/NavbarWrapper";
 import ChatWidget from "@/components/ui/ChatWidget";
@@ -22,6 +21,12 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Cinzel:wght@400;600;700;900&display=swap" rel="stylesheet" />
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7477507850508281"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className="font-sans overflow-x-hidden">
         <AuthProvider>
@@ -31,12 +36,6 @@ export default function RootLayout({
             <ChatWidget />
           </LanguageProvider>
         </AuthProvider>
-        <Script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7477507850508281"
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );
