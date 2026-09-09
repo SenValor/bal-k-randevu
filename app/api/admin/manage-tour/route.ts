@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
+const ALLOWED_ADMIN_EMAILS = ['baliksefasi33@admin.com', 'bukre@akturk.com'];
+
+async function verifyAdmin(req: NextRequest): Promise<boolean> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return false;
+  try {
+    const decoded = await adminAuth.verifyIdToken(authHeader.slice(7));
+    const email = decoded.email ?? '';
+    if (ALLOWED_ADMIN_EMAILS.includes(email)) return true;
+    const adminDoc = await adminDb.collection('admins').doc(email).get();
+    return adminDoc.exists && adminDoc.data()?.active === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req: NextRequest) {
+  if (!(await verifyAdmin(req))) {
+    return NextResponse.json({ success: false, error: 'Yetkisiz' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { action, id, data } = body;

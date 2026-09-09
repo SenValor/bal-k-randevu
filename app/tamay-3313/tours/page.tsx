@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Plus, Compass, Loader2, Edit, Trash2, ChevronLeft } from 'lucide-react';
 import { Tour, subscribeToTours } from '@/lib/tourHelpers';
 import TourFormModal from '@/components/admin/tours/TourFormModal';
+import { auth } from '@/lib/firebaseClient';
 
 export default function TamayToursPage() {
   const router = useRouter();
@@ -25,9 +26,10 @@ export default function TamayToursPage() {
 
   const handleToggle = async (tour: Tour) => {
     setTogglingId(tour.id);
+    const token = await auth.currentUser?.getIdToken();
     await fetch('/api/admin/manage-tour', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ action: 'toggle', id: tour.id, data: { isActive: !tour.isActive } }),
     });
     setTogglingId(null);
@@ -35,9 +37,10 @@ export default function TamayToursPage() {
 
   const handleDelete = async (tour: Tour) => {
     if (!confirm(`"${tour.name}" turunu silmek istediğinize emin misiniz?`)) return;
+    const token = await auth.currentUser?.getIdToken();
     await fetch('/api/admin/manage-tour', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ action: 'delete', id: tour.id }),
     });
   };

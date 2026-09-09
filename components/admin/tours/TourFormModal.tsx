@@ -5,6 +5,7 @@ import { X, Loader2, Plus, Trash2, Compass } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Tour, TourFormData, addTour, updateTour } from '@/lib/tourHelpers';
+import { auth } from '@/lib/firebaseClient';
 
 interface TourFormModalProps {
   isOpen: boolean;
@@ -128,9 +129,13 @@ export default function TourFormModal({
 
       if (useApiRoute) {
         const action = tour ? 'update' : 'add';
+        const token = await auth.currentUser?.getIdToken();
         const res = await fetch('/api/admin/manage-tour', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
           body: JSON.stringify({ action, id: tour?.id, data: formData }),
         });
         result = await res.json();

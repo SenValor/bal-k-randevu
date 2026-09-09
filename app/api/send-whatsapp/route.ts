@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 
 const META_TOKEN = process.env.META_WHATSAPP_TOKEN!;
 const META_PHONE_ID = process.env.META_PHONE_ID!;
+const ALLOWED_ADMIN_EMAILS = ['baliksefasi33@admin.com', 'bukre@akturk.com'];
+
+async function verifyAdmin(req: NextRequest): Promise<boolean> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return false;
+  try {
+    const decoded = await adminAuth.verifyIdToken(authHeader.slice(7));
+    const email = decoded.email ?? '';
+    if (ALLOWED_ADMIN_EMAILS.includes(email)) return true;
+    const adminDoc = await adminDb.collection('admins').doc(email).get();
+    return adminDoc.exists && adminDoc.data()?.active === true;
+  } catch {
+    return false;
+  }
+}
 
 // Telefon numarasını WhatsApp formatına çevirir
 function formatPhoneNumber(phone: string): string {
@@ -36,6 +52,10 @@ function formatDateTurkish(dateStr: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  if (!(await verifyAdmin(request))) {
+    return NextResponse.json({ success: false, error: 'Yetkisiz' }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { type, reservation } = body;
