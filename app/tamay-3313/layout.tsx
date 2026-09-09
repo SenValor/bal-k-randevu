@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Lock, Loader2, Ship } from 'lucide-react';
 
-const PIN = '3464';
 const SESSION_KEY = 'tamay_auth';
 
 export default function TamayLayout({ children }: { children: React.ReactNode }) {
@@ -18,18 +17,31 @@ export default function TamayLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const stored = sessionStorage.getItem(SESSION_KEY);
-    if (stored === PIN) {
+    if (stored === '1') {
       setAuthed(true);
     }
     setChecking(false);
   }, []);
 
-  const handleSubmit = () => {
-    if (pin === PIN) {
-      sessionStorage.setItem(SESSION_KEY, PIN);
-      setAuthed(true);
-      setError(false);
-    } else {
+  const handleSubmit = async () => {
+    try {
+      const res = await fetch('/api/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, type: 'staff' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        sessionStorage.setItem(SESSION_KEY, '1');
+        setAuthed(true);
+        setError(false);
+      } else {
+        setError(true);
+        setShaking(true);
+        setPin('');
+        setTimeout(() => setShaking(false), 500);
+      }
+    } catch {
       setError(true);
       setShaking(true);
       setPin('');

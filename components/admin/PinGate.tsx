@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Lock, Delete } from 'lucide-react';
 
-const CORRECT_PIN = '3464';
 const SESSION_KEY = 'admin_pin_unlocked';
 
 interface PinGateProps {
@@ -33,11 +32,22 @@ export default function PinGate({ children }: PinGateProps) {
 
   const handleDelete = () => setPin(p => p.slice(0, -1));
 
-  const verify = (value: string) => {
-    if (value === CORRECT_PIN) {
-      sessionStorage.setItem(SESSION_KEY, '1');
-      setUnlocked(true);
-    } else {
+  const verify = async (value: string) => {
+    try {
+      const res = await fetch('/api/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: value, type: 'admin_secondary' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        sessionStorage.setItem(SESSION_KEY, '1');
+        setUnlocked(true);
+      } else {
+        setShake(true);
+        setTimeout(() => { setPin(''); setShake(false); inputRef.current?.focus(); }, 600);
+      }
+    } catch {
       setShake(true);
       setTimeout(() => { setPin(''); setShake(false); inputRef.current?.focus(); }, 600);
     }
