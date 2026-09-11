@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Boat } from '@/lib/boatHelpers';
+import { getCalendarFullness } from '@/lib/reservationHelpers';
 import { useLanguage } from '@/context/LanguageContext';
 
 interface CalendarSectionProps {
@@ -66,22 +67,14 @@ export default function CalendarSection({ selectedDate, onDateSelect }: Calendar
           const startDateStr = formatLocalDate(startDate);
           const endDateStr = formatLocalDate(endDate);
           
-          const takvimRes = await fetch('/api/musaitlik/takvim', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              boatId: boat.id,
-              startDate: startDateStr,
-              endDate: endDateStr,
-              capacity: boat.capacity,
-              timeSlotCount: boat.timeSlots?.length || 1,
-              timeSlots: boat.timeSlots,
-              scheduledTimeSlots: boat.scheduledTimeSlots,
-            }),
-          });
-          const takvimJson = await takvimRes.json();
-          const fullnessMap = new Map<string, number>(
-            takvimJson.success ? Object.entries(takvimJson.fullnessMap as Record<string, number>) : []
+          const fullnessMap = await getCalendarFullness(
+            boat.id,
+            startDateStr,
+            endDateStr,
+            boat.capacity,
+            boat.timeSlots?.length || 1,
+            boat.timeSlots,
+            boat.scheduledTimeSlots
           );
           
           
