@@ -114,7 +114,7 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
           const resTourName = extractTourName(slot.timeSlotDisplay);
           const resRange = extractTimeRange(slot.timeSlotDisplay);
           const rangeMatches = targetRange && resRange && targetRange === resRange;
-          const idMatches = slot.timeSlotId === timeSlotId;
+          const idMatches = !!timeSlotId && slot.timeSlotId === timeSlotId;
           const nameOnlyMatches = !resRange && targetTourName && resTourName === targetTourName;
           if ((rangeMatches || idMatches || nameOnlyMatches) && Array.isArray(slot.selectedSeats)) {
             allOccupied.push(...slot.selectedSeats);

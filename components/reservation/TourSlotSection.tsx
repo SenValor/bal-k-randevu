@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Anchor, Loader2, Moon, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
-import { getAllTimeSlotsFullness } from '@/lib/reservationHelpers';
 import { useLanguage } from '@/context/LanguageContext';
 
 interface TimeSlotWithFullness {
@@ -122,25 +121,45 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
 
         // Sonra doluluk oranlarını hesapla
 
-        const fullnessMap = await getAllTimeSlotsFullness(
-          currentBoat.id,
-          dateStr,
-          slotsWithId.map(slot => ({ 
-            id: slot.id, 
-            start: slot.start, 
-            end: slot.end,
-            displayName: slot.displayName 
-          })),
-          currentBoat.capacity
-        );
+        const musaitlikRes = await fetch('/api/musaitlik', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ boatId: currentBoat.id, date: dateStr }),
+        });
+        const musaitlikJson = await musaitlikRes.json();
 
+        const extractTourName = (s: string) => {
+          const m = s?.match(/^([^(]+)/);
+          return m ? m[1].trim().toLowerCase() : s?.toLowerCase().trim() || '';
+        };
+        const extractTimeRange = (s: string) => {
+          const m = s?.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+          return m ? `${m[1]}-${m[2]}` : null;
+        };
+
+        const apiSlots: { timeSlotId: string; timeSlotDisplay: string; selectedSeats: number[] }[] =
+          musaitlikJson.success ? musaitlikJson.slots : [];
 
         // TimeSlots'ları güncel doluluk oranlarıyla güncelle
         setTimeSlots(
-          slotsWithId.map(slot => ({
-            ...slot,
-            fullness: fullnessMap.get(slot.id) || 0,
-          }))
+          slotsWithId.map(slot => {
+            const slotRange = `${slot.start}-${slot.end}`;
+            const slotName = extractTourName(slot.displayName);
+            const occupied = new Set<number>();
+
+            apiSlots.forEach(apiSlot => {
+              const apiRange = extractTimeRange(apiSlot.timeSlotDisplay);
+              const apiName = extractTourName(apiSlot.timeSlotDisplay);
+              const rangeMatches = apiRange && apiRange === slotRange;
+              const idMatches = !!slot.id && apiSlot.timeSlotId === slot.id;
+              const nameMatches = !apiRange && slotName && apiName === slotName;
+              if ((rangeMatches || idMatches || nameMatches) && Array.isArray(apiSlot.selectedSeats)) {
+                apiSlot.selectedSeats.forEach(s => occupied.add(s));
+              }
+            });
+
+            return { ...slot, fullness: occupied.size / currentBoat.capacity };
+          })
         );
       } catch (error) {
       }
