@@ -10,9 +10,9 @@ service cloud.firestore {
       );
     }
 
-    // Rezervasyonlar: okuma herkese açık (takvim/koltuk için), yazma sunucu API'sinden geçer
+    // Rezervasyonlar: okuma sunucu API'sinden (admin SDK), doğrudan erişim kapalı
     match /reservations/{docId} {
-      allow read: if true;
+      allow read: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
       allow create: if false;
       allow update: if isAdmin();
       allow delete: if isAdmin();

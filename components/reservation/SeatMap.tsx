@@ -4,8 +4,6 @@ import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
 
 interface SeatMapProps {
   selectedSeats: number[];
@@ -101,32 +99,36 @@ export default function SeatMap({ selectedSeats, onSeatToggle, maxSeats, selecte
     const targetTourName = extractTourName(slotDisplayName);
     const targetRange = slotStart && slotEnd ? `${slotStart}-${slotEnd}` : fallbackRange;
 
-    const q = query(
-      collection(db, 'reservations'),
-      where('boatId', '==', boat.id),
-      where('date', '==', dateStr),
-      where('status', 'in', ['pending', 'confirmed'])
-    );
+    const fetchOccupied = async () => {
+      try {
+        const res = await fetch('/api/musaitlik', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ boatId: boat.id, date: dateStr }),
+        });
+        const json = await res.json();
+        if (!json.success) return;
+        const allOccupied: number[] = [];
+        (json.slots as { timeSlotId: string; timeSlotDisplay: string; selectedSeats: number[] }[]).forEach(slot => {
+          if (!slot.timeSlotDisplay) return;
+          const resTourName = extractTourName(slot.timeSlotDisplay);
+          const resRange = extractTimeRange(slot.timeSlotDisplay);
+          const rangeMatches = targetRange && resRange && targetRange === resRange;
+          const idMatches = slot.timeSlotId === timeSlotId;
+          const nameOnlyMatches = !resRange && targetTourName && resTourName === targetTourName;
+          if ((rangeMatches || idMatches || nameOnlyMatches) && Array.isArray(slot.selectedSeats)) {
+            allOccupied.push(...slot.selectedSeats);
+          }
+        });
+        setOccupiedSeats([...new Set(allOccupied)]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const allOccupied: number[] = [];
-      snapshot.forEach((d) => {
-        const data = d.data();
-        if (!data.timeSlotDisplay) return;
-        const resTourName = extractTourName(data.timeSlotDisplay);
-        const resRange = extractTimeRange(data.timeSlotDisplay);
-        const rangeMatches = targetRange && resRange && targetRange === resRange;
-        const idMatches = data.timeSlotId === timeSlotId;
-        const nameOnlyMatches = !resRange && targetTourName && resTourName === targetTourName;
-        if ((rangeMatches || idMatches || nameOnlyMatches) && Array.isArray(data.selectedSeats)) {
-          allOccupied.push(...data.selectedSeats);
-        }
-      });
-      setOccupiedSeats([...new Set(allOccupied)]);
-      setLoading(false);
-    }, () => setLoading(false));
-
-    return () => unsubscribe();
+    fetchOccupied();
+    const interval = setInterval(fetchOccupied, 5000);
+    return () => clearInterval(interval);
   }, [selectedDate, timeSlotId]);
 
   const isOccupied = (seatId: number) => occupiedSeats.includes(seatId);
