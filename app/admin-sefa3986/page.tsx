@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Anchor, Users, FileText, Clock, BarChart3, Calendar, Compass, Image, HelpCircle, Settings, Megaphone, Tag, ClipboardList, Shield } from 'lucide-react';
+import { Anchor, Users, FileText, Clock, BarChart3, Calendar, Compass, Image, HelpCircle, Settings, Megaphone, Tag, ClipboardList, Shield, UserCog } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminDashboard() {
@@ -123,6 +123,15 @@ export default function AdminDashboard() {
       icon: Settings,
       color: 'from-gray-500 to-gray-600',
       path: '/admin-sefa3986/settings',
+      available: true,
+    },
+    {
+      id: 'users',
+      title: 'Kullanıcı Yönetimi',
+      description: 'Kayıtlı müşterileri ara, telefon/isim düzenle',
+      icon: UserCog,
+      color: 'from-blue-500 to-blue-700',
+      path: '/admin-sefa3986/users',
       available: true,
     },
     {
