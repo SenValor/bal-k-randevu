@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, slots });
-  } catch {
-    return NextResponse.json({ success: false, error: 'Sunucu hatası' }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err?.message || 'Sunucu hatası' }, { status: 500 });
   }
 }
