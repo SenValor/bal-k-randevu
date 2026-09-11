@@ -7,8 +7,6 @@ import {
   Calendar, ChevronLeft, Loader2, Search, X,
   ChevronDown, ChevronUp, Tag, Clock, Phone, Users, Anchor,
 } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
 import { subscribeToBoats, Boat } from '@/lib/boatHelpers';
 
 interface Reservation {
@@ -211,14 +209,21 @@ export default function TamayReservationsPage() {
   const fetchReservations = async () => {
     setLoading(true);
     try {
+      const pin = sessionStorage.getItem('tamay_pin') || '';
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 14);
       const cutoffStr = cutoff.toISOString().split('T')[0];
-      const snap = await getDocs(query(collection(db, 'reservations'), where('date', '>=', cutoffStr)));
-      const list: Reservation[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation));
+      const res = await fetch('/api/tamay/rezervasyonlar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, cutoffDate: cutoffStr }),
+      });
+      const json = await res.json();
+      if (!json.success) return;
+      const list: Reservation[] = json.reservations as Reservation[];
       list.sort((a, b) => a.date.localeCompare(b.date));
       setReservations(list);
-    } catch (err) {
+    } catch {
     } finally {
       setLoading(false);
     }

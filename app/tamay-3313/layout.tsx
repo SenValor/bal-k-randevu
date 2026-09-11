@@ -17,8 +17,12 @@ export default function TamayLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const stored = sessionStorage.getItem(SESSION_KEY);
-    if (stored === '1') {
+    const pin = sessionStorage.getItem('tamay_pin');
+    if (stored === '1' && pin) {
       setAuthed(true);
+    } else {
+      sessionStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem('tamay_pin');
     }
     setChecking(false);
   }, []);
@@ -33,6 +37,7 @@ export default function TamayLayout({ children }: { children: React.ReactNode })
       const data = await res.json();
       if (data.success) {
         sessionStorage.setItem(SESSION_KEY, '1');
+        sessionStorage.setItem('tamay_pin', pin);
         setAuthed(true);
         setError(false);
       } else {
