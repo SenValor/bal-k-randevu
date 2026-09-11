@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, CheckCircle, User, Mail, Phone, Calendar, Clock, Users, Ship, Compass, Copy, MessageCircle } from 'lucide-react';
-import { addReservation, checkSeatsAvailable, ReservationFormData } from '@/lib/reservationHelpers';
+import { ReservationFormData } from '@/lib/reservationHelpers';
 import { Boat, getTimeSlotsForDate } from '@/lib/boatHelpers';
 import { Tour } from '@/lib/tourHelpers';
 import { isPhoneBlacklisted, getBlacklistInfo } from '@/lib/blacklistHelpers';
-import { validatePromoCode, incrementPromoCodeUsage, PromoCode } from '@/lib/promoCodeHelpers';
+import { validatePromoCode, PromoCode } from '@/lib/promoCodeHelpers';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
 import ReservationNewYearDecor from '@/components/seasonal/ReservationNewYearDecor';
@@ -292,36 +292,22 @@ export default function StepFourConfirmation() {
       };
 
 
-      // ⚠️ SERVER-SIDE KOLTUK KONTROLÜ — yazma öncesi son doğrulama
-      const timeSlotStart  = selectedTimeSlot?.start  || '';
-      const timeSlotEnd    = selectedTimeSlot?.end    || '';
-      const timeSlotDisplay = reservation.timeSlotDisplay || '';
-      const seatCheck = await checkSeatsAvailable(
-        boat.id,
-        reservationDate,
-        reservation.timeSlotId,
-        timeSlotStart,
-        timeSlotEnd,
-        timeSlotDisplay,
-        reservationData.seats || []
-      );
+      const timeSlotStart = selectedTimeSlot?.start || '';
+      const timeSlotEnd   = selectedTimeSlot?.end   || '';
 
-      if (!seatCheck.available) {
-        setError(
-          `${seatCheck.conflictingSeats.join(', ')} ${t('confirm.seatsTaken')}`
-        );
-        setLoading(false);
-        return;
-      }
-
-      const result = await addReservation(reservation);
-      
+      const apiRes = await fetch('/api/rezervasyon-olustur', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reservationData: reservation,
+          timeSlotStart,
+          timeSlotEnd,
+          promoCodeId: promoData?.id || null,
+        }),
+      });
+      const result = await apiRes.json();
 
       if (result.success) {
-        // Kampanya kodu kullanımını artır
-        if (promoData?.id) {
-          await incrementPromoCodeUsage(promoData.id);
-        }
         setReservationComplete(true);
         setReservationNumber(result.reservationNumber || '');
         localStorage.removeItem('selectedBoat');

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, X, Calendar, Clock, Ship, Users, Phone, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { getReservationByNumber, getReservationsByPhone, cancelReservationByNumber, Reservation } from '@/lib/reservationHelpers';
+import { cancelReservationByNumber, Reservation } from '@/lib/reservationHelpers';
 
 export default function ReservationQueryPage() {
   const [searchType, setSearchType] = useState<'number' | 'phone'>('number');
@@ -40,24 +40,30 @@ export default function ReservationQueryPage() {
     setLoading(true);
 
     try {
-      if (searchType === 'number') {
-        const result = await getReservationByNumber(reservationNumber.trim());
+      const res = await fetch('/api/rezervasyon-sorgula', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: searchType,
+          value: searchType === 'number' ? reservationNumber.trim() : searchPhone.trim(),
+        }),
+      });
+      const result = await res.json();
 
+      if (searchType === 'number') {
         if (result.success && result.reservation) {
-          setReservation(result.reservation);
+          setReservation(result.reservation as Reservation);
         } else {
           setError(result.error || 'Rezervasyon bulunamadı');
         }
       } else {
-        const result = await getReservationsByPhone(searchPhone.trim());
-
-        if (result.success && result.reservations && result.reservations.length > 0) {
-          setReservations(result.reservations);
+        if (result.success && result.reservations?.length > 0) {
+          setReservations(result.reservations as Reservation[]);
         } else {
           setError(result.error || 'Rezervasyon bulunamadı');
         }
       }
-    } catch (err) {
+    } catch {
       setError('Bir hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       setLoading(false);
