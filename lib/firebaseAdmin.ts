@@ -5,6 +5,12 @@ import { getAuth } from 'firebase-admin/auth';
 function getAdminApp(): App {
   if (getApps().length > 0) return getApps()[0];
 
+  // FIREBASE_SERVICE_ACCOUNT_JSON varsa onu kullan (Vercel için en güvenilir yol)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    return initializeApp({ credential: cert(serviceAccount) });
+  }
+
   return initializeApp({
     credential: cert({
       projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
