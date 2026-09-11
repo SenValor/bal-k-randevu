@@ -20,7 +20,27 @@ export async function POST(request: NextRequest) {
       }
 
       const doc = snapshot.docs[0];
-      return NextResponse.json({ success: true, reservation: { id: doc.id, ...doc.data() } });
+      const d = doc.data();
+      // PII fields stripped — phone verification not required for number-based lookup
+      return NextResponse.json({
+        success: true,
+        reservation: {
+          id: doc.id,
+          reservationNumber: d.reservationNumber,
+          date: d.date,
+          timeSlotDisplay: d.timeSlotDisplay,
+          boatName: d.boatName,
+          tourName: d.tourName,
+          totalPeople: d.totalPeople,
+          adultCount: d.adultCount,
+          childCount: d.childCount,
+          selectedSeats: d.selectedSeats,
+          status: d.status,
+          totalPrice: d.totalPrice,
+          promoCode: d.promoCode,
+          createdAt: d.createdAt,
+        },
+      });
     }
 
     if (type === 'phone') {
