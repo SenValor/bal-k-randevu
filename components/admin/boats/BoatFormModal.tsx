@@ -1006,7 +1006,7 @@ export default function BoatFormModal({
                               </div>
                             </div>
                             {/* Konum alanı */}
-                            <div>
+                            <div className="mb-2">
                               <label className="block text-white/40 text-xs mb-1">📍 Konum</label>
                               <input
                                 type="url"
@@ -1016,6 +1016,28 @@ export default function BoatFormModal({
                                 placeholder="https://maps.google.com/..."
                                 className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs placeholder-white/30 focus:border-purple-400 outline-none transition-all disabled:opacity-50"
                               />
+                            </div>
+
+                            {/* Yem Uyarısı Toggle */}
+                            <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <Fish className={`w-4 h-4 ${slot.baitWarning ? 'text-orange-400' : 'text-white/40'}`} />
+                                <span className="text-white/80 text-xs">Yem Uyarısı</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'baitWarning', !slot.baitWarning)}
+                                disabled={loading}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
+                                  slot.baitWarning ? 'bg-orange-500' : 'bg-white/20'
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                    slot.baitWarning ? 'translate-x-4' : 'translate-x-1'
+                                  }`}
+                                />
+                              </button>
                             </div>
                           </div>
                         ))}

@@ -53,6 +53,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
     if (selectedBoatData) {
       try {
         const boat: Boat = JSON.parse(selectedBoatData);
+        console.log('[DEBUG] localStorage boat:', boat.name, '| scheduledTimeSlots:', JSON.stringify(boat.scheduledTimeSlots));
         setBoatName(boat.name);
         setBoatId(boat.id);
         setBoatCapacity(boat.capacity);
@@ -103,7 +104,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
           currentBoat.timeSlots,
           dateStr
         );
-
+        console.log('[DEBUG] getTimeSlotsForDate için tarih:', dateStr, '| scheduledTimeSlots:', JSON.stringify(currentBoat.scheduledTimeSlots), '| sonuç slotları:', effectiveTimeSlots.length, effectiveTimeSlots.map(s => s.displayName));
 
         // TimeSlots'ları hazırla
         const slotsWithId = effectiveTimeSlots.map((slot, index) => ({
