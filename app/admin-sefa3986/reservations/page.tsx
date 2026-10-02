@@ -99,10 +99,21 @@ export default function AdminReservationsPage() {
 
   // Tekne seçildiğinde saat dilimlerini güncelle
   useEffect(() => {
+    // Seçilen tarih için doğru saat dilimlerini döndürür (scheduledTimeSlots öncelikli)
+    const getEffectiveSlots = (boat: any): any[] => {
+      const dateToUse = specificDate || new Date().toISOString().split('T')[0];
+      return getTimeSlotsForDate(
+        boat.scheduledTimeSlots,
+        boat.timeSlots || [],
+        dateToUse
+      );
+    };
+
     if (boatFilter !== 'all') {
       const selectedBoat = boats.find(b => b.id === boatFilter);
-      if (selectedBoat && selectedBoat.timeSlots && selectedBoat.timeSlots.length > 0) {
-        setAvailableTimeSlotsForFilter(selectedBoat.timeSlots);
+      if (selectedBoat) {
+        const effectiveSlots = getEffectiveSlots(selectedBoat);
+        setAvailableTimeSlotsForFilter(effectiveSlots.length > 0 ? effectiveSlots : []);
       } else {
         setAvailableTimeSlotsForFilter([]);
       }
@@ -110,20 +121,19 @@ export default function AdminReservationsPage() {
       // Tüm tekneler seçiliyse, tüm saat dilimlerini topla
       const allTimeSlots: any[] = [];
       boats.forEach(boat => {
-        if (boat.timeSlots && boat.timeSlots.length > 0) {
-          boat.timeSlots.forEach((slot: any) => {
-            const slotKey = `${slot.start}-${slot.end}`;
-            if (!allTimeSlots.find(s => `${s.start}-${s.end}` === slotKey)) {
-              allTimeSlots.push(slot);
-            }
-          });
-        }
+        const effectiveSlots = getEffectiveSlots(boat);
+        effectiveSlots.forEach((slot: any) => {
+          const slotKey = `${slot.start}-${slot.end}`;
+          if (!allTimeSlots.find(s => `${s.start}-${s.end}` === slotKey)) {
+            allTimeSlots.push(slot);
+          }
+        });
       });
       setAvailableTimeSlotsForFilter(allTimeSlots);
     }
-    // Tekne değiştiğinde saat filtresini sıfırla
+    // Tekne veya tarih değiştiğinde saat filtresini sıfırla
     setTimeSlotFilter('all');
-  }, [boatFilter, boats]);
+  }, [boatFilter, boats, specificDate]);
 
   const fetchBoats = async () => {
     try {
