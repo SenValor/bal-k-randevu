@@ -12,7 +12,7 @@ admin.initializeApp();
 
 // Token - Doğrudan tanımlı (Firebase Functions v1 .env'i production'a yüklemez)
 const META_TOKEN = "EAAMfyFpCzHsBStuZAeDljkvOAtGNq1ysyvCsDrh38kQZBerKJyYf5oktHG20uOZAb9HIvGYZBLkyI3EYVQHyit7rLCQ1xen08JQVM8JSwaypU2vPZCeJ9oL7PGj4QpVlnAMMHgg9F6sQ47LBiA52badQufFwTcPl7QtS5DHPip72CeEYBeHDson6eaKq5fNlleATjlF35oaTqkzCBByXeoETA9bKsGHBJkZAMlYzkj";
-const META_PHONE = "797993213405372";
+const META_PHONE = "848154734423333";
 
 function getAccessToken() {
   return META_TOKEN;
