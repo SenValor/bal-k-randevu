@@ -8,7 +8,6 @@ import { getAdminInfo, logAdminAction, AdminAction } from '@/lib/adminHelpers';
 // Koleksiyonu Firebase Console'dan oluşturduktan sonra bu listeyi temizleyebilirsiniz.
 const BOOTSTRAP_ADMINS: Record<string, string> = {
   'baliksefasi33@admin.com': 'Ana Admin',
-  'bukre@akturk.com': 'Bukre',
 };
 
 interface AdminContextType {

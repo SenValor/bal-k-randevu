@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 
-const ALLOWED_ADMIN_EMAILS = ['baliksefasi33@admin.com', 'bukre@akturk.com'];
+const ALLOWED_ADMIN_EMAILS = ['baliksefasi33@admin.com'];
 
 export async function POST(req: NextRequest) {
   try {
