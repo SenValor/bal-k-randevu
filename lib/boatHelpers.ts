@@ -17,6 +17,7 @@ export interface TimeSlot {
   displayName: string;
   displayName_en?: string;
   baitWarning?: boolean; // Yem uyarısı aktif mi?
+  baitWarningText?: string; // Özel yem uyarı metni
   mapsLink?: string; // Bu saat dilimine özel Google Maps konumu
 }
 

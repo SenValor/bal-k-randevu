@@ -14,6 +14,7 @@ interface TimeSlotWithFullness {
   displayName_en?: string;
   fullness: number;
   baitWarning?: boolean;
+  baitWarningText?: string;
 }
 
 interface TourSlotSectionProps {
@@ -34,6 +35,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
   const [pendingTourSelection, setPendingTourSelection] = useState<{ id: number; time: string; title: string; availableSeats?: number } | null>(null);
   const [showBaitWarning, setShowBaitWarning] = useState(false);
   const [pendingBaitTourSelection, setPendingBaitTourSelection] = useState<{ id: number; time: string; title: string; availableSeats?: number } | null>(null);
+  const [pendingBaitWarningText, setPendingBaitWarningText] = useState('');
 
   // Özel tur kontrolü
   useEffect(() => {
@@ -82,6 +84,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
           displayName_en: slot.displayName_en,
           fullness: 0,
           baitWarning: slot.baitWarning || false,
+          baitWarningText: slot.baitWarningText || '',
         }));
         setTimeSlots(slotsWithFullness);
       }
@@ -115,6 +118,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
           displayName_en: slot.displayName_en,
           fullness: 0,
           baitWarning: slot.baitWarning || false,
+          baitWarningText: slot.baitWarningText || '',
         }));
 
         // Önce saat dilimlerini göster (doluluk 0 ile)
@@ -183,12 +187,11 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
     return `${available} ${t('slot.spotsLeft')}`;
   };
 
-  // Gece yarısını geçen tur kontrolü (01:00-07:00 arası)
+  // Gece yarısını geçen tur kontrolü: bitiş saati başlangıçtan küçükse midnight'ı geçiyor
   const isOvernightTour = (startTime: string, endTime: string) => {
-    const [startHour] = startTime.split(':').map(Number);
-    const [endHour] = endTime.split(':').map(Number);
-    // 01:00-07:00 arası başlayan turlar için uyarı göster
-    return startHour >= 1 && startHour < 7;
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    return endHour < startHour || (endHour === startHour && endMin < startMin);
   };
 
   // Gün isimlerini al
@@ -204,11 +207,35 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
     return getDayName(nextDay);
   };
 
+  // Türkçe sesli uyumu: son sesli harfe göre belirtme eki (-ı/-i/-u/-ü + y kalıpçısı)
+  const getAccusativeSuffix = (word: string): string => {
+    const backVowels = ['a', 'ı', 'o', 'u'];
+    const lastVowel = word.toLowerCase().split('').reverse().find(c => 'aeıioöuü'.includes(c));
+    if (!lastVowel) return "'ı";
+    const endsWithVowel = 'aeıioöuü'.includes(word[word.length - 1].toLowerCase());
+    const connector = endsWithVowel ? "y" : "";
+    if (backVowels.includes(lastVowel)) {
+      return lastVowel === 'a' || lastVowel === 'ı' ? `'${connector}ı` : `'${connector}u`;
+    }
+    return lastVowel === 'e' || lastVowel === 'i' ? `'${connector}i` : `'${connector}ü`;
+  };
+
+  // Türkçe yönelme eki (-a/-e)
+  const getDativeSuffix = (word: string): string => {
+    const backVowels = ['a', 'ı', 'o', 'u'];
+    const lastVowel = word.toLowerCase().split('').reverse().find(c => 'aeıioöuü'.includes(c));
+    if (!lastVowel) return "'a";
+    const endsWithVowel = 'aeıioöuü'.includes(word[word.length - 1].toLowerCase());
+    const connector = endsWithVowel ? "y" : "";
+    return backVowels.includes(lastVowel) ? `'${connector}a` : `'${connector}e`;
+  };
+
   // Tur seçim handler'ı
   const handleTourSelection = (tour: { id: number; time: string; title: string; availableSeats?: number }, slot: TimeSlotWithFullness) => {
     // Önce yem uyarısı kontrol et
     if (slot.baitWarning) {
       setPendingBaitTourSelection(tour);
+      setPendingBaitWarningText(slot.baitWarningText || '');
       setShowBaitWarning(true);
       return;
     }
@@ -250,6 +277,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
       }
       setShowBaitWarning(false);
       setPendingBaitTourSelection(null);
+      setPendingBaitWarningText('');
     }
   };
 
@@ -257,6 +285,7 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
   const cancelBaitWarning = () => {
     setShowBaitWarning(false);
     setPendingBaitTourSelection(null);
+    setPendingBaitWarningText('');
   };
 
   return (
@@ -458,11 +487,8 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
                 <div className="flex items-start gap-3 mb-4">
                   <AlertCircle className="w-5 h-5 text-[#8B3A3A] flex-shrink-0 mt-0.5" />
                   <div className="space-y-2">
-                    <p className="text-[#0D2847] font-semibold text-base">
-                      Yeminizi Kendiniz Getirin
-                    </p>
                     <p className="text-[#1B3A5C]/80 text-sm leading-relaxed">
-                      Bu tur için yem hizmeti verilmemektedir. Lütfen kendi yeminizi getirmeyi unutmayın.
+                      {pendingBaitWarningText || 'Bu tur için yem hizmeti verilmemektedir. Lütfen kendi yeminizi getirmeyi unutmayın.'}
                     </p>
                   </div>
                 </div>
@@ -561,8 +587,11 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
                       Seçtiğiniz tur gece yarısını geçmektedir.
                     </p>
                     <p className="text-yellow-400 text-sm font-semibold">
-                      {selectedDate.toLocaleDateString('tr-TR', { weekday: 'long' })}'yı{' '}
-                      {new Date(selectedDate.getTime() + 86400000).toLocaleDateString('tr-TR', { weekday: 'long' })}'ya bağlayan gece
+                      {(() => {
+                        const day = getDayName(selectedDate);
+                        const nextDay = getNextDayName(selectedDate);
+                        return `${day}${getAccusativeSuffix(day)} ${nextDay}${getDativeSuffix(nextDay)} bağlayan gece`;
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -584,7 +613,11 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
 
                   <div className="pt-3 border-t border-white/10">
                     <p className="text-center text-white font-semibold">
-                      {getDayName(selectedDate)}'yı {getNextDayName(selectedDate)}'ye bağlayan gece
+                      {(() => {
+                        const day = getDayName(selectedDate);
+                        const nextDay = getNextDayName(selectedDate);
+                        return `${day}${getAccusativeSuffix(day)} ${nextDay}${getDativeSuffix(nextDay)} bağlayan gece`;
+                      })()}
                     </p>
                   </div>
                 </div>

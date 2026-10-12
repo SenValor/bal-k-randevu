@@ -221,7 +221,7 @@ export default function BoatFormModal({
       ...formData,
       timeSlots: [
         ...formData.timeSlots,
-        { start: '09:00', end: '12:00', displayName: 'Sabah Turu', baitWarning: false, mapsLink: '' },
+        { start: '09:00', end: '12:00', displayName: 'Sabah Turu', baitWarning: false, baitWarningText: '', mapsLink: '' },
       ],
     });
   };
@@ -291,7 +291,7 @@ export default function BoatFormModal({
       ...newScheduled[scheduleIndex],
       timeSlots: [
         ...newScheduled[scheduleIndex].timeSlots,
-        { start: '09:00', end: '12:00', displayName: 'Yeni Tur', baitWarning: false, mapsLink: '' },
+        { start: '09:00', end: '12:00', displayName: 'Yeni Tur', baitWarning: false, baitWarningText: '', mapsLink: '' },
       ],
     };
     setFormData({ ...formData, scheduledTimeSlots: newScheduled });
@@ -843,25 +843,41 @@ export default function BoatFormModal({
                       </div>
 
                       {/* Yem Uyarısı Toggle */}
-                      <div className="mb-3 flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <Fish className={`w-4 h-4 ${slot.baitWarning ? 'text-orange-400' : 'text-white/40'}`} />
-                          <span className="text-white/80 text-sm">Yem Uyarısı</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleTimeSlotChange(index, 'baitWarning', !slot.baitWarning)}
-                          disabled={loading}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
-                            slot.baitWarning ? 'bg-orange-500' : 'bg-white/20'
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              slot.baitWarning ? 'translate-x-6' : 'translate-x-1'
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <Fish className={`w-4 h-4 ${slot.baitWarning ? 'text-orange-400' : 'text-white/40'}`} />
+                            <span className="text-white/80 text-sm">Yem Uyarısı</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleTimeSlotChange(index, 'baitWarning', !slot.baitWarning)}
+                            disabled={loading}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                              slot.baitWarning ? 'bg-orange-500' : 'bg-white/20'
                             }`}
-                          />
-                        </button>
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                slot.baitWarning ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        {slot.baitWarning && (
+                          <div className="mt-2">
+                            <label className="block text-orange-300/70 text-xs mb-1">⚠️ Uyarı Metni</label>
+                            <textarea
+                              value={slot.baitWarningText || ''}
+                              onChange={(e) => handleTimeSlotChange(index, 'baitWarningText', e.target.value)}
+                              disabled={loading}
+                              rows={2}
+                              placeholder="Bu tur için yem hizmeti verilmemektedir. Lütfen kendi yeminizi getirmeyi unutmayın."
+                              className="w-full bg-orange-500/10 border border-orange-500/30 rounded-lg px-3 py-2 text-white text-sm placeholder-white/30 focus:border-orange-400 outline-none transition-all disabled:opacity-50 resize-none"
+                            />
+                            <p className="text-white/30 text-xs mt-1">Boş bırakılırsa varsayılan metin kullanılır</p>
+                          </div>
+                        )}
                       </div>
 
                       <button
@@ -1019,25 +1035,41 @@ export default function BoatFormModal({
                             </div>
 
                             {/* Yem Uyarısı Toggle */}
-                            <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <Fish className={`w-4 h-4 ${slot.baitWarning ? 'text-orange-400' : 'text-white/40'}`} />
-                                <span className="text-white/80 text-xs">Yem Uyarısı</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'baitWarning', !slot.baitWarning)}
-                                disabled={loading}
-                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
-                                  slot.baitWarning ? 'bg-orange-500' : 'bg-white/20'
-                                }`}
-                              >
-                                <span
-                                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                                    slot.baitWarning ? 'translate-x-4' : 'translate-x-1'
+                            <div>
+                              <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <Fish className={`w-4 h-4 ${slot.baitWarning ? 'text-orange-400' : 'text-white/40'}`} />
+                                  <span className="text-white/80 text-xs">Yem Uyarısı</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'baitWarning', !slot.baitWarning)}
+                                  disabled={loading}
+                                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
+                                    slot.baitWarning ? 'bg-orange-500' : 'bg-white/20'
                                   }`}
-                                />
-                              </button>
+                                >
+                                  <span
+                                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                      slot.baitWarning ? 'translate-x-4' : 'translate-x-1'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+                              {slot.baitWarning && (
+                                <div className="mt-2">
+                                  <label className="block text-orange-300/70 text-xs mb-1">⚠️ Uyarı Metni</label>
+                                  <textarea
+                                    value={slot.baitWarningText || ''}
+                                    onChange={(e) => handleScheduledTimeSlotChange(scheduleIndex, slotIndex, 'baitWarningText', e.target.value)}
+                                    disabled={loading}
+                                    rows={2}
+                                    placeholder="Bu tur için yem hizmeti verilmemektedir. Lütfen kendi yeminizi getirmeyi unutmayın."
+                                    className="w-full bg-orange-500/10 border border-orange-500/30 rounded px-2 py-1.5 text-white text-xs placeholder-white/30 focus:border-orange-400 outline-none transition-all disabled:opacity-50 resize-none"
+                                  />
+                                  <p className="text-white/30 text-xs mt-1">Boş bırakılırsa varsayılan metin kullanılır</p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
