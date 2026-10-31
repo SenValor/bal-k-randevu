@@ -187,11 +187,15 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
     return `${available} ${t('slot.spotsLeft')}`;
   };
 
-  // Gece yarısını geçen tur kontrolü: bitiş saati başlangıçtan küçükse midnight'ı geçiyor
+  // Seçilen günün gecesine ait, gece yarısından sonra başlayan tur (ör. 01:00 - 07:00)
+  const startsAfterMidnight = (startTime: string) => Number(startTime.split(':')[0]) < 6;
+
+  // Gece turu kontrolü: gece yarısını geçen veya gece yarısından sonra başlayan turlar
   const isOvernightTour = (startTime: string, endTime: string) => {
     const [startHour, startMin] = startTime.split(':').map(Number);
     const [endHour, endMin] = endTime.split(':').map(Number);
-    return endHour < startHour || (endHour === startHour && endMin < startMin);
+    const crossesMidnight = endHour < startHour || (endHour === startHour && endMin < startMin);
+    return crossesMidnight || startsAfterMidnight(startTime);
   };
 
   // Gün isimlerini al
@@ -584,7 +588,9 @@ export default function TourSlotSection({ selectedDate, selectedTour, onTourSele
                   <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-white/90 text-sm leading-relaxed mb-2">
-                      Seçtiğiniz tur gece yarısını geçmektedir.
+                      {startsAfterMidnight(pendingTourSelection.time)
+                        ? 'Seçtiğiniz tur gece yarısından sonra başlamaktadır.'
+                        : 'Seçtiğiniz tur gece yarısını geçmektedir.'}
                     </p>
                     <p className="text-yellow-400 text-sm font-semibold">
                       {(() => {
