@@ -28,6 +28,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Eksik rezervasyon verisi' }, { status: 400 });
     }
 
+    // Tekne sorumlusu bilgisi istemciden gelmezse (ör. mobil uygulama) tekne kaydından tamamla.
+    // WhatsApp onay mesajı (onReservationApproved) bu alanları rezervasyon dokümanından okur.
+    if (!reservationData.boatResponsibleName || !reservationData.boatResponsiblePhone) {
+      try {
+        const boatSnap = await adminDb.collection('boats').doc(String(reservationData.boatId)).get();
+        const boat = boatSnap.data();
+        if (boat) {
+          reservationData.boatResponsibleName ||= boat.responsibleName || '';
+          reservationData.boatResponsiblePhone ||= boat.responsiblePhone || '';
+          reservationData.boatMapsLink ||= boat.mapsLink || '';
+        }
+      } catch (e) {
+        console.error('Tekne sorumlusu bilgisi alınamadı:', e);
+      }
+    }
+
     const reservationNumber = generateReservationNumber();
     const newDocRef = adminDb.collection('reservations').doc();
 

@@ -685,6 +685,24 @@ export default function AdminReservationsPage() {
       : `${start} - ${end}`;
   };
 
+  // ⚠️ Aşağıdaki iki manuel mesaj, Meta'daki onaylı şablonların BİREBİR kopyasıdır:
+  //   reservation_confirmation  → functions/index.js onReservationApproved
+  //   reservation_cancellation  → functions/index.js onReservationCancelled
+  // Meta'da şablon metni değişirse burayı da güncelleyin.
+
+  // Akşam / Gece (yemli) turlarında yem notu — functions/index.js ile aynı kural
+  const BAIT_NOTE = "⚠️ YEM TEDARİĞİ TARAFINIZA AİTTİR. KİŞİ BAŞI 500GR TAZE HAMSİ ALMANIZ GEREKMEKTEDİR.";
+  const isEveningOrNightTour = (timeSlotDisplay: string): boolean => {
+    if (!timeSlotDisplay) return false;
+    const name = timeSlotDisplay.split("(")[0].toLocaleLowerCase("tr-TR");
+    if (/akşam|aksam|gece|yemli/.test(name)) return true;
+    if (/sabah|sabab|öğlen|oglen|gündüz|gunduz|çapari|capari/.test(name)) return false;
+    const m = timeSlotDisplay.match(/(\d{2}):\d{2}\s*-\s*\d{2}:\d{2}/);
+    if (!m) return false;
+    const startHour = parseInt(m[1], 10);
+    return startHour >= 19 || startHour < 6;
+  };
+
   // WhatsApp Onay Mesajı Gönder (Manuel - WhatsApp Web)
   const sendApprovalMessage = (reservation: Reservation) => {
     if (!reservation.userPhone) {
@@ -694,36 +712,36 @@ export default function AdminReservationsPage() {
 
     const formattedPhone = formatPhoneForWhatsApp(reservation.userPhone);
     const formattedDate = formatDateTurkish(reservation.date);
-    const seats = reservation.selectedSeats?.join(", ") || "";
     // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
     const locationLink = (reservation as any).timeSlotMapsLink || reservation.boatMapsLink || "";
-    const realTimeSlot = getRealTimeSlotDisplay(reservation);
-    const responsibleName = (reservation as any).boatResponsibleName || "";
-    const responsiblePhone = (reservation as any).boatResponsiblePhone || "";
+    const timeSlot = reservation.timeSlotDisplay || getRealTimeSlotDisplay(reservation);
+    const timeSlotText = isEveningOrNightTour(timeSlot) ? `${timeSlot} — ${BAIT_NOTE}` : timeSlot;
+    const boat = boats.find(b => b.id === reservation.boatId);
+    const responsibleName = (reservation as any).boatResponsibleName || boat?.responsibleName || "";
+    const responsiblePhone = (reservation as any).boatResponsiblePhone || boat?.responsiblePhone || "";
 
-    const message = `🐟 Balık Sefası
+    const message = `*Randevunuz Onaylandı*
 
-Merhaba ${reservation.userName || "Değerli Müşterimiz"},
+🐟 Balık Sefası
 
-Rezervasyonunuz onaylandı! 🎉
+Merhaba ${reservation.userName || "Değerli Müşterimiz"}, rezervasyonunuz onaylandı! 🎉
 
-🎫 Rezervasyon No: ${reservation.reservationNumber || ""}
+👤 Sorumlu: ${responsibleName || "-"}
+📞 Sorumlu Tel: ${responsiblePhone || "-"}
+
 📅 Tarih: ${formattedDate}
-🕐 Saat: ${realTimeSlot}
+🕐 Saat: ${timeSlotText}
 ⛵ Tekne: ${reservation.boatName || "BALIK SEFASI"}
-💺 Koltuklar: ${seats}
-${locationLink ? `📍 Konum: ${locationLink}` : ''}
-${responsibleName ? `👤 Tekne Sorumlusu: ${responsibleName}` : ''}
-${responsiblePhone ? `📞 Tekne Sorumlusu Tel: ${responsiblePhone}` : ''}
-${responsiblePhone ? `⚠️ Bu numara yalnızca tur günü ve saatinde tekneyi bulamadığınız durumda aranabilir.` : ''}
+🎫 Rezervasyon No: ${reservation.reservationNumber || "BS-XXXX"}
+📍 Konum: ${locationLink || "Konum bilgisi bulunamadı"}
 
-Teşekkürler, iyi avlar dileriz ⚓
+İyi avlar dileriz ⚓
+www.baliksefasi.com
 
-Rezervasyonunuzu sorgulamak veya iptal etmek için:
-www.baliksefasi.com`;
+*Teyit etmek amacıyla yazıyorum 'KATILIYORUM' ŞEKLİNDE DÖNÜŞ YAPABİLİR MİSİNİZ?*`;
 
     // WhatsApp Web'e yönlendir
-    const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
@@ -738,25 +756,27 @@ www.baliksefasi.com`;
     const formattedDate = formatDateTurkish(reservation.date);
     // Saat dilimine özel konum varsa onu kullan, yoksa tekne konumunu kullan
     const locationLink = (reservation as any).timeSlotMapsLink || reservation.boatMapsLink || "";
-    const realTimeSlot = getRealTimeSlotDisplay(reservation);
+    const timeSlot = reservation.timeSlotDisplay || getRealTimeSlotDisplay(reservation);
 
-    const message = `🐟 Balık Sefası
+    const message = `*Rezervasyonunuz İptal Edildi!*
 
-Merhaba ${reservation.userName || "Değerli Müşterimiz"},
+🐟 Balık Sefası
 
-Rezervasyonunuz iptal edildi.
+Merhaba ${reservation.userName || "Değerli Müşterimiz"}, rezervasyonunuz iptal edilmiştir. ❌
 
-🎫 Rezervasyon No: ${reservation.reservationNumber || ""}
 📅 Tarih: ${formattedDate}
-🕐 Saat: ${realTimeSlot}
+🕐 Saat: ${timeSlot}
 ⛵ Tekne: ${reservation.boatName || "BALIK SEFASI"}
-${locationLink ? `📍 Konum: ${locationLink}` : ''}
+🎫 Rezervasyon No: ${reservation.reservationNumber || "BS-XXXX"}
+📍 Konum: ${locationLink || "Konum bilgisi bulunamadı"}
 
-Tekrar görüşmek dileğiyle 🙏
-www.baliksefasi.com`;
+Üzgünüz, bir sonraki turda görüşmek dileğiyle ⚓
+www.baliksefasi.com
+
+_SORULARINIZ İÇİN: 0531 089 2537_`;
 
     // WhatsApp Web'e yönlendir
-    const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 

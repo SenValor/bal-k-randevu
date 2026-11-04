@@ -126,10 +126,24 @@ exports.onReservationApproved = functions
       const formattedPhone = formatPhoneNumber(userPhone);
       const formattedDate = formatDateTurkish(date);
 
-      const {
+      let {
         boatResponsibleName = "",
         boatResponsiblePhone = "",
       } = after;
+
+      // Rezervasyonda sorumlu bilgisi yoksa (ör. mobil uygulamadan gelen eski kayıtlar) tekneden al
+      if ((!boatResponsibleName || !boatResponsiblePhone) && after.boatId) {
+        try {
+          const boatSnap = await admin.firestore().collection("boats").doc(String(after.boatId)).get();
+          const boat = boatSnap.exists ? boatSnap.data() : null;
+          if (boat) {
+            boatResponsibleName = boatResponsibleName || boat.responsibleName || "";
+            boatResponsiblePhone = boatResponsiblePhone || boat.responsiblePhone || "";
+          }
+        } catch (boatErr) {
+          console.error("⚠️ Tekne sorumlusu okunamadı:", boatErr.message);
+        }
+      }
 
       // Akşam/gece turlarında yem notunu saat satırına ekle
       // (Meta şablonu sabit olduğu için not, saat parametresinin sonuna eklenir; parametrede satır sonu olamaz)
@@ -437,10 +451,41 @@ exports.whatsappWebhook = functions
           return;
         }
 
+        // 📬 Teslim durumu bildirimleri (sent / delivered / read / failed)
+        const statuses = value.statuses;
+        if (Array.isArray(statuses) && statuses.length > 0) {
+          for (const st of statuses) {
+            const errors = Array.isArray(st.errors) ? st.errors : [];
+            if (st.status === "failed") {
+              console.error("❌ WhatsApp teslim HATASI:", JSON.stringify({
+                id: st.id,
+                to: st.recipient_id,
+                errors,
+              }));
+            } else {
+              console.log(`📬 WhatsApp durum: ${st.status} | ${st.id}`);
+            }
+            try {
+              await admin.firestore().collection("whatsapp_statuses").add({
+                messageId: st.id || null,
+                status: st.status || null,
+                recipient: st.recipient_id || null,
+                errorCode: errors[0]?.code ?? null,
+                errorTitle: errors[0]?.title ?? null,
+                errorDetails: errors[0]?.error_data?.details ?? errors[0]?.message ?? null,
+                pricingCategory: st.pricing?.category ?? null,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            } catch (dbErr) {
+              console.error("⚠️ Durum kaydı hatası:", dbErr.message);
+            }
+          }
+        }
+
         // Mesaj kontrolü
         const messages = value.messages;
         if (!messages || messages.length === 0) {
-          console.log("ℹ️ Mesaj yok (status update olabilir), atlanıyor");
+          if (!statuses) console.log("ℹ️ Mesaj ve durum yok, atlanıyor");
           return;
         }
 
