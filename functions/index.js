@@ -49,6 +49,22 @@ function formatDateTurkish(dateString) {
   }
 }
 
+// 🐟 Akşam / Gece (yemli) turlarında müşteriye yem notu
+const BAIT_NOTE = "⚠️ YEM TEDARİĞİ TARAFINIZA AİTTİR. KİŞİ BAŞI 500GR TAZE HAMSİ ALMANIZ GEREKMEKTEDİR.";
+
+// "Akşam Yemli Turu(...) (19:00 - 01:00)" → akşam/gece turu mu?
+// Önce tur adına bakar; ad belirsizse başlangıç saatine düşer (19:00 ve sonrası / 06:00 öncesi).
+function isEveningOrNightTour(timeSlotDisplay) {
+  if (!timeSlotDisplay || typeof timeSlotDisplay !== "string") return false;
+  const name = timeSlotDisplay.split("(")[0].toLocaleLowerCase("tr-TR");
+  if (/akşam|aksam|gece|yemli/.test(name)) return true;
+  if (/sabah|sabab|öğlen|oglen|gündüz|gunduz|çapari|capari/.test(name)) return false;
+  const m = timeSlotDisplay.match(/(\d{2}):\d{2}\s*-\s*\d{2}:\d{2}/);
+  if (!m) return false;
+  const startHour = parseInt(m[1], 10);
+  return startHour >= 19 || startHour < 6;
+}
+
 /**
  * ✅ Rezervasyon Onaylandığında Şablonlu Mesaj Gönder
  */
@@ -115,6 +131,12 @@ exports.onReservationApproved = functions
         boatResponsiblePhone = "",
       } = after;
 
+      // Akşam/gece turlarında yem notunu saat satırına ekle
+      // (Meta şablonu sabit olduğu için not, saat parametresinin sonuna eklenir; parametrede satır sonu olamaz)
+      const timeSlotText = isEveningOrNightTour(timeSlotDisplay)
+        ? `${timeSlotDisplay} — ${BAIT_NOTE}`
+        : timeSlotDisplay;
+
       console.log(`📱 Formatlanmış telefon: +${formattedPhone}`);
 
       // 🚀 TEMPLATE mesajı gönder - Token'ı dinamik al
@@ -144,7 +166,7 @@ exports.onReservationApproved = functions
                 parameters: [
                   { type: "text", text: userName },
                   { type: "text", text: formattedDate },
-                  { type: "text", text: timeSlotDisplay },
+                  { type: "text", text: timeSlotText },
                   { type: "text", text: boatName },
                   { type: "text", text: reservationNumber },
                   { type: "text", text: locationLink || "Konum bilgisi bulunamadı" },
